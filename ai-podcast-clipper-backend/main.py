@@ -1,29 +1,53 @@
 import glob
 import json
+import os
 import pathlib
 import pickle
 import shutil
 import subprocess
 import time
 import uuid
+
 import boto3
-import cv2
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-import ffmpegcv
+from google import genai
+from google.genai import types
 import modal
 import numpy as np
-from pydantic import BaseModel
-import os
-from google import genai
-
 import pysubs2
 from tqdm import tqdm
-import whisperx
 
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 
-class ProcessVideoRequest(BaseModel):
-    s3_key: str
+try:
+    import ffmpegcv
+except ImportError:
+    ffmpegcv = None
+
+try:
+    import whisperx
+except ImportError:
+    whisperx = None
+
+from core.schemas import (
+    ClipItem,
+    DownloadYouTubeRequest,
+    DownloadYouTubeResponse,
+    MomentsExtraction,
+    ProcessVideoRequest,
+    ProcessVideoResponse,
+)
+from core.subtitle_styles import generate_ass_subtitles
+from core.youtube_downloader import (
+    YouTubeAgeRestrictedError,
+    YouTubeVideoUnavailableError,
+    download_youtube_to_s3,
+    get_youtube_video_info,
+)
 
 
 image = (modal.Image.from_registry(
@@ -34,6 +58,12 @@ image = (modal.Image.from_registry(
                    "wget -O /usr/share/fonts/truetype/custom/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
                    "fc-cache -f -v"])
     .add_local_dir("asd", "/asd", copy=True))
+
+cpu_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .apt_install(["ffmpeg"])
+    .pip_install(["yt-dlp", "boto3", "fastapi[standard]", "pydantic"])
+)
 
 app = modal.App("ai-podcast-clipper", image=image)
 
@@ -147,94 +177,46 @@ def create_vertical_video(tracks, scores, pyframes_path, pyavi_path, audio_path,
     subprocess.run(ffmpeg_command, shell=True, check=True, text=True)
 
 
-def create_subtitles_with_ffmpeg(transcript_segments: list, clip_start: float, clip_end: float, clip_video_path: str, output_path: str, max_words: int = 5):
+def create_subtitles_with_ffmpeg(
+    transcript_segments: list,
+    clip_start: float,
+    clip_end: float,
+    clip_video_path: str,
+    output_path: str,
+    preset: str = "HORMOZI",
+    max_words: int = 5,
+):
+    """Generate styled subtitles with pysubs2 preset and burn them via ffmpeg."""
     temp_dir = os.path.dirname(output_path)
-    subtitle_path = os.path.join(temp_dir, "temp_subtitles.ass")
+    subtitle_path = os.path.join(temp_dir, f"subtitles_{preset.lower()}.ass")
 
-    clip_segments = [segment for segment in transcript_segments
-                     if segment.get("start") is not None
-                     and segment.get("end") is not None
-                     and segment.get("end") > clip_start
-                     and segment.get("start") < clip_end
-                     ]
+    generate_ass_subtitles(
+        transcript_segments=transcript_segments,
+        clip_start=clip_start,
+        clip_end=clip_end,
+        output_path=subtitle_path,
+        preset=preset,
+        max_words=max_words,
+    )
 
-    subtitles = []
-    current_words = []
-    current_start = None
-    current_end = None
-
-    for segment in clip_segments:
-        word = segment.get("word", "").strip()
-        seg_start = segment.get("start")
-        seg_end = segment.get("end")
-
-        if not word or seg_start is None or seg_end is None:
-            continue
-
-        start_rel = max(0.0, seg_start - clip_start)
-        end_rel = max(0.0, seg_end - clip_start)
-
-        if end_rel <= 0:
-            continue
-
-        if not current_words:
-            current_start = start_rel
-            current_end = end_rel
-            current_words = [word]
-        elif len(current_words) >= max_words:
-            subtitles.append(
-                (current_start, current_end, ' '.join(current_words)))
-            current_words = [word]
-            current_start = start_rel
-            current_end = end_rel
-        else:
-            current_words.append(word)
-            current_end = end_rel
-
-    if current_words:
-        subtitles.append(
-            (current_start, current_end, ' '.join(current_words)))
-
-    subs = pysubs2.SSAFile()
-
-    subs.info["WrapStyle"] = 0
-    subs.info["ScaledBorderAndShadow"] = "yes"
-    subs.info["PlayResX"] = 1080
-    subs.info["PlayResY"] = 1920
-    subs.info["ScriptType"] = "v4.00+"
-
-    style_name = "Default"
-    new_style = pysubs2.SSAStyle()
-    new_style.fontname = "Anton"
-    new_style.fontsize = 140
-    new_style.primarycolor = pysubs2.Color(255, 255, 255)
-    new_style.outline = 2.0
-    new_style.shadow = 2.0
-    new_style.shadowcolor = pysubs2.Color(0, 0, 0, 128)
-    new_style.alignment = 2
-    new_style.marginl = 50
-    new_style.marginr = 50
-    new_style.marginv = 50
-    new_style.spacing = 0.0
-
-    subs.styles[style_name] = new_style
-
-    for i, (start, end, text) in enumerate(subtitles):
-        start_time = pysubs2.make_time(s=start)
-        end_time = pysubs2.make_time(s=end)
-        line = pysubs2.SSAEvent(
-            start=start_time, end=end_time, text=text, style=style_name)
-        subs.events.append(line)
-
-    subs.save(subtitle_path)
-
-    ffmpeg_cmd = (f"ffmpeg -y -i {clip_video_path} -vf \"ass={subtitle_path}\" "
-                  f"-c:v h264 -preset fast -crf 23 {output_path}")
-
+    ffmpeg_cmd = (
+        f'ffmpeg -y -i {clip_video_path} -vf "ass={subtitle_path}" '
+        f'-c:v h264 -preset fast -crf 23 {output_path}'
+    )
     subprocess.run(ffmpeg_cmd, shell=True, check=True)
 
 
-def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_time: float, end_time: float, clip_index: int, transcript_segments: list):
+def process_clip(
+    base_dir: pathlib.Path,
+    original_video_path: pathlib.Path,
+    s3_key: str,
+    start_time: float,
+    end_time: float,
+    clip_index: int,
+    transcript_segments: list,
+    preset: str = "HORMOZI",
+    clip_item: ClipItem | None = None,
+) -> dict:
     clip_name = f"clip_{clip_index}"
     s3_key_dir = os.path.dirname(s3_key)
     output_s3_key = f"{s3_key_dir}/{clip_name}.mp4"
@@ -256,26 +238,34 @@ def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_tim
     pyavi_path.mkdir(exist_ok=True)
 
     duration = end_time - start_time
-    cut_command = (f"ffmpeg -i {original_video_path} -ss {start_time} -t {duration} "
-                   f"{clip_segment_path}")
-    subprocess.run(cut_command, shell=True, check=True,
-                   capture_output=True, text=True)
+    # 1. Cut ONLY the clip slice from the original video
+    cut_command = (
+        f"ffmpeg -y -i {original_video_path} -ss {start_time} -t {duration} "
+        f"{clip_segment_path}"
+    )
+    subprocess.run(cut_command, shell=True, check=True, capture_output=True, text=True)
 
-    extract_cmd = f"ffmpeg -i {clip_segment_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {audio_path}"
-    subprocess.run(extract_cmd, shell=True,
-                   check=True, capture_output=True)
+    # 2. Extract audio for LR-ASD from the cut segment
+    extract_cmd = (
+        f"ffmpeg -y -i {clip_segment_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {audio_path}"
+    )
+    subprocess.run(extract_cmd, shell=True, check=True, capture_output=True)
 
     shutil.copy(clip_segment_path, base_dir / f"{clip_name}.mp4")
 
-    columbia_command = (f"python Columbia_test.py --videoName {clip_name} "
-                        f"--videoFolder {str(base_dir)} "
-                        f"--pretrainModel weight/finetuning_TalkSet.model")
+    # 3. LR-ASD (Columbia) runs ONLY on this specific 30-60s clip, not the full video
+    columbia_command = (
+        f"python Columbia_test.py --videoName {clip_name} "
+        f"--videoFolder {str(base_dir)} "
+        f"--pretrainModel weight/finetuning_TalkSet.model"
+    )
 
     columbia_start_time = time.time()
     subprocess.run(columbia_command, cwd="/asd", shell=True)
     columbia_end_time = time.time()
     print(
-        f"Columbia script completed in {columbia_end_time - columbia_start_time:.2f} seconds")
+        f"Columbia LR-ASD script completed in {columbia_end_time - columbia_start_time:.2f} seconds"
+    )
 
     tracks_path = clip_dir / "pywork" / "tracks.pckl"
     scores_path = clip_dir / "pywork" / "scores.pckl"
@@ -294,28 +284,63 @@ def process_clip(base_dir: str, original_video_path: str, s3_key: str, start_tim
     )
     cvv_end_time = time.time()
     print(
-        f"Clip {clip_index} vertical video creation time: {cvv_end_time - cvv_start_time:.2f} seconds")
+        f"Clip {clip_index} vertical video creation time: {cvv_end_time - cvv_start_time:.2f} seconds"
+    )
 
-    create_subtitles_with_ffmpeg(transcript_segments, start_time,
-                                 end_time, vertical_mp4_path, subtitle_output_path, max_words=5)
+    # 4. Generate subtitles with chosen preset and burn to video
+    create_subtitles_with_ffmpeg(
+        transcript_segments=transcript_segments,
+        clip_start=start_time,
+        clip_end=end_time,
+        clip_video_path=str(vertical_mp4_path),
+        output_path=str(subtitle_output_path),
+        preset=preset,
+        max_words=5,
+    )
 
     s3_client = boto3.client("s3")
     s3_client.upload_file(
-        subtitle_output_path, "ai-podcast-clipper", output_s3_key)
+        str(subtitle_output_path), "ai-podcast-clipper", output_s3_key
+    )
+
+    clip_metadata = {
+        "clip_index": clip_index,
+        "s3_key": output_s3_key,
+        "start": start_time,
+        "end": end_time,
+        "duration": duration,
+        "preset": preset,
+    }
+    if clip_item:
+        clip_metadata.update({
+            "title": clip_item.title,
+            "hook": clip_item.hook,
+            "virality_score": clip_item.virality_score,
+            "reason": clip_item.reason,
+        })
+    return clip_metadata
 
 
-@app.cls(gpu="L40S", timeout=900, retries=0, scaledown_window=20, secrets=[modal.Secret.from_name("ai-podcast-clipper-secret")], volumes={mount_path: volume})
+@app.cls(
+    gpu="L40S",
+    timeout=900,
+    retries=0,
+    scaledown_window=20,
+    secrets=[modal.Secret.from_name("ai-podcast-clipper-secret")],
+    volumes={mount_path: volume},
+)
 class AiPodcastClipper:
     @modal.enter()
     def load_model(self):
         print("Loading models")
 
         self.whisperx_model = whisperx.load_model(
-            "large-v2", device="cuda", compute_type="float16")
+            "large-v2", device="cuda", compute_type="float16"
+        )
 
         self.alignment_model, self.metadata = whisperx.load_align_model(
             language_code="en",
-            device="cuda"
+            device="cuda",
         )
 
         print("Transcription models loaded...")
@@ -324,11 +349,12 @@ class AiPodcastClipper:
         self.gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
         print("Created gemini client...")
 
-    def transcribe_video(self, base_dir: str, video_path: str) -> str:
+    def transcribe_video(self, base_dir: pathlib.Path, video_path: pathlib.Path) -> str:
         audio_path = base_dir / "audio.wav"
-        extract_cmd = f"ffmpeg -i {video_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {audio_path}"
-        subprocess.run(extract_cmd, shell=True,
-                       check=True, capture_output=True)
+        extract_cmd = (
+            f"ffmpeg -i {video_path} -vn -acodec pcm_s16le -ar 16000 -ac 1 {audio_path}"
+        )
+        subprocess.run(extract_cmd, shell=True, check=True, capture_output=True)
 
         print("Starting transcription with WhisperX...")
         start_time = time.time()
@@ -342,14 +368,13 @@ class AiPodcastClipper:
             self.metadata,
             audio,
             device="cuda",
-            return_char_alignments=False
+            return_char_alignments=False,
         )
 
         duration = time.time() - start_time
-        print("Transcription and alignment took " + str(duration) + " seconds")
+        print(f"Transcription and alignment took {duration:.2f} seconds")
 
         segments = []
-
         if "word_segments" in result:
             for word_segment in result["word_segments"]:
                 segments.append({
@@ -360,80 +385,165 @@ class AiPodcastClipper:
 
         return json.dumps(segments)
 
-    def identify_moments(self, transcript: dict):
-        response = self.gemini_client.models.generate_content(model="gemini-2.5-flash-preview-04-17", contents="""
-    This is a podcast video transcript consisting of word, along with each words's start and end time. I am looking to create clips between a minimum of 30 and maximum of 60 seconds long. The clip should never exceed 60 seconds.
+    def identify_moments(self, transcript: list) -> MomentsExtraction:
+        """Extract viral clips between 30-60 seconds from transcript using Gemini Structured Outputs."""
+        prompt = f"""
+This is a podcast video transcript consisting of words, along with each word's start and end time. I am looking to create clips between a minimum of 30 and maximum of 60 seconds long. The clip should never exceed 60 seconds.
 
-    Your task is to find and extract stories, or question and their corresponding answers from the transcript.
-    Each clip should begin with the question and conclude with the answer.
-    It is acceptable for the clip to include a few additional sentences before a question if it aids in contextualizing the question.
+Your task is to find and extract stories, hooks, questions and their corresponding answers from the transcript.
+Each clip should begin with an engaging hook or question and conclude with the resolution or answer.
+It is acceptable for the clip to include a few additional sentences before a question if it aids in contextualizing the question.
 
-    Please adhere to the following rules:
-    - Ensure that clips do not overlap with one another.
-    - Start and end timestamps of the clips should align perfectly with the sentence boundaries in the transcript.
-    - Only use the start and end timestamps provided in the input. modifying timestamps is not allowed.
-    - Format the output as a list of JSON objects, each representing a clip with 'start' and 'end' timestamps: [{"start": seconds, "end": seconds}, ...clip2, clip3]. The output should always be readable by the python json.loads function.
-    - Aim to generate longer clips between 40-60 seconds, and ensure to include as much content from the context as viable.
+Please adhere to the following rules:
+- Ensure that clips do not overlap with one another.
+- Start and end timestamps of the clips should align perfectly with the sentence boundaries in the transcript.
+- Only use the start and end timestamps provided in the input. Modifying timestamps is not allowed.
+- Clip duration (end - start) must be strictly greater than 0 and less than or equal to 60.0 seconds.
+- Provide a viral hook, title, virality_score (1 to 10), and reason for each clip.
+- If there are no valid clips to extract, return an empty clips list: {{"clips": []}}.
 
-    Avoid including:
-    - Moments of greeting, thanking, or saying goodbye.
-    - Non-question and answer interactions.
+The transcript is as follows:
+{json.dumps(transcript) if isinstance(transcript, (list, dict)) else str(transcript)}
+"""
+        client = getattr(self, "gemini_client", None)
+        if client is None:
+            client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "dummy_key"))
+        response = client.models.generate_content(
+            model=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=MomentsExtraction,
+            ),
+        )
+        print(f"Identified moments response: {response.text}")
+        if not response.text:
+            return MomentsExtraction(clips=[])
 
-    If there are no valid clips to extract, the output should be an empty list [], in JSON format. Also readable by json.loads() in Python.
-
-    The transcript is as follows:\n\n""" + str(transcript))
-        print(f"Identified moments response: ${response.text}")
-        return response.text
+        try:
+            return MomentsExtraction.model_validate_json(response.text)
+        except Exception:
+            cleaned = response.text.strip()
+            if cleaned.startswith("```json"):
+                cleaned = cleaned[len("```json"):].strip()
+            if cleaned.endswith("```"):
+                cleaned = cleaned[:-len("```")].strip()
+            return MomentsExtraction.model_validate_json(cleaned)
 
     @modal.fastapi_endpoint(method="POST")
-    def process_video(self, request: ProcessVideoRequest, token: HTTPAuthorizationCredentials = Depends(auth_scheme)):
+    def process_video(
+        self,
+        request: ProcessVideoRequest,
+        token: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    ) -> ProcessVideoResponse:
         s3_key = request.s3_key
+        preset = request.preset or "HORMOZI"
 
-        if token.credentials != os.environ["AUTH_TOKEN"]:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
-                                detail="Incorrect bearer token", headers={"WWW-Authenticate": "Bearer"})
+        if token.credentials != os.environ.get("AUTH_TOKEN"):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect bearer token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
         run_id = str(uuid.uuid4())
         base_dir = pathlib.Path("/tmp") / run_id
         base_dir.mkdir(parents=True, exist_ok=True)
 
-        # Download video file
-        video_path = base_dir / "input.mp4"
-        s3_client = boto3.client("s3")
-        s3_client.download_file("ai-podcast-clipper", s3_key, str(video_path))
+        try:
+            # Download video file
+            video_path = base_dir / "input.mp4"
+            s3_client = boto3.client("s3")
+            s3_client.download_file("ai-podcast-clipper", s3_key, str(video_path))
 
-        # 1. Transcription
-        transcript_segments_json = self.transcribe_video(base_dir, video_path)
-        transcript_segments = json.loads(transcript_segments_json)
+            # 1. Transcription
+            transcript_segments_json = self.transcribe_video(base_dir, video_path)
+            transcript_segments = json.loads(transcript_segments_json)
 
-        # 2. Identify moments for clips
-        print("Identifying clip moments")
-        identified_moments_raw = self.identify_moments(transcript_segments)
+            # 2. Identify moments for clips using structured schema
+            print("Identifying clip moments with Gemini structured output...")
+            moments_extraction = self.identify_moments(transcript_segments)
+            clips_to_process = moments_extraction.clips[:5]
+            print(f"Identified {len(clips_to_process)} candidate clips")
 
-        cleaned_json_string = identified_moments_raw.strip()
-        if cleaned_json_string.startswith("```json"):
-            cleaned_json_string = cleaned_json_string[len("```json"):].strip()
-        if cleaned_json_string.endswith("```"):
-            cleaned_json_string = cleaned_json_string[:-len("```")].strip()
+            # 3. Process clips (LR-ASD on cropped segments + vertical reframe + styled subtitles)
+            processed_clips = []
+            for index, clip_item in enumerate(clips_to_process):
+                print(
+                    f"Processing clip {index} ({clip_item.title}): from "
+                    f"{clip_item.start}s to {clip_item.end}s"
+                )
+                clip_result = process_clip(
+                    base_dir=base_dir,
+                    original_video_path=video_path,
+                    s3_key=s3_key,
+                    start_time=clip_item.start,
+                    end_time=clip_item.end,
+                    clip_index=index,
+                    transcript_segments=transcript_segments,
+                    preset=preset,
+                    clip_item=clip_item,
+                )
+                processed_clips.append(clip_result)
 
-        clip_moments = json.loads(cleaned_json_string)
-        if not clip_moments or not isinstance(clip_moments, list):
-            print("Error: Identified moments is not a list")
-            clip_moments = []
+            return ProcessVideoResponse(
+                success=True,
+                file_id=s3_key,
+                clips=processed_clips,
+            )
+        finally:
+            if base_dir.exists():
+                print(f"Cleaning up temp dir {base_dir}")
+                shutil.rmtree(base_dir, ignore_errors=True)
 
-        print(clip_moments)
 
-        # 3. Process clips
-        for index, moment in enumerate(clip_moments[:5]):
-            if "start" in moment and "end" in moment:
-                print("Processing clip" + str(index) + " from " +
-                      str(moment["start"]) + " to " + str(moment["end"]))
-                process_clip(base_dir, video_path, s3_key,
-                             moment["start"], moment["end"], index, transcript_segments)
+@app.function(
+    image=cpu_image,
+    timeout=600,
+    secrets=[modal.Secret.from_name("ai-podcast-clipper-secret")],
+)
+@modal.fastapi_endpoint(method="POST")
+def download_youtube(
+    request: DownloadYouTubeRequest,
+    token: HTTPAuthorizationCredentials = Depends(auth_scheme),
+) -> DownloadYouTubeResponse:
+    if token.credentials != os.environ.get("AUTH_TOKEN"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-        if base_dir.exists():
-            print(f"Cleaning up temp dir after {base_dir}")
-            shutil.rmtree(base_dir, ignore_errors=True)
+    s3_key = request.s3_key or f"youtube/{uuid.uuid4()}/original.mp4"
+
+    try:
+        result = download_youtube_to_s3(
+            url=request.url,
+            s3_bucket=request.s3_bucket,
+            s3_key=s3_key,
+        )
+        return DownloadYouTubeResponse(
+            success=True,
+            s3_key=result["s3_key"],
+            title=result["title"],
+            duration=result["duration"],
+            thumbnail=result.get("thumbnail"),
+        )
+    except YouTubeVideoUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"YouTube video unavailable: {str(e)}",
+        )
+    except YouTubeAgeRestrictedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"YouTube video is age-restricted: {str(e)}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to download YouTube video: {str(e)}",
+        )
 
 
 @app.local_entrypoint()
@@ -445,16 +555,16 @@ def main():
     url = ai_podcast_clipper.process_video.web_url
 
     payload = {
-        "s3_key": "test2/mi630min.mp4"
+        "s3_key": "test2/mi630min.mp4",
+        "preset": "HORMOZI",
     }
 
     headers = {
         "Content-Type": "application/json",
-        "Authorization": "Bearer 123123"
+        "Authorization": "Bearer 123123",
     }
 
-    response = requests.post(url, json=payload,
-                             headers=headers)
+    response = requests.post(url, json=payload, headers=headers)
     response.raise_for_status()
     result = response.json()
     print(result)
