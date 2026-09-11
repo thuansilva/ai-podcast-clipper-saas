@@ -23,6 +23,11 @@
     "test:integration": "vitest run tests/integration",
     "test:all": "vitest run",
     "test:watch": "vitest",
+    "test:load:smoke": "PATH=./bin:$PATH k6 run --env PROFILE=smoke load-tests/scenarios/main-suite.js",
+    "test:load": "PATH=./bin:$PATH k6 run --env PROFILE=load load-tests/scenarios/main-suite.js",
+    "test:load:stress": "PATH=./bin:$PATH k6 run --env PROFILE=stress load-tests/scenarios/main-suite.js",
+    "test:load:stripe": "PATH=./bin:$PATH k6 run load-tests/scenarios/stripe-webhook.js",
+    "test:load:s3": "PATH=./bin:$PATH k6 run load-tests/scenarios/s3-presign-flow.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -61,6 +66,7 @@
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
+    "@types/k6": "^2.2.0",
     "@types/node": "^20.14.10",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
