@@ -14,18 +14,6 @@ datasource db {
     url      = env("DATABASE_URL")
 }
 
-model Post {
-    id        Int      @id @default(autoincrement())
-    name      String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
-
-    createdBy   User   @relation(fields: [createdById], references: [id])
-    createdById String
-
-    @@index([name])
-}
-
 // Necessary for Next auth
 model Account {
     id                       String  @id @default(cuid())
@@ -55,50 +43,79 @@ model Session {
 }
 
 model User {
-    id            String    @id @default(cuid())
-    name          String?
-    email         String   @unique
-    emailVerified DateTime?
-    password      String
-    credits       Int @default(10)
-    stripeCustomerId String? @unique
-    image         String?
-    accounts      Account[]
-    sessions      Session[]
-    posts         Post[]
+    id               String              @id @default(cuid())
+    name             String?
+    email            String              @unique
+    emailVerified    DateTime?
+    password         String
+    credits          Int                 @default(10)
+    reservedCredits  Int                 @default(0)
+    stripeCustomerId String?             @unique
+    image            String?
+    accounts         Account[]
+    sessions         Session[]
+    creditTransactions CreditTransaction[]
 
     uploadedFiles UploadedFile[]
-    clips Clip[]
+    clips         Clip[]
+}
+
+model CreditTransaction {
+    id          String   @id @default(cuid())
+    userId      String
+    amount      Int
+    type        String   // "PURCHASE", "HOLD", "CONSUME", "REFUND"
+    description String
+    createdAt   DateTime @default(now())
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([userId])
 }
 
 model UploadedFile {
-    id String @id @default(cuid())
-    s3Key String
-    displayName String?
-    uploaded Boolean @default(false)
-    status String @default("queued") // processing, processed, no credits
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+    id              String    @id @default(cuid())
+    s3Key           String
+    displayName     String?
+    sourceType      String    @default("UPLOAD")
+    youtubeUrl      String?
+    durationSeconds Int       @default(0)
+    creditsCost     Int       @default(0)
+    uploaded        Boolean   @default(false)
+    status          String    @default("queued") // processing, processed, no credits, failed
+    errorMessage    String?
+    createdAt       DateTime  @default(now())
+    updatedAt       DateTime  @updatedAt
 
     clips Clip[]
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
     userId String
 
     @@index([s3Key])
 }
 
 model Clip {
-    id String @id @default(cuid())
-    s3Key String
+    id              String   @id @default(cuid())
+    s3Key           String
+    title           String   @default("Clip")
+    hook            String?
+    viralityScore   Float?
+    reason          String?
+    startTime       Float    @default(0)
+    endTime         Float    @default(0)
+    durationSeconds Float    @default(0)
+    subtitlePreset  String   @default("HORMOZI")
+    layoutMode      String   @default("SMART_CROP")
+    transcriptWords Json?
 
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
-    uploadedFile UploadedFile? @relation(fields: [uploadedFileId], references: [id], onDelete: Cascade)
+    uploadedFile   UploadedFile? @relation(fields: [uploadedFileId], references: [id], onDelete: Cascade)
     uploadedFileId String?
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
     userId String
 
     @@index([s3Key])
