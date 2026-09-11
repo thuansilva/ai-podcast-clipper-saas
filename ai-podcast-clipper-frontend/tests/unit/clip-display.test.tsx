@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { ClipDisplay } from "~/components/clip-display";
+import { getClipPlayUrl } from "~/actions/generation";
 import type { Clip } from "@prisma/client";
 
 vi.mock("~/actions/generation", () => ({
@@ -66,7 +67,7 @@ describe("ClipDisplay Component", () => {
     ).toBeInTheDocument();
   });
 
-  it("deve renderizar múltiplos ClipCards quando houver clipes", () => {
+  it("deve renderizar múltiplos ClipCards quando houver clipes", async () => {
     render(<ClipDisplay clips={mockClips} />);
 
     expect(screen.getByText("Primeiro Corte Viral")).toBeInTheDocument();
@@ -74,5 +75,10 @@ describe("ClipDisplay Component", () => {
 
     expect(screen.getByText("Segundo Corte Viral")).toBeInTheDocument();
     expect(screen.getByText("🔥 8.5/10")).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getClipPlayUrl).toHaveBeenCalledWith("clip-1");
+      expect(getClipPlayUrl).toHaveBeenCalledWith("clip-2");
+    });
   });
 });

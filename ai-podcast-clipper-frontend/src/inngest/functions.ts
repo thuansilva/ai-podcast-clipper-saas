@@ -1,7 +1,11 @@
 import { env } from "~/env";
 import { inngest } from "./client";
 import { db } from "~/server/db";
-import { CreditService } from "~/server/services/credit-service";
+import {
+  makeConsumeCreditsUseCase,
+  makeHoldCreditsUseCase,
+  makeRefundCreditsUseCase,
+} from "~/infrastructure/factories/use-case-factories";
 import { Prisma } from "@prisma/client";
 
 export interface ProcessVideoEventData {
@@ -102,7 +106,7 @@ export async function downloadYouTubeVideo({
 
 export function formatFriendlyErrorMessage(errorMsg: string): string {
   const lower = errorMsg.toLowerCase();
-  if (lower.includes("insufficient credits")) {
+  if (lower.includes("insufficient credits") || lower.includes("saldo insuficiente")) {
     return errorMsg;
   }
   if (
@@ -168,16 +172,17 @@ export async function processVideoHandler({
           });
         }
 
-        const holdResult = await CreditService.holdCredits(
-          uploadedFile.userId,
+        const holdCreditsUseCase = makeHoldCreditsUseCase();
+        const holdResult = await holdCreditsUseCase.execute({
+          userId: uploadedFile.userId,
           durationSeconds,
-          uploadedFile.id,
-        );
+          fileId: uploadedFile.id,
+        });
 
         return {
           userId: uploadedFile.userId,
           s3Key: currentS3Key,
-          creditsCost: holdResult.held,
+          creditsCost: holdResult.heldCredits,
         };
       },
     )) as {
@@ -267,11 +272,12 @@ export async function processVideoHandler({
         });
       }
 
-      await CreditService.consumeCredits(
-        resolvedUserId!,
-        heldCredits,
-        uploadedFileId,
-      );
+      const consumeCreditsUseCase = makeConsumeCreditsUseCase();
+      await consumeCreditsUseCase.execute({
+        userId: resolvedUserId!,
+        amount: heldCredits,
+        fileId: uploadedFileId,
+      });
 
       await db.uploadedFile.update({
         where: { id: uploadedFileId },
@@ -315,15 +321,17 @@ export async function processVideoHandler({
     );
 
     if (amountToRefund > 0) {
-      await CreditService.refundCredits(
-        fileUserId,
-        amountToRefund,
-        uploadedFileId,
-        friendlyErrorMessage,
-      );
+      const refundCreditsUseCase = makeRefundCreditsUseCase();
+      await refundCreditsUseCase.execute({
+        userId: fileUserId,
+        amount: amountToRefund,
+        fileId: uploadedFileId,
+        reason: friendlyErrorMessage,
+      });
     } else {
       const isInsufficient =
-        rawErrorMessage.toLowerCase().includes("insufficient credits");
+        rawErrorMessage.toLowerCase().includes("insufficient credits") ||
+        rawErrorMessage.toLowerCase().includes("saldo insuficiente");
 
       await db.uploadedFile.update({
         where: { id: uploadedFileId },
@@ -379,15 +387,17 @@ export const processVideo = inngest.createFunction(
       );
 
       if (amountToRefund > 0) {
-        await CreditService.refundCredits(
-          fileUserId,
-          amountToRefund,
-          uploadedFileId,
-          friendlyMessage,
-        );
+        const refundCreditsUseCase = makeRefundCreditsUseCase();
+        await refundCreditsUseCase.execute({
+          userId: fileUserId,
+          amount: amountToRefund,
+          fileId: uploadedFileId,
+          reason: friendlyMessage,
+        });
       } else {
         const isInsufficient =
-          errorMessage.toLowerCase().includes("insufficient credits");
+          errorMessage.toLowerCase().includes("insufficient credits") ||
+          errorMessage.toLowerCase().includes("saldo insuficiente");
         await db.uploadedFile.update({
           where: { id: uploadedFileId },
           data: {

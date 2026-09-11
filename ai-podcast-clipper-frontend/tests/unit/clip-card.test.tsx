@@ -52,7 +52,6 @@ describe("ClipCard Component", () => {
     vi.mocked(deleteClip).mockResolvedValue({ success: true });
     vi.mocked(updateClip).mockResolvedValue({ success: true });
 
-    // Mock clipboard
     Object.assign(navigator, {
       clipboard: {
         writeText: vi.fn().mockResolvedValue(undefined),
@@ -69,6 +68,10 @@ describe("ClipCard Component", () => {
     expect(screen.getByText(/O maior segredo que ninguém te conta/i)).toBeInTheDocument();
     expect(screen.getByText("HORMOZI")).toBeInTheDocument();
     expect(screen.getByText(/Forte gatilho de curiosidade/i)).toBeInTheDocument();
+
+    await waitFor(() => {
+      expect(getClipPlayUrl).toHaveBeenCalledWith("clip-test-1");
+    });
   });
 
   it("deve carregar e exibir o player vertical 9:16 com a URL retornada", async () => {
@@ -83,6 +86,10 @@ describe("ClipCard Component", () => {
 
   it("deve copiar o hook para a área de transferência ao clicar em 'Copiar Hook'", async () => {
     render(<ClipCard clip={mockClip} />);
+
+    await waitFor(() => {
+      expect(getClipPlayUrl).toHaveBeenCalledWith("clip-test-1");
+    });
 
     const copyBtn = screen.getByRole("button", { name: /copiar hook/i });
     fireEvent.click(copyBtn);
@@ -100,7 +107,6 @@ describe("ClipCard Component", () => {
   it("deve acionar o download do clipe ao clicar no botão de Download", async () => {
     render(<ClipCard clip={mockClip} />);
 
-    // Aguardar carregamento da playUrl
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /^download$/i })).not.toBeDisabled();
     });
@@ -118,22 +124,22 @@ describe("ClipCard Component", () => {
   it("deve abrir o modal de edição ao clicar em Editar e salvar alterações", async () => {
     render(<ClipCard clip={mockClip} />);
 
+    await waitFor(() => {
+      expect(getClipPlayUrl).toHaveBeenCalledWith("clip-test-1");
+    });
+
     const editBtn = screen.getByRole("button", { name: /editar/i });
     fireEvent.click(editBtn);
 
-    // Modal deve estar visível
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByText(/Editar Legendas e Transcrição/i)).toBeInTheDocument();
 
-    // Selecionar preset NEON
     const neonPresetBtn = screen.getByRole("button", { name: /neon/i });
     fireEvent.click(neonPresetBtn);
 
-    // Editar transcrição
     const textarea = screen.getByTestId("transcript-input");
     fireEvent.change(textarea, { target: { value: "O maior segredo incrível" } });
 
-    // Salvar
     const saveBtn = screen.getByRole("button", { name: /salvar e re-renderizar/i });
     fireEvent.click(saveBtn);
 
@@ -162,6 +168,10 @@ describe("ClipCard Component", () => {
 
     render(<ClipCard clip={mockClip} onDelete={onDeleteMock} />);
 
+    await waitFor(() => {
+      expect(getClipPlayUrl).toHaveBeenCalledWith("clip-test-1");
+    });
+
     const deleteBtn = screen.getByRole("button", { name: /excluir/i });
     fireEvent.click(deleteBtn);
 
@@ -184,6 +194,10 @@ describe("ClipCard Component", () => {
 
     render(<ClipCard clip={mockClip} onDelete={onDeleteMock} />);
 
+    await waitFor(() => {
+      expect(getClipPlayUrl).toHaveBeenCalledWith("clip-test-1");
+    });
+
     const deleteBtn = screen.getByRole("button", { name: /excluir/i });
     fireEvent.click(deleteBtn);
 
@@ -202,6 +216,10 @@ describe("ClipCard Component", () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     render(<ClipCard clip={mockClip} />);
+
+    await waitFor(() => {
+      expect(getClipPlayUrl).toHaveBeenCalledWith("clip-test-1");
+    });
 
     const deleteBtn = screen.getByRole("button", { name: /excluir/i });
     fireEvent.click(deleteBtn);

@@ -1,9 +1,7 @@
-// stripe listen --forward-to localhost:3000/api/webhooks/stripe
-
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { env } from "~/env";
-import { db } from "~/server/db";
+import { makeAddCreditsFromStripeWebhookUseCase } from "~/infrastructure/factories/use-case-factories";
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-04-30.basil",
@@ -31,33 +29,23 @@ export async function POST(req: Request) {
       const session = event.data.object;
       const customerId = session.customer as string;
 
-      const retreivedSession = await stripe.checkout.sessions.retrieve(
+      const retrievedSession = await stripe.checkout.sessions.retrieve(
         session.id,
         { expand: ["line_items"] },
       );
 
-      const lineItems = retreivedSession.line_items;
+      const lineItems = retrievedSession.line_items;
       if (lineItems && lineItems.data.length > 0) {
         const priceId = lineItems.data[0]?.price?.id ?? undefined;
 
         if (priceId) {
-          let creditsToAdd = 0;
-
-          if (priceId === env.STRIPE_SMALL_CREDIT_PACK) {
-            creditsToAdd = 50;
-          } else if (priceId === env.STRIPE_MEDIUM_CREDIT_PACK) {
-            creditsToAdd = 150;
-          } else if (priceId === env.STRIPE_LARGE_CREDIT_PACK) {
-            creditsToAdd = 500;
-          }
-
-          await db.user.update({
-            where: { stripeCustomerId: customerId },
-            data: {
-              credits: {
-                increment: creditsToAdd,
-              },
-            },
+          const useCase = makeAddCreditsFromStripeWebhookUseCase();
+          await useCase.execute({
+            stripeCustomerId: customerId,
+            priceId,
+            smallPackPriceId: env.STRIPE_SMALL_CREDIT_PACK,
+            mediumPackPriceId: env.STRIPE_MEDIUM_CREDIT_PACK,
+            largePackPriceId: env.STRIPE_LARGE_CREDIT_PACK,
           });
         }
       }

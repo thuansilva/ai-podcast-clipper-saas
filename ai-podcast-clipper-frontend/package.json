@@ -19,7 +19,9 @@
     "lint:fix": "next lint --fix",
     "preview": "next build && next start",
     "start": "next start",
-    "test": "vitest run",
+    "test": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:all": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

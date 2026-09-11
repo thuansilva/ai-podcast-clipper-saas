@@ -21,13 +21,18 @@ vi.mock("~/server/auth", () => ({
 vi.mock("~/server/db", () => ({
   db: {
     clip: {
+      findUnique: vi.fn(),
       findFirst: vi.fn(),
       delete: vi.fn(),
       update: vi.fn(),
+      findMany: vi.fn(),
+      createMany: vi.fn(),
     },
     uploadedFile: {
+      findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       update: vi.fn(),
+      create: vi.fn(),
     },
   },
 }));
@@ -75,7 +80,7 @@ describe("Generation Server Actions", () => {
 
       const result = await deleteClip("clip-123");
       expect(result).toEqual({ success: false, error: "Unauthorized" });
-      expect(db.clip.findFirst).not.toHaveBeenCalled();
+      expect(db.clip.findUnique).not.toHaveBeenCalled();
     });
 
     it("deve retornar erro se o clipe não for encontrado ou não pertencer ao usuário", async () => {
@@ -84,10 +89,11 @@ describe("Generation Server Actions", () => {
         expires: "2099-01-01",
       } as any);
 
-      vi.mocked(db.clip.findFirst).mockResolvedValueOnce(null);
+      vi.mocked(db.clip.findUnique).mockResolvedValueOnce(null);
 
       const result = await deleteClip("clip-404");
-      expect(result).toEqual({ success: false, error: "Clip not found" });
+      expect(result.success).toBe(false);
+      expect(result.error).toContain("não foi encontrado");
       expect(db.clip.delete).not.toHaveBeenCalled();
     });
 
@@ -97,10 +103,18 @@ describe("Generation Server Actions", () => {
         expires: "2099-01-01",
       } as any);
 
-      vi.mocked(db.clip.findFirst).mockResolvedValueOnce({
+      vi.mocked(db.clip.findUnique).mockResolvedValueOnce({
         id: "clip-123",
         userId: "user-123",
         s3Key: "uploads/user-123/clip_1.mp4",
+        title: "Clip",
+        startTime: 0,
+        endTime: 30,
+        durationSeconds: 30,
+        subtitlePreset: "HORMOZI",
+        layoutMode: "SMART_CROP",
+        createdAt: new Date(),
+        updatedAt: new Date(),
       } as any);
 
       vi.mocked(db.clip.delete).mockResolvedValueOnce({
@@ -126,7 +140,7 @@ describe("Generation Server Actions", () => {
         expires: "2099-01-01",
       } as any);
 
-      vi.mocked(db.clip.findFirst).mockRejectedValueOnce(new Error("DB Timeout"));
+      vi.mocked(db.clip.findUnique).mockRejectedValueOnce(new Error("DB Timeout"));
 
       const result = await deleteClip("clip-123");
       expect(result).toEqual({ success: false, error: "DB Timeout" });
@@ -140,9 +154,18 @@ describe("Generation Server Actions", () => {
         expires: "2099-01-01",
       } as any);
 
-      vi.mocked(db.clip.findFirst).mockResolvedValueOnce({
+      vi.mocked(db.clip.findUnique).mockResolvedValueOnce({
         id: "clip-123",
         userId: "user-123",
+        s3Key: "uploads/clip.mp4",
+        title: "Clip",
+        startTime: 0,
+        endTime: 30,
+        durationSeconds: 30,
+        subtitlePreset: "HORMOZI",
+        layoutMode: "SMART_CROP",
+        createdAt: new Date(),
+        updatedAt: new Date(),
       } as any);
 
       vi.mocked(db.clip.update).mockResolvedValueOnce({
@@ -174,10 +197,18 @@ describe("Generation Server Actions", () => {
         expires: "2099-01-01",
       } as any);
 
-      vi.mocked(db.clip.findFirst).mockResolvedValueOnce({
+      vi.mocked(db.clip.findUnique).mockResolvedValueOnce({
         id: "clip-123",
         userId: "user-123",
         s3Key: "uploads/clip.mp4",
+        title: "Clip",
+        startTime: 0,
+        endTime: 30,
+        durationSeconds: 30,
+        subtitlePreset: "HORMOZI",
+        layoutMode: "SMART_CROP",
+        createdAt: new Date(),
+        updatedAt: new Date(),
       } as any);
 
       const result = await getClipPlayUrl("clip-123");

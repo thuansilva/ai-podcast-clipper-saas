@@ -1,11 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { v4 as uuidv4 } from "uuid";
-import { inngest } from "~/inngest/client";
-import { isValidYouTubeUrl, extractYouTubeVideoId } from "~/lib/youtube";
 import { auth } from "~/server/auth";
-import { db } from "~/server/db";
+import { makeImportYouTubeVideoUseCase } from "~/infrastructure/factories/use-case-factories";
+import { DomainError } from "~/domain/errors/domain-error";
 
 export interface ImportYouTubeVideoInput {
   url: string;
@@ -31,51 +29,33 @@ export async function importYouTubeVideo({
     return { success: false, error: "Unauthorized" };
   }
 
-  if (!url || !isValidYouTubeUrl(url)) {
-    return { success: false, error: "Invalid YouTube URL" };
-  }
-
   try {
-    const videoId = extractYouTubeVideoId(url);
-    const uuid = uuidv4();
-    const s3Key = `youtube/${uuid}/original.mp4`;
-    const displayName = `YouTube Video (${videoId ?? "unknown"})`;
-
-    const uploadedFile = await db.uploadedFile.create({
-      data: {
-        userId: session.user.id,
-        s3Key,
-        displayName,
-        sourceType: "YOUTUBE",
-        youtubeUrl: url,
-        uploaded: true,
-        status: "queued",
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    await inngest.send({
-      name: "process-video-events",
-      data: {
-        uploadedFileId: uploadedFile.id,
-        userId: session.user.id,
-        preset,
-      },
+    const useCase = makeImportYouTubeVideoUseCase();
+    const result = await useCase.execute({
+      userId: session.user.id,
+      url,
+      preset,
     });
 
     revalidatePath("/dashboard");
 
     return {
       success: true,
-      uploadedFileId: uploadedFile.id,
+      uploadedFileId: result.uploadedFileId,
     };
   } catch (error) {
+    if (error instanceof DomainError) {
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "Failed to import YouTube video",
+        error instanceof Error
+          ? error.message
+          : "Failed to import YouTube video",
     };
   }
 }

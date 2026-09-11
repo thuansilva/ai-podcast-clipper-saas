@@ -13,6 +13,8 @@ vi.mock("~/server/db", () => ({
   db: {
     uploadedFile: {
       create: vi.fn(),
+      findUnique: vi.fn(),
+      update: vi.fn(),
     },
   },
 }));
@@ -56,10 +58,8 @@ describe("importYouTubeVideo Server Action", () => {
       url: "https://vimeo.com/123456",
     });
 
-    expect(result).toEqual({
-      success: false,
-      error: "Invalid YouTube URL",
-    });
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("não é um link válido");
     expect(db.uploadedFile.create).not.toHaveBeenCalled();
   });
 
@@ -71,6 +71,18 @@ describe("importYouTubeVideo Server Action", () => {
 
     vi.mocked(db.uploadedFile.create).mockResolvedValueOnce({
       id: "uploaded-file-abc",
+      userId: "user-123",
+      s3Key: "youtube/123/original.mp4",
+      displayName: "YouTube Video (dQw4w9WgXcQ)",
+      sourceType: "YOUTUBE",
+      youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      durationSeconds: 0,
+      creditsCost: 0,
+      uploaded: true,
+      status: "queued",
+      errorMessage: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     } as any);
 
     vi.mocked(inngest.send).mockResolvedValueOnce({} as any);
@@ -95,9 +107,6 @@ describe("importYouTubeVideo Server Action", () => {
         status: "queued",
         s3Key: expect.stringMatching(/^youtube\/[a-f0-9-]+\/original\.mp4$/),
       }),
-      select: {
-        id: true,
-      },
     });
 
     expect(inngest.send).toHaveBeenCalledWith({
