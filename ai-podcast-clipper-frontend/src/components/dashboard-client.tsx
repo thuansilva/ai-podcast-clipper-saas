@@ -1,6 +1,5 @@
 "use client";
 
-import Dropzone, { type DropzoneState } from "shadcn-dropzone";
 import type { Clip } from "@prisma/client";
 import Link from "next/link";
 import { Button } from "./ui/button";
@@ -12,11 +11,9 @@ import {
   CardHeader,
   CardTitle,
 } from "./ui/card";
-import { Loader2, UploadCloud } from "lucide-react";
-import { useState } from "react";
-import { generateUploadUrl } from "~/actions/s3";
+import { Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { processVideo } from "~/actions/generation";
 import {
   Table,
   TableBody,
@@ -28,11 +25,9 @@ import {
 import { Badge } from "./ui/badge";
 import { useRouter } from "next/navigation";
 import { ClipDisplay } from "./clip-display";
+import { ImportVideoTabs } from "./import-video-tabs";
 
-export function DashboardClient({
-  uploadedFiles,
-  clips,
-}: {
+export interface DashboardClientProps {
   uploadedFiles: {
     id: string;
     s3Key: string;
@@ -42,11 +37,36 @@ export function DashboardClient({
     createdAt: Date;
   }[];
   clips: Clip[];
-}) {
-  const [files, setFiles] = useState<File[]>([]);
-  const [uploading, setUploading] = useState(false);
+  userCredits: number;
+}
+
+export function DashboardClient({
+  uploadedFiles,
+  clips,
+  userCredits,
+}: DashboardClientProps) {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
+  const wasProcessingRef = useRef<boolean>(false);
+
+  // Detecta se há arquivos em processamento ou na fila
+  const hasActiveProcessing = uploadedFiles.some(
+    (file) => file.status === "queued" || file.status === "processing",
+  );
+
+  useEffect(() => {
+    if (hasActiveProcessing) {
+      wasProcessingRef.current = true;
+      const interval = setInterval(() => {
+        router.refresh();
+      }, 4000);
+
+      return () => clearInterval(interval);
+    } else if (wasProcessingRef.current) {
+      wasProcessingRef.current = false;
+      toast.success("Seus clipes estão prontos!");
+    }
+  }, [hasActiveProcessing, router]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -54,145 +74,55 @@ export function DashboardClient({
     setTimeout(() => setRefreshing(false), 600);
   };
 
-  const handleDrop = (acceptedFiles: File[]) => {
-    setFiles(acceptedFiles);
-  };
-
-  const handleUpload = async () => {
-    if (files.length === 0) return;
-
-    const file = files[0]!;
-    setUploading(true);
-
-    try {
-      const { success, signedUrl, uploadedFileId } = await generateUploadUrl({
-        filename: file.name,
-        contentType: file.type,
-      });
-
-      if (!success) throw new Error("Failed to get upload URL");
-
-      const uploadResponse = await fetch(signedUrl, {
-        method: "PUT",
-        body: file,
-        headers: {
-          "Content-Type": file.type,
-        },
-      });
-
-      if (!uploadResponse.ok)
-        throw new Error(`Upload filed with status: ${uploadResponse.status}`);
-
-      await processVideo(uploadedFileId);
-
-      setFiles([]);
-
-      toast.success("Video uploaded successfully", {
-        description:
-          "Your video has been scheduled for processing. Check the status below.",
-        duration: 5000,
-      });
-    } catch (error) {
-      toast.error("Upload failed", {
-        description:
-          "There was a problem uploading your video. Please try again.",
-      });
-    } finally {
-      setUploading(false);
-    }
-  };
-
   return (
     <div className="mx-auto flex max-w-5xl flex-col space-y-6 px-4 py-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Podcast Clipper
-          </h1>
-          <p className="text-muted-foreground">
-            Upload your podcast and get AI-generated clips instantly
-          </p>
-        </div>
-        <Link href="/dashboard/billing">
-          <Button>Buy Credits</Button>
-        </Link>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">
+          Estúdio de Cortes
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          Transforme podcasts e vídeos em clipes verticais prontos para TikTok, Reels e Shorts.
+        </p>
       </div>
 
       <Tabs defaultValue="upload">
         <TabsList>
-          <TabsTrigger value="upload">Upload</TabsTrigger>
-          <TabsTrigger value="my-clips">My Clips</TabsTrigger>
+          <TabsTrigger value="upload">Importar Vídeo</TabsTrigger>
+          <TabsTrigger value="my-clips">
+            Meus Clipes
+            {clips.length > 0 && (
+              <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px]">
+                {clips.length}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="upload">
-          <Card>
-            <CardHeader>
-              <CardTitle>Upload Podcast</CardTitle>
-              <CardDescription>
-                Upload your audio or video file to generate clips
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Dropzone
-                onDrop={handleDrop}
-                accept={{ "video/mp4": [".mp4"] }}
-                maxSize={500 * 1024 * 1024}
-                disabled={uploading}
-                maxFiles={1}
-              >
-                {(dropzone: DropzoneState) => (
-                  <>
-                    <div className="flex flex-col items-center justify-center space-y-4 rounded-lg p-10 text-center">
-                      <UploadCloud className="text-muted-foreground h-12 w-12" />
-                      <p className="font-medium">Drag and drop your file</p>
-                      <p className="text-muted-foreground text-sm">
-                        or click to browse (MP4 up to 500MB)
-                      </p>
-                      <Button
-                        className="cursor-pointer"
-                        variant="default"
-                        size="sm"
-                        disabled={uploading}
+        <TabsContent value="upload" className="space-y-6">
+          <ImportVideoTabs
+            userCredits={userCredits}
+            onUploadSuccess={handleRefresh}
+          />
+
+          {uploadedFiles.length > 0 && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-lg font-medium">Fila de Processamento</CardTitle>
+                    <CardDescription>
+                      Acompanhe o status e a geração dos seus cortes em tempo real
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {hasActiveProcessing && (
+                      <Badge
+                        variant="outline"
+                        className="flex items-center gap-1.5 border-amber-500/40 text-amber-500 text-xs animate-pulse"
                       >
-                        Select File
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </Dropzone>
-
-              <div className="mt-2 flex items-start justify-between">
-                <div>
-                  {files.length > 0 && (
-                    <div className="space-y-1 text-sm">
-                      <p className="font-medium">Selected file:</p>
-                      {files.map((file) => (
-                        <p key={file.name} className="text-muted-foreground">
-                          {file.name}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <Button
-                  disabled={files.length === 0 || uploading}
-                  onClick={handleUpload}
-                >
-                  {uploading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Uploading...
-                    </>
-                  ) : (
-                    "Upload and Generate Clips"
-                  )}
-                </Button>
-              </div>
-
-              {uploadedFiles.length > 0 && (
-                <div className="pt-6">
-                  <div className="mb-2 flex items-center justify-between">
-                    <h3 className="text-md mb-2 font-medium">Queue status</h3>
+                        <Loader2 className="h-3 w-3 animate-spin" /> Polling ativo (4s)
+                      </Badge>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"
@@ -205,72 +135,73 @@ export function DashboardClient({
                       Refresh
                     </Button>
                   </div>
-                  <div className="max-h-[300px] overflow-auto rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>File</TableHead>
-                          <TableHead>Uploaded</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Clips created</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {uploadedFiles.map((item) => (
-                          <TableRow key={item.id}>
-                            <TableCell className="max-w-xs truncate font-medium">
-                              {item.filename}
-                            </TableCell>
-                            <TableCell className="text-muted-foreground text-sm">
-                              {new Date(item.createdAt).toLocaleDateString()}
-                            </TableCell>
-                            <TableCell>
-                              {item.status === "queued" && (
-                                <Badge variant="outline">Queued</Badge>
-                              )}
-                              {item.status === "processing" && (
-                                <Badge variant="outline">Processing</Badge>
-                              )}
-                              {item.status === "processed" && (
-                                <Badge variant="outline">Processed</Badge>
-                              )}
-                              {item.status === "no credits" && (
-                                <Badge variant="destructive">No credits</Badge>
-                              )}
-                              {item.status === "failed" && (
-                                <Badge variant="destructive">Failed</Badge>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {item.clipsCount > 0 ? (
-                                <span>
-                                  {item.clipsCount} clip
-                                  {item.clipsCount !== 1 ? "s" : ""}
-                                </span>
-                              ) : (
-                                <span className="text-muted-foreground">
-                                  No clips yet
-                                </span>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
                 </div>
-              )}
-            </CardContent>
-          </Card>
+              </CardHeader>
+              <CardContent>
+                <div className="max-h-[300px] overflow-auto rounded-md border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>File</TableHead>
+                        <TableHead>Uploaded</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead>Clips created</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {uploadedFiles.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="max-w-xs truncate font-medium">
+                            {item.filename}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-sm">
+                            {new Date(item.createdAt).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            {item.status === "queued" && (
+                              <Badge variant="outline">Queued</Badge>
+                            )}
+                            {item.status === "processing" && (
+                              <Badge variant="outline">Processing</Badge>
+                            )}
+                            {item.status === "processed" && (
+                              <Badge variant="outline">Processed</Badge>
+                            )}
+                            {item.status === "no credits" && (
+                              <Badge variant="destructive">No credits</Badge>
+                            )}
+                            {item.status === "failed" && (
+                              <Badge variant="destructive">Failed</Badge>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {item.clipsCount > 0 ? (
+                              <span>
+                                {item.clipsCount} clip
+                                {item.clipsCount !== 1 ? "s" : ""}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">
+                                No clips yet
+                              </span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="my-clips">
           <Card>
             <CardHeader>
-              <CardTitle>My Clips</CardTitle>
+              <CardTitle>Meus Clipes Gerados</CardTitle>
               <CardDescription>
-                View and manage your generated clips here. Processing may take a
-                few minuntes.
+                Visualize, edite legendas e faça download dos seus cortes prontos para publicação.
               </CardDescription>
             </CardHeader>
             <CardContent>

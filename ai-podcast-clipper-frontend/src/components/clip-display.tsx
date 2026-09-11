@@ -1,86 +1,31 @@
 "use client";
 
 import type { Clip } from "@prisma/client";
-import { Download, Loader2, Play } from "lucide-react";
-import { useEffect, useState } from "react";
-import { getClipPlayUrl } from "~/actions/generation";
-import { Button } from "./ui/button";
+import { Film } from "lucide-react";
+import { ClipCard } from "./clip-card";
 
-function ClipCard({ clip }: { clip: Clip }) {
-  const [playUrl, setPlayUrl] = useState<string | null>(null);
-  const [isLoadingUrl, setIsLoadingUrl] = useState(true);
-
-  useEffect(() => {
-    async function fetchPlayUrl() {
-      try {
-        const result = await getClipPlayUrl(clip.id);
-        if (result.succes && result.url) {
-          setPlayUrl(result.url);
-        } else if (result.error) {
-          console.error("Failed to get play url: " + result.error);
-        }
-      } catch (error) {
-      } finally {
-        setIsLoadingUrl(false);
-      }
-    }
-
-    void fetchPlayUrl();
-  }, [clip.id]);
-
-  const handleDownload = () => {
-    if (playUrl) {
-      const link = document.createElement("a");
-      link.href = playUrl;
-      link.style.display = "none";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
-  return (
-    <div className="flex max-w-52 flex-col gap-2">
-      <div className="bg-muted">
-        {isLoadingUrl ? (
-          <div className="flex h-full w-full items-center justify-center">
-            <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
-          </div>
-        ) : playUrl ? (
-          <video
-            src={playUrl}
-            controls
-            preload="metadata"
-            className="h-full w-full rounded-md object-cover"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Play className="text-muted-foreground h-10 w-10 opacity-50" />
-          </div>
-        )}
-      </div>
-      <div className="flex flex-col gap-2">
-        <Button onClick={handleDownload} variant="outline" size="sm">
-          <Download className="mr-1.5 h-4 w-4" />
-          Download
-        </Button>
-      </div>
-    </div>
-  );
+export interface ClipDisplayProps {
+  clips: Clip[];
+  onDeleteClip?: (clipId: string) => void;
 }
 
-export function ClipDisplay({ clips }: { clips: Clip[] }) {
+export function ClipDisplay({ clips, onDeleteClip }: ClipDisplayProps) {
   if (clips.length === 0) {
     return (
-      <p className="text-muted-foreground p-4 text-center">
-        No clips generated yet.
-      </p>
+      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed p-10 text-center">
+        <Film className="mb-3 h-10 w-10 text-muted-foreground opacity-40" />
+        <h3 className="text-base font-medium">Nenhum clipe gerado ainda</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Envie um arquivo de vídeo ou importe um link do YouTube para começar a gerar clipes virais.
+        </p>
+      </div>
     );
   }
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {clips.map((clip) => (
-        <ClipCard key={clip.id} clip={clip} />
+        <ClipCard key={clip.id} clip={clip} onDelete={onDeleteClip} />
       ))}
     </div>
   );
