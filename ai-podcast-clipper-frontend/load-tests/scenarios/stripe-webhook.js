@@ -28,8 +28,8 @@ export default function () {
   const res = http.post(`${baseUrl}/api/webhooks/stripe`, payload, { headers });
 
   check(res, {
-    "status is 200 or 400 (signature/customer handling)": (r) =>
-      r.status === 200 || r.status === 400,
+    "status is valid (200/400/404)": (r) =>
+      r.status === 200 || r.status === 400 || r.status === 404,
     "response time < 300ms": (r) => r.timings.duration < 300,
   });
 

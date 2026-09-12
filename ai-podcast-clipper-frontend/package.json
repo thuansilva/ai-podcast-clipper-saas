@@ -8,6 +8,7 @@
     "inngest-dev": "npx inngest-cli@latest dev",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
+    "db:seed": "npx tsx prisma/seed.ts",
     "build": "next build",
     "check": "next lint && tsc --noEmit",
     "db:generate": "prisma migrate dev",
