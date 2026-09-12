@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  frontend:
+    name: Frontend (Lint, Typecheck & Tests)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ai_podcast_clipper
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: ai-podcast-clipper-frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ai-podcast-clipper-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client & Push Schema
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper
+        run: |
+          npx prisma generate
+          npx prisma db push --skip-generate
+
+      - name: Run Lint and Typecheck
+        run: npm run check
+
+      - name: Run Unit and Integration Tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper
+        run: npm run test:all
+
+  backend:
+    name: Backend (Pytest)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ai-podcast-clipper-backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-podcast-clipper-backend/requirements-test.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-test.txt
+
+      - name: Run Pytest
+        run: pytest -v

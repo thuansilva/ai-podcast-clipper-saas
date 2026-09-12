@@ -73,7 +73,7 @@ function parseTranscriptWords(raw: unknown): TranscriptWordItem[] {
   }
   if (typeof raw === "string") {
     try {
-      const parsed = JSON.parse(raw);
+      const parsed: unknown = JSON.parse(raw);
       if (Array.isArray(parsed)) return parseTranscriptWords(parsed);
     } catch {
       // Raw string of words

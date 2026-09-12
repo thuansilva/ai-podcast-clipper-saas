@@ -1,7 +1,9 @@
 import "@testing-library/jest-dom/vitest";
 
 process.env.SKIP_ENV_VALIDATION = "1";
-process.env.DATABASE_URL = "postgresql://mock:mock@localhost:5432/mock";
+process.env.DATABASE_URL =
+  process.env.DATABASE_URL ??
+  "postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper";
 process.env.AWS_ACCESS_KEY_ID = "mock_key";
 process.env.AWS_SECRET_ACCESS_KEY = "mock_secret";
 process.env.AWS_REGION = "us-east-1";

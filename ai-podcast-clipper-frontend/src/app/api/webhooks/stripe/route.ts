@@ -27,12 +27,12 @@ export async function POST(req: Request) {
     }
 
     if (event.type === "checkout.session.completed") {
-      const session = event.data.object as Stripe.Checkout.Session;
+      const session = event.data.object;
       const customerId = session.customer as string;
 
       let lineItems = session.line_items;
 
-      if (!lineItems || !lineItems.data || lineItems.data.length === 0) {
+      if (!lineItems?.data || lineItems.data.length === 0) {
         try {
           const retrievedSession = await stripe.checkout.sessions.retrieve(
             session.id,
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
         }
       }
 
-      if (lineItems && lineItems.data && lineItems.data.length > 0) {
+      if (lineItems?.data && lineItems.data.length > 0) {
         const priceId = lineItems.data[0]?.price?.id ?? undefined;
 
         if (priceId && customerId) {

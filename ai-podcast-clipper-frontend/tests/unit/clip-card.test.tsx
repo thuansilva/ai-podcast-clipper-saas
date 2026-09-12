@@ -111,7 +111,7 @@ describe("ClipCard Component", () => {
       expect(screen.getByRole("button", { name: /^download$/i })).not.toBeDisabled();
     });
 
-    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => { });
 
     const downloadBtn = screen.getByRole("button", { name: /^download$/i });
     fireEvent.click(downloadBtn);

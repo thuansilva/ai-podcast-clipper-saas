@@ -191,7 +191,7 @@ export function ImportVideoTabs({
         onUploadSuccess?.();
       } else {
         toast.error("Erro ao importar do YouTube", {
-          description: result.error || "Não foi possível importar o vídeo.",
+          description: result.error ?? "Não foi possível importar o vídeo.",
         });
       }
     } catch (error) {
@@ -285,7 +285,7 @@ export function ImportVideoTabs({
               disabled={uploading}
               maxFiles={1}
             >
-              {(dropzone: DropzoneState) => (
+              {(_dropzone: DropzoneState) => (
                 <div className="flex flex-col items-center justify-center space-y-4 rounded-lg p-8 text-center cursor-pointer">
                   <UploadCloud className="text-muted-foreground h-12 w-12" />
                   <div>

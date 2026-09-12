@@ -123,11 +123,11 @@ export function formatFriendlyErrorMessage(errorMsg: string): string {
   ) {
     return errorMsg;
   }
-  return errorMsg || "Video processing failed. Please try again later.";
+  return errorMsg ?? "Video processing failed. Please try again later.";
 }
 
 export interface PipelineStep {
-  run: (name: string, fn: () => any) => Promise<any>;
+  run: <T>(name: string, fn: () => Promise<T> | T) => Promise<T>;
 }
 
 export async function processVideoHandler({
@@ -205,7 +205,7 @@ export async function processVideoHandler({
     });
 
     // Step 3: call-modal-gpu
-    const modalResult = (await step.run("call-modal-gpu", async () => {
+    const modalResult = await step.run("call-modal-gpu", async () => {
       const response = await fetch(env.PROCESS_VIDEO_ENDPOINT, {
         method: "POST",
         headers: {
@@ -227,7 +227,7 @@ export async function processVideoHandler({
 
       const data = (await response.json()) as ModalProcessVideoResponse;
       return data;
-    })) as ModalProcessVideoResponse;
+    });
 
     // Step 4: persist-clips-and-consume
     await step.run("persist-clips-and-consume", async () => {
@@ -305,7 +305,7 @@ export async function processVideoHandler({
       return { success: false, uploadedFileId, error: friendlyErrorMessage };
     }
 
-    const fileUserId = currentFile?.userId || resolvedUserId;
+    const fileUserId = currentFile?.userId ?? resolvedUserId;
     if (!fileUserId) {
       return { success: false, uploadedFileId, error: friendlyErrorMessage };
     }
@@ -412,7 +412,7 @@ export const processVideo = inngest.createFunction(
   async ({ event, step }) => {
     return processVideoHandler({
       event: event as { data: ProcessVideoEventData },
-      step,
+      step: step as unknown as PipelineStep,
     });
   },
 );

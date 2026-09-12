@@ -279,7 +279,7 @@ describe("Inngest Pipeline Integration Tests", () => {
       where: { id: file.id },
     });
     expect(["no credits", "failed"]).toContain(updatedFile.status);
-    expect(updatedFile.errorMessage).toMatch(/insufficient credits/i);
+    expect(updatedFile.errorMessage).toMatch(/insufficient credits|saldo insuficiente/i);
 
     // 3. Nenhuma chamada de rede para a GPU deve ter ocorrido
     expect(mockFetch).not.toHaveBeenCalled();

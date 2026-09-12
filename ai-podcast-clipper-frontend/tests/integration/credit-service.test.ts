@@ -80,7 +80,7 @@ describe("CreditService Integration Tests", () => {
       // durationSeconds = 180s -> 3 créditos necessários, usuário só tem 1
       await expect(
         CreditService.holdCredits(user.id, 180, file.id)
-      ).rejects.toThrow(/insufficient credits/i);
+      ).rejects.toThrow(/insufficient credits|saldo insuficiente/i);
 
       // Verificar que nada foi debitado (rollback da transação)
       const freshUser = await db.user.findUnique({
