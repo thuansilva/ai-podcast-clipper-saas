@@ -46,4 +46,5 @@ yarn-error.log*
 .idea
 
 # local binaries
-/bin/
+/bin/*
+!/bin/k6

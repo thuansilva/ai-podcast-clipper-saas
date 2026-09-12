@@ -4,9 +4,20 @@ Esta pasta contém a suíte modular de testes de carga e estresse para APIs e We
 
 ---
 
-## 1. Instalação do Grafana k6
+## 1. Execução do Grafana k6
 
-### Linux (Debian / Ubuntu):
+### Opção A: Docker (Já configurado - Recomendado)
+O projeto já conta com um wrapper em `./bin/k6` que utiliza a imagem oficial `grafana/k6:latest` com rede em modo host. Você pode executar os testes diretamente com os scripts npm (`npm run test:load:*`) ou usando o Docker Compose:
+
+```bash
+# Na raiz do projeto:
+docker compose run --rm k6 run load-tests/scenarios/main-suite.js
+```
+
+### Opção B: Instalação Nativa no Host (Opcional)
+Se preferir instalar o binário no host:
+
+#### Linux (Debian / Ubuntu):
 ```bash
 sudo gpg -k
 sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
@@ -15,13 +26,10 @@ sudo apt-get update
 sudo apt-get install k6
 ```
 
-### macOS (Homebrew):
+#### macOS (Homebrew):
 ```bash
 brew install k6
 ```
-
-### Binário Direto (Qualquer OS):
-Baixe diretamente do repositório oficial: [github.com/grafana/k6/releases](https://github.com/grafana/k6/releases)
 
 ---
 

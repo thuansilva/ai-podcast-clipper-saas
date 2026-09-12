@@ -17,5 +17,13 @@ services:
       timeout: 5s
       retries: 5
 
+  k6:
+    image: grafana/k6:latest
+    container_name: ai-podcast-k6
+    network_mode: host
+    volumes:
+      - ./ai-podcast-clipper-frontend:/work
+    working_dir: /work
+
 volumes:
   postgres_data:

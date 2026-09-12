@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -e
+
+# Pass interactive TTY flags if running in a terminal
+DOCKER_TTY_FLAG=""
+if [ -t 0 ] && [ -t 1 ]; then
+  DOCKER_TTY_FLAG="-t"
+fi
+
+# Run k6 via Docker with host network mode to connect to localhost
+exec docker run --rm -i $DOCKER_TTY_FLAG \
+  --network host \
+  -v "$PWD:/work" \
+  -w /work \
+  grafana/k6 "$@"
