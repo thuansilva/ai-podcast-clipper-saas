@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { inngest } from "~/inngest/client";
-import { auth } from "~/server/auth";
+import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
 import {
   makeDeleteClipUseCase,
@@ -50,8 +50,8 @@ export async function processVideo(uploadedFileId: string, preset?: string) {
 export async function getClipPlayUrl(
   clipId: string,
 ): Promise<{ succes: boolean; success?: boolean; url?: string; error?: string }> {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
     return { succes: false, success: false, error: "Unauthorized" };
   }
 
@@ -59,7 +59,7 @@ export async function getClipPlayUrl(
     const useCase = makeGetClipPlayUrlUseCase();
     const result = await useCase.execute({
       clipId,
-      userId: session.user.id,
+      userId,
     });
 
     return { succes: true, success: true, url: result.url };
@@ -78,8 +78,8 @@ export async function getClipPlayUrl(
 export async function deleteClip(
   clipId: string,
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
     return { success: false, error: "Unauthorized" };
   }
 
@@ -87,7 +87,7 @@ export async function deleteClip(
     const useCase = makeDeleteClipUseCase();
     await useCase.execute({
       clipId,
-      userId: session.user.id,
+      userId,
     });
 
     revalidatePath("/dashboard");
@@ -112,8 +112,8 @@ export async function updateClip(
     transcriptWords?: unknown;
   },
 ): Promise<{ success: boolean; error?: string }> {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
     return { success: false, error: "Unauthorized" };
   }
 
@@ -121,7 +121,7 @@ export async function updateClip(
     const useCase = makeUpdateClipUseCase();
     await useCase.execute({
       clipId,
-      userId: session.user.id,
+      userId,
       title: data.title,
       subtitlePreset: data.subtitlePreset as SubtitlePreset | undefined,
       transcriptWords: data.transcriptWords,

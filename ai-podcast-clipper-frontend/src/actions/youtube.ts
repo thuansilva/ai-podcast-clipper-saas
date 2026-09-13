@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { auth } from "~/server/auth";
+import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { makeImportYouTubeVideoUseCase } from "~/infrastructure/factories/use-case-factories";
 import { DomainError } from "~/domain/errors/domain-error";
 
@@ -24,15 +24,15 @@ export async function importYouTubeVideo({
   url,
   preset,
 }: ImportYouTubeVideoInput): Promise<ImportYouTubeVideoResult> {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
     return { success: false, error: "Unauthorized" };
   }
 
   try {
     const useCase = makeImportYouTubeVideoUseCase();
     const result = await useCase.execute({
-      userId: session.user.id,
+      userId,
       url,
       preset,
     });

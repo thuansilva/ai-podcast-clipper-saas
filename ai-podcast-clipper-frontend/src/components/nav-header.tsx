@@ -1,20 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { UserButton } from "@clerk/nextjs";
+import { CreditCard } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "./ui/avatar";
-import { signOut } from "next-auth/react";
 
-const NavHeader = ({ credits, email }: { credits: number; email: string }) => {
+const NavHeader = ({ credits }: { credits: number; email: string }) => {
   return (
     <header className="bg-background sticky top-0 z-10 flex justify-center border-b">
       <div className="container flex h-16 items-center justify-between px-4 py-2">
@@ -44,34 +36,15 @@ const NavHeader = ({ credits, email }: { credits: number; email: string }) => {
             </Button>
           </div>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="relative h-8 w-8 rounded-full p-0"
-              >
-                <Avatar>
-                  <AvatarFallback>{email.charAt(0)}</AvatarFallback>
-                </Avatar>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>
-                <p className="text-muted-foreground text-xs">{email}</p>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem asChild>
-                <Link href="/dashboard/billing">Billing</Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => signOut({ redirectTo: "/login" })}
-                className="text-destructive cursor-pointer"
-              >
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <UserButton>
+            <UserButton.MenuItems>
+              <UserButton.Link
+                label="Billing"
+                labelIcon={<CreditCard className="size-4" />}
+                href="/dashboard/billing"
+              />
+            </UserButton.MenuItems>
+          </UserButton>
         </div>
       </div>
     </header>

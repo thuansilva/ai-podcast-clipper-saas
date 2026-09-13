@@ -21,6 +21,7 @@ describe("Inngest Pipeline Integration Tests", () => {
   async function createTestUser(credits = 10, reservedCredits = 0) {
     const user = await db.user.create({
       data: {
+        id: `user_test_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         email: `test-inngest-${Date.now()}-${Math.random().toString(36).substring(2, 7)}@example.com`,
         password: "hashedpassword123",
         credits,

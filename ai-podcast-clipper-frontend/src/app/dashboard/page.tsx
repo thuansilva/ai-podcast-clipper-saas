@@ -1,19 +1,17 @@
-"use server";
-
 import { redirect } from "next/navigation";
 import { DashboardClient } from "~/components/dashboard-client";
-import { auth } from "~/server/auth";
+import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
 
 export default async function DashboardPage() {
-  const session = await auth();
+  const userId = await makeAuthGateway().getUserId();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     redirect("/login");
   }
 
   const userData = await db.user.findUniqueOrThrow({
-    where: { id: session.user.id },
+    where: { id: userId },
     select: {
       credits: true,
       uploadedFiles: {

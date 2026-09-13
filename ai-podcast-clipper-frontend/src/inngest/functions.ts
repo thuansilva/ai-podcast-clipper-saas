@@ -349,6 +349,7 @@ export async function processVideoHandler({
 export const processVideo = inngest.createFunction(
   {
     id: "process-video",
+    triggers: [{ event: "process-video-events" }],
     retries: 1,
     concurrency: {
       limit: 1,
@@ -408,10 +409,9 @@ export const processVideo = inngest.createFunction(
       }
     },
   },
-  { event: "process-video-events" },
   async ({ event, step }) => {
     return processVideoHandler({
-      event: event as { data: ProcessVideoEventData },
+      event: event as unknown as { data: ProcessVideoEventData },
       step: step as unknown as PipelineStep,
     });
   },

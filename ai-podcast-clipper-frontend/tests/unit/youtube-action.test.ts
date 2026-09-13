@@ -1,12 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { importYouTubeVideo } from "~/actions/youtube";
-import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { inngest } from "~/inngest/client";
 import { revalidatePath } from "next/cache";
 
-vi.mock("~/server/auth", () => ({
-  auth: vi.fn(),
+const mockAuthGateway = {
+  getUserId: vi.fn(),
+  getCurrentUser: vi.fn(),
+  requireUserId: vi.fn(),
+};
+
+vi.mock("~/infrastructure/factories/auth-factory", () => ({
+  makeAuthGateway: () => mockAuthGateway,
 }));
 
 vi.mock("~/server/db", () => ({
@@ -35,7 +40,7 @@ describe("importYouTubeVideo Server Action", () => {
   });
 
   it("deve retornar erro se o usuário não estiver autenticado", async () => {
-    vi.mocked(auth).mockResolvedValueOnce(null as any);
+    mockAuthGateway.getUserId.mockResolvedValueOnce(null);
 
     const result = await importYouTubeVideo({
       url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
@@ -49,10 +54,7 @@ describe("importYouTubeVideo Server Action", () => {
   });
 
   it("deve retornar erro se a URL do YouTube for inválida", async () => {
-    vi.mocked(auth).mockResolvedValueOnce({
-      user: { id: "user-123" },
-      expires: "2099-01-01",
-    } as any);
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 
     const result = await importYouTubeVideo({
       url: "https://vimeo.com/123456",
@@ -64,10 +66,7 @@ describe("importYouTubeVideo Server Action", () => {
   });
 
   it("deve criar UploadedFile com sourceType YOUTUBE, disparar evento no Inngest e revalidar", async () => {
-    vi.mocked(auth).mockResolvedValueOnce({
-      user: { id: "user-123" },
-      expires: "2099-01-01",
-    } as any);
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 
     vi.mocked(db.uploadedFile.create).mockResolvedValueOnce({
       id: "uploaded-file-abc",
@@ -122,10 +121,7 @@ describe("importYouTubeVideo Server Action", () => {
   });
 
   it("deve capturar e retornar exceções na criação ou envio de eventos", async () => {
-    vi.mocked(auth).mockResolvedValueOnce({
-      user: { id: "user-123" },
-      expires: "2099-01-01",
-    } as any);
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 
     vi.mocked(db.uploadedFile.create).mockRejectedValueOnce(
       new Error("Database connection failure"),

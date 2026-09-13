@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "~/server/auth";
+import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { makeGenerateUploadUrlUseCase } from "~/infrastructure/factories/use-case-factories";
 import { DomainError } from "~/domain/errors/domain-error";
 
@@ -14,15 +14,15 @@ export async function generateUploadUrl(fileInfo: {
   uploadedFileId: string;
   error?: string;
 }> {
-  const session = await auth();
-  if (!session?.user?.id) {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
     throw new Error("Unauthorized");
   }
 
   try {
     const useCase = makeGenerateUploadUrlUseCase();
     const result = await useCase.execute({
-      userId: session.user.id,
+      userId,
       filename: fileInfo.filename,
       contentType: fileInfo.contentType,
     });

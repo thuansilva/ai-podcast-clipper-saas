@@ -1,11 +1,43 @@
 import { db } from "~/server/db";
 import type { UserEntity } from "~/domain/entities/user";
-import type { IUserRepository } from "~/domain/ports/user-repository";
+import type {
+  IUserRepository,
+  CreateUserData,
+  UpdateUserData,
+  CreditsUpdateInput,
+} from "~/domain/ports/user-repository";
 
 export class PrismaUserRepository implements IUserRepository {
   async findById(id: string): Promise<UserEntity | null> {
     const user = await db.user.findUnique({
       where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        credits: true,
+        reservedCredits: true,
+        stripeCustomerId: true,
+        image: true,
+      },
+    });
+
+    if (!user) return null;
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      credits: user.credits,
+      reservedCredits: user.reservedCredits,
+      stripeCustomerId: user.stripeCustomerId,
+      image: user.image,
+    };
+  }
+
+  async findByEmail(email: string): Promise<UserEntity | null> {
+    const user = await db.user.findUnique({
+      where: { email },
       select: {
         id: true,
         name: true,
@@ -59,14 +91,75 @@ export class PrismaUserRepository implements IUserRepository {
     };
   }
 
+  async create(data: CreateUserData): Promise<UserEntity> {
+    const user = await db.user.create({
+      data: {
+        id: data.id,
+        email: data.email,
+        name: data.name ?? null,
+        image: data.image ?? null,
+        stripeCustomerId: data.stripeCustomerId ?? null,
+        credits: data.credits ?? 10,
+        reservedCredits: data.reservedCredits ?? 0,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        credits: true,
+        reservedCredits: true,
+        stripeCustomerId: true,
+        image: true,
+      },
+    });
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      credits: user.credits,
+      reservedCredits: user.reservedCredits,
+      stripeCustomerId: user.stripeCustomerId,
+      image: user.image,
+    };
+  }
+
+  async update(userId: string, data: UpdateUserData): Promise<UserEntity> {
+    const user = await db.user.update({
+      where: { id: userId },
+      data: {
+        ...(data.email !== undefined && { email: data.email }),
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.image !== undefined && { image: data.image }),
+        ...(data.stripeCustomerId !== undefined && {
+          stripeCustomerId: data.stripeCustomerId,
+        }),
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        credits: true,
+        reservedCredits: true,
+        stripeCustomerId: true,
+        image: true,
+      },
+    });
+
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      credits: user.credits,
+      reservedCredits: user.reservedCredits,
+      stripeCustomerId: user.stripeCustomerId,
+      image: user.image,
+    };
+  }
+
   async updateCredits(
     userId: string,
-    data: {
-      creditsDecrement?: number;
-      creditsIncrement?: number;
-      reservedCreditsIncrement?: number;
-      reservedCreditsDecrement?: number;
-    }
+    data: CreditsUpdateInput
   ): Promise<UserEntity> {
     const user = await db.user.update({
       where: { id: userId },

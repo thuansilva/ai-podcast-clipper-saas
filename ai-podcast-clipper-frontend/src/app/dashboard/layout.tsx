@@ -1,10 +1,9 @@
-"use server";
-
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import NavHeader from "~/components/nav-header";
 import { Toaster } from "~/components/ui/sonner";
-import { auth } from "~/server/auth";
+import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
+import { makeSyncUserUseCase } from "~/infrastructure/factories/use-case-factories";
 import { db } from "~/server/db";
 
 export default async function DashboardLayout({
@@ -12,16 +11,36 @@ export default async function DashboardLayout({
 }: {
   children: ReactNode;
 }) {
-  const session = await auth();
+  const authGateway = makeAuthGateway();
+  const userId = await authGateway.getUserId();
 
-  if (!session?.user?.id) {
+  if (!userId) {
     redirect("/login");
   }
 
-  const user = await db.user.findUniqueOrThrow({
-    where: { id: session.user.id },
+  let user = await db.user.findUnique({
+    where: { id: userId },
     select: { credits: true, email: true },
   });
+
+  if (!user) {
+    const authUser = await authGateway.getCurrentUser();
+    if (authUser?.email) {
+      const syncUseCase = makeSyncUserUseCase();
+      const syncedUser = await syncUseCase.execute({
+        clerkUserId: userId,
+        email: authUser.email,
+        name: authUser.name,
+        image: authUser.imageUrl,
+      });
+      user = {
+        credits: syncedUser.credits,
+        email: syncedUser.email,
+      };
+    } else {
+      redirect("/login");
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col">

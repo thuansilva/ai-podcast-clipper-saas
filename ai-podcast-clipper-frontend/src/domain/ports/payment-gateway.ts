@@ -6,4 +6,5 @@ export interface CreateCheckoutSessionInput {
 
 export interface IPaymentGateway {
   createCheckoutSession(input: CreateCheckoutSessionInput): Promise<string>;
+  createCustomer(email: string, name?: string | null): Promise<string>;
 }

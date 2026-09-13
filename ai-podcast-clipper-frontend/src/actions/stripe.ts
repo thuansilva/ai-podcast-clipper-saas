@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { env } from "~/env";
-import { auth } from "~/server/auth";
+import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
 import { makeStripePaymentGateway } from "~/infrastructure/factories/use-case-factories";
 
@@ -15,11 +15,14 @@ const PRICE_IDS: Record<PriceId, string> = {
 };
 
 export async function createCheckoutSession(priceId: PriceId) {
-  const serverSession = await auth();
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
 
   const user = await db.user.findUniqueOrThrow({
     where: {
-      id: serverSession?.user.id,
+      id: userId,
     },
     select: { stripeCustomerId: true },
   });

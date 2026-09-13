@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { deleteClip, updateClip, getClipPlayUrl } from "~/actions/generation";
-import { auth } from "~/server/auth";
 import { db } from "~/server/db";
 import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { revalidatePath } from "next/cache";
@@ -14,8 +13,14 @@ vi.mock("~/env", () => ({
   },
 }));
 
-vi.mock("~/server/auth", () => ({
-  auth: vi.fn(),
+const mockAuthGateway = {
+  getUserId: vi.fn(),
+  getCurrentUser: vi.fn(),
+  requireUserId: vi.fn(),
+};
+
+vi.mock("~/infrastructure/factories/auth-factory", () => ({
+  makeAuthGateway: () => mockAuthGateway,
 }));
 
 vi.mock("~/server/db", () => ({
@@ -76,7 +81,7 @@ describe("Generation Server Actions", () => {
 
   describe("deleteClip", () => {
     it("deve retornar erro Unauthorized se usuário não estiver autenticado", async () => {
-      vi.mocked(auth).mockResolvedValueOnce(null as any);
+      mockAuthGateway.getUserId.mockResolvedValueOnce(null);
 
       const result = await deleteClip("clip-123");
       expect(result).toEqual({ success: false, error: "Unauthorized" });
@@ -84,10 +89,7 @@ describe("Generation Server Actions", () => {
     });
 
     it("deve retornar erro se o clipe não for encontrado ou não pertencer ao usuário", async () => {
-      vi.mocked(auth).mockResolvedValueOnce({
-        user: { id: "user-123" },
-        expires: "2099-01-01",
-      } as any);
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 
       vi.mocked(db.clip.findUnique).mockResolvedValueOnce(null);
 
@@ -98,10 +100,7 @@ describe("Generation Server Actions", () => {
     });
 
     it("deve excluir o arquivo do S3 e deletar o clipe no Prisma e revalidar /dashboard", async () => {
-      vi.mocked(auth).mockResolvedValueOnce({
-        user: { id: "user-123" },
-        expires: "2099-01-01",
-      } as any);
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 
       vi.mocked(db.clip.findUnique).mockResolvedValueOnce({
         id: "clip-123",
@@ -135,10 +134,7 @@ describe("Generation Server Actions", () => {
     });
 
     it("deve capturar falhas e retornar erro", async () => {
-      vi.mocked(auth).mockResolvedValueOnce({
-        user: { id: "user-123" },
-        expires: "2099-01-01",
-      } as any);
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 
       vi.mocked(db.clip.findUnique).mockRejectedValueOnce(new Error("DB Timeout"));
 
@@ -149,10 +145,7 @@ describe("Generation Server Actions", () => {
 
   describe("updateClip", () => {
     it("deve atualizar preset e transcrição do clipe", async () => {
-      vi.mocked(auth).mockResolvedValueOnce({
-        user: { id: "user-123" },
-        expires: "2099-01-01",
-      } as any);
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 
       vi.mocked(db.clip.findUnique).mockResolvedValueOnce({
         id: "clip-123",
@@ -192,10 +185,7 @@ describe("Generation Server Actions", () => {
 
   describe("getClipPlayUrl", () => {
     it("deve gerar URL pré-assinada para clipe do usuário", async () => {
-      vi.mocked(auth).mockResolvedValueOnce({
-        user: { id: "user-123" },
-        expires: "2099-01-01",
-      } as any);
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 
       vi.mocked(db.clip.findUnique).mockResolvedValueOnce({
         id: "clip-123",

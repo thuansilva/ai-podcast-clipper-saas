@@ -18,6 +18,7 @@ import { ImportYouTubeVideoUseCase } from "~/application/use-cases/videos/import
 import { GetClipPlayUrlUseCase } from "~/application/use-cases/clips/get-clip-play-url.use-case";
 import { UpdateClipUseCase } from "~/application/use-cases/clips/update-clip.use-case";
 import { DeleteClipUseCase } from "~/application/use-cases/clips/delete-clip.use-case";
+import { SyncUserUseCase } from "~/application/use-cases/users/sync-user.use-case";
 
 // --- Fábricas de Créditos ---
 export function makeHoldCreditsUseCase(): HoldCreditsUseCase {
@@ -91,4 +92,12 @@ export function makeDeleteClipUseCase(): DeleteClipUseCase {
 // --- Fábricas de Pagamento ---
 export function makeStripePaymentGateway(): StripePaymentGateway {
   return new StripePaymentGateway();
+}
+
+// --- Fábricas de Usuário ---
+export function makeSyncUserUseCase(): SyncUserUseCase {
+  return new SyncUserUseCase(
+    new PrismaUserRepository(),
+    new StripePaymentGateway()
+  );
 }

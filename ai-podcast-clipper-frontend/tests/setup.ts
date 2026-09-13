@@ -17,3 +17,6 @@ process.env.STRIPE_LARGE_CREDIT_PACK = "price_large_789";
 process.env.STRIPE_WEBHOOK_SECRET = "whsec_mock";
 process.env.BASE_URL = "http://localhost:3000";
 process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_test_mock";
+process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_mock_clerk";
+process.env.CLERK_SECRET_KEY = "sk_test_mock_clerk";
+process.env.CLERK_WEBHOOK_SECRET = "whsec_mock_clerk";
