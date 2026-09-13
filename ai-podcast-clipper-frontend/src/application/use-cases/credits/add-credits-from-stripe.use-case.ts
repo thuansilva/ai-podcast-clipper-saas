@@ -1,4 +1,5 @@
 import { NotFoundError } from "~/domain/errors/not-found-error";
+import { User } from "~/domain/entities/user";
 import type { IUserRepository } from "~/domain/ports/user-repository";
 import type { ICreditTransactionRepository } from "~/domain/ports/credit-transaction-repository";
 import type { IUnitOfWork } from "~/domain/ports/unit-of-work";
@@ -17,10 +18,10 @@ export class AddCreditsFromStripeWebhookUseCase {
   async execute(
     input: AddCreditsFromStripeInput
   ): Promise<AddCreditsFromStripeOutput> {
-    const user = await this.userRepository.findByStripeCustomerId(
+    const userRecord = await this.userRepository.findByStripeCustomerId(
       input.stripeCustomerId
     );
-    if (!user) {
+    if (!userRecord) {
       throw new NotFoundError(
         "Usuário com Stripe Customer ID",
         input.stripeCustomerId
@@ -37,7 +38,13 @@ export class AddCreditsFromStripeWebhookUseCase {
     }
 
     if (creditsToAdd === 0) {
-      return { success: false, addedCredits: 0, userId: user.id };
+      return { success: false, addedCredits: 0, userId: userRecord.id };
+    }
+
+    const user = User.restore(userRecord);
+    user.addCredits(creditsToAdd);
+    if (input.priceId === input.largePackPriceId) {
+      user.upgradePlan("STUDIO");
     }
 
     await this.unitOfWork.execute(async () => {
@@ -46,7 +53,7 @@ export class AddCreditsFromStripeWebhookUseCase {
       });
 
       if (input.priceId === input.largePackPriceId) {
-        await this.userRepository.update(user.id, { plan: "STUDIO" });
+        await this.userRepository.update(user.id, { plan: user.plan });
       }
 
       await this.creditTransactionRepository.create({

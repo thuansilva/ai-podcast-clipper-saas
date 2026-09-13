@@ -1,5 +1,5 @@
 import { calculateVideoCredits } from "~/domain/rules/calculate-credits";
-import { InsufficientCreditsError } from "~/domain/errors/insufficient-credits-error";
+import { User } from "~/domain/entities/user";
 import { NotFoundError } from "~/domain/errors/not-found-error";
 import type { IUserRepository } from "~/domain/ports/user-repository";
 import type { IUploadedFileRepository } from "~/domain/ports/uploaded-file-repository";
@@ -22,14 +22,13 @@ export class HoldCreditsUseCase {
     const requiredCredits =
       input.amount ?? calculateVideoCredits(input.durationSeconds);
 
-    const user = await this.userRepository.findById(input.userId);
-    if (!user) {
+    const userRecord = await this.userRepository.findById(input.userId);
+    if (!userRecord) {
       throw new NotFoundError("Usuário", input.userId);
     }
 
-    if (user.credits < requiredCredits) {
-      throw new InsufficientCreditsError(requiredCredits, user.credits);
-    }
+    const user = User.restore(userRecord);
+    user.holdCredits(requiredCredits);
 
     return await this.unitOfWork.execute(async () => {
       await this.userRepository.updateCredits(input.userId, {

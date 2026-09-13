@@ -1,4 +1,5 @@
 import { NotFoundError } from "~/domain/errors/not-found-error";
+import { User } from "~/domain/entities/user";
 import type { IUserRepository } from "~/domain/ports/user-repository";
 import type { ICreditTransactionRepository } from "~/domain/ports/credit-transaction-repository";
 import type { IUnitOfWork } from "~/domain/ports/unit-of-work";
@@ -12,10 +13,13 @@ export class ConsumeCreditsUseCase {
   ) {}
 
   async execute(input: ConsumeCreditsInput): Promise<{ success: boolean }> {
-    const user = await this.userRepository.findById(input.userId);
-    if (!user) {
+    const userRecord = await this.userRepository.findById(input.userId);
+    if (!userRecord) {
       throw new NotFoundError("Usuário", input.userId);
     }
+
+    const user = User.restore(userRecord);
+    user.consumeCredits(input.amount);
 
     await this.unitOfWork.execute(async () => {
       await this.userRepository.updateCredits(input.userId, {

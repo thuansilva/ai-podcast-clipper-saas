@@ -1,5 +1,6 @@
 import { NotFoundError } from "~/domain/errors/not-found-error";
 import { UnauthorizedError } from "~/domain/errors/unauthorized-error";
+import { Clip } from "~/domain/entities/clip";
 import type { IClipRepository } from "~/domain/ports/clip-repository";
 import type { IStorageGateway } from "~/domain/ports/storage-gateway";
 import type {
@@ -14,12 +15,14 @@ export class GetClipPlayUrlUseCase {
   ) {}
 
   async execute(input: GetClipPlayUrlInput): Promise<GetClipPlayUrlOutput> {
-    const clip = await this.clipRepository.findById(input.clipId);
-    if (!clip) {
+    const clipRecord = await this.clipRepository.findById(input.clipId);
+    if (!clipRecord) {
       throw new NotFoundError("Clipe", input.clipId);
     }
 
-    if (clip.userId !== input.userId) {
+    const clip = Clip.restore(clipRecord);
+
+    if (!clip.isOwnedBy(input.userId)) {
       throw new UnauthorizedError("Você não tem permissão para acessar este clipe.");
     }
 
