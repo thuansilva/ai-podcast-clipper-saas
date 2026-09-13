@@ -13,7 +13,7 @@ export default async function HomePage() {
   const isAuthenticated = Boolean(userId);
 
   return (
-    <div className="relative min-h-screen bg-[#0b0a08] text-[#f5f1e8] selection:bg-[#e8ba52]/20 selection:text-[#e8ba52] overflow-x-hidden">
+    <div className="relative min-h-screen bg-[var(--tinta)] text-[var(--marfim)] selection:bg-[var(--ouro)]/20 selection:text-[var(--ouro)] overflow-x-hidden">
       {/* aioson.com Atmospheric Contour Field & Prismatic Ray Background */}
       <div className="site-field" aria-hidden="true">
         <svg

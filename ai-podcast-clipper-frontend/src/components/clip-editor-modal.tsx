@@ -163,7 +163,7 @@ export function ClipEditorModal({
     >
       {/* Modal Card */}
       <div
-        className="relative w-full max-w-xl rounded-2xl border border-[var(--linha)] bg-[#161310] p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-[var(--marfim)]"
+        className="relative w-full max-w-xl rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-[var(--marfim)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -182,7 +182,7 @@ export function ClipEditorModal({
             size="sm"
             onClick={onClose}
             aria-label="Fechar"
-            className="h-8 w-8 p-0 text-[var(--fumaca)] hover:text-[var(--marfim)] hover:bg-[#1d1914] rounded-full"
+            className="h-8 w-8 p-0 text-[var(--fumaca)] hover:text-[var(--marfim)] hover:bg-[var(--superficie-2)] rounded-full"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -205,7 +205,7 @@ export function ClipEditorModal({
                     className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                       isSelected
                         ? "border-[var(--ouro)] bg-[var(--ouro)]/10 shadow-[0_0_15px_rgba(232,186,82,0.15)] ring-1 ring-[var(--ouro)]"
-                        : "border-[var(--linha)] bg-[#0b0a08] hover:border-[var(--linha-2)]"
+                        : "border-[var(--linha)] bg-[var(--tinta)] hover:border-[var(--linha-2)]"
                     }`}
                   >
                     <div className="flex items-center justify-between w-full mb-1">
@@ -217,7 +217,7 @@ export function ClipEditorModal({
                         className={`text-[10px] px-1.5 py-0 font-mono ${
                           isSelected
                             ? "border-[var(--ouro)]/40 bg-[var(--ouro)]/20 text-[var(--ouro)]"
-                            : "border-[var(--linha)] bg-[#161310] text-[var(--fumaca)]"
+                            : "border-[var(--linha)] bg-[var(--superficie)] text-[var(--fumaca)]"
                         }`}
                       >
                         {preset.badge}
@@ -252,7 +252,7 @@ export function ClipEditorModal({
               onChange={(e) => handleTextChange(e.target.value)}
               placeholder="Digite ou edite a transcrição das palavras do clipe..."
               rows={4}
-              className="w-full rounded-xl border border-[var(--linha)] bg-[#0b0a08] p-3 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] focus-visible:outline-hidden focus-visible:border-[var(--ouro)] focus-visible:ring-1 focus-visible:ring-[var(--ouro)] disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
+              className="w-full rounded-xl border border-[var(--linha)] bg-[var(--tinta)] p-3 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] focus-visible:outline-hidden focus-visible:border-[var(--ouro)] focus-visible:ring-1 focus-visible:ring-[var(--ouro)] disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
             />
           </div>
 
@@ -262,11 +262,11 @@ export function ClipEditorModal({
               <span className="text-[11px] font-medium text-[var(--fumaca)]">
                 Prévia das Palavras e Timestamps:
               </span>
-              <div className="max-h-28 overflow-y-auto rounded-xl border border-[var(--linha)] bg-[#0b0a08] p-2.5 flex flex-wrap gap-1.5">
+              <div className="max-h-28 overflow-y-auto rounded-xl border border-[var(--linha)] bg-[var(--tinta)] p-2.5 flex flex-wrap gap-1.5">
                 {words.map((item, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1 rounded-full bg-[#1d1914] px-2.5 py-0.5 text-xs border border-[var(--linha)]"
+                    className="inline-flex items-center gap-1 rounded-full bg-[var(--superficie-2)] px-2.5 py-0.5 text-xs border border-[var(--linha)]"
                     title={`${item.start?.toFixed(1)}s - ${item.end?.toFixed(1)}s`}
                   >
                     <span className="font-medium text-[var(--marfim)]">{item.word}</span>

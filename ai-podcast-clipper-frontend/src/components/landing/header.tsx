@@ -1,17 +1,18 @@
 import Link from "next/link";
 import { SparklesIcon, ArrowRightIcon } from "lucide-react";
+import { ThemeToggle } from "~/components/theme-toggle";
 
 export function Header({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-[var(--linha)] bg-[#0b0a08]/85 backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full border-b border-[var(--linha)] bg-[var(--tinta)]/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-90">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--ouro)]/40 bg-[#161310] shadow-[0_0_12px_rgba(232,186,82,0.15)]">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--ouro)]/40 bg-[var(--superficie)] shadow-[0_0_12px_rgba(232,186,82,0.15)]">
             <SparklesIcon className="h-4 w-4 text-[var(--ouro)]" />
           </div>
           <div className="flex items-center gap-2">
             <span className="text-base font-semibold tracking-tight text-[var(--marfim)]">Podcast Clipper</span>
-            <span className="rounded-full border border-[var(--linha-2)] bg-[#161310] px-2 py-0.5 font-mono text-[10px] text-[var(--ouro)] tracking-widest">
+            <span className="rounded-full border border-[var(--linha-2)] bg-[var(--superficie)] px-2 py-0.5 font-mono text-[10px] text-[var(--ouro)] tracking-widest">
               STUDIO
             </span>
           </div>
@@ -36,8 +37,10 @@ export function Header({ isAuthenticated }: { isAuthenticated: boolean }) {
           </Link>
         </nav>
 
-        {/* Action Buttons */}
+        {/* Action Buttons & Tools */}
         <div className="flex items-center gap-3">
+          <ThemeToggle />
+
           {isAuthenticated ? (
             <Link
               href="/dashboard"

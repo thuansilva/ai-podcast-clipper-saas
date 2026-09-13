@@ -75,7 +75,7 @@ export function ProductPreview() {
     <section id="demo" className="py-16 relative">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <div className="text-center">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--linha-2)] bg-[#161310] px-3.5 py-1 font-mono text-xs text-[var(--ouro)] uppercase tracking-wider mb-2">
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-[var(--linha-2)] bg-[var(--superficie)] px-3.5 py-1 font-mono text-xs text-[var(--ouro)] uppercase tracking-wider mb-2">
             <SparklesIcon className="h-3.5 w-3.5 text-[var(--ouro)]" />
             Live Engine Demonstration
           </div>
@@ -88,11 +88,11 @@ export function ProductPreview() {
         </div>
 
         {/* Studio Controls Header */}
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-t-2xl border border-b-0 border-[var(--linha)] bg-[#161310]/90 px-4 py-3 sm:px-6">
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-t-2xl border border-b-0 border-[var(--linha)] bg-[var(--superficie)]/90 px-4 py-3 sm:px-6">
           <div className="flex items-center gap-2">
             <button
               onClick={togglePlay}
-              className="flex items-center gap-1.5 rounded-full border border-[var(--linha-2)] bg-[#1d1914] px-3.5 py-1.5 font-mono text-xs font-medium text-[var(--marfim)] hover:border-[var(--ouro)] hover:text-[var(--ouro)] transition-all cursor-pointer"
+              className="flex items-center gap-1.5 rounded-full border border-[var(--linha-2)] bg-[var(--superficie-2)] px-3.5 py-1.5 font-mono text-xs font-medium text-[var(--marfim)] hover:border-[var(--ouro)] hover:text-[var(--ouro)] transition-all cursor-pointer"
             >
               {isPlaying ? (
                 <>
@@ -106,7 +106,7 @@ export function ProductPreview() {
             </button>
             <button
               onClick={toggleMute}
-              className="flex items-center gap-1.5 rounded-full border border-[var(--linha)] bg-[#0b0a08] px-3 py-1.5 font-mono text-xs text-[var(--fumaca)] hover:text-[var(--marfim)] hover:border-[var(--linha-2)] transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 rounded-full border border-[var(--linha)] bg-[var(--tinta)] px-3 py-1.5 font-mono text-xs text-[var(--fumaca)] hover:text-[var(--marfim)] hover:border-[var(--linha-2)] transition-colors cursor-pointer"
               title={isMuted ? "Unmute audio" : "Mute audio"}
             >
               {isMuted ? (
@@ -127,7 +127,7 @@ export function ProductPreview() {
                 className={`rounded-full px-3 py-1 text-[11px] font-medium transition-all cursor-pointer ${
                   preset === p
                     ? "bg-[var(--ouro)] text-[var(--tinta)] font-bold shadow-[0_0_12px_rgba(232,186,82,0.3)]"
-                    : "bg-[#0b0a08] text-[var(--fumaca)] hover:text-[var(--marfim)] border border-[var(--linha)]"
+                    : "bg-[var(--tinta)] text-[var(--fumaca)] hover:text-[var(--marfim)] border border-[var(--linha)]"
                 }`}
               >
                 {p}
@@ -137,7 +137,7 @@ export function ProductPreview() {
         </div>
 
         {/* Split Video Container */}
-        <div className="overflow-hidden rounded-b-2xl border border-[var(--linha)] bg-[#161310] p-4 sm:p-8">
+        <div className="overflow-hidden rounded-b-2xl border border-[var(--linha)] bg-[var(--superficie)] p-4 sm:p-8">
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:items-center">
             {/* Left: 16:9 Raw Source with Face Tracking overlay */}
             {/* Left: 16:9 Raw Source with Face Tracking overlay */}
@@ -148,7 +148,7 @@ export function ProductPreview() {
               </div>
 
               {/* 16:9 Video Canvas */}
-              <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-[var(--linha)] bg-[#0b0a08]">
+              <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-[var(--linha)] bg-[var(--tinta)]">
                 <video
                   ref={video16x9Ref}
                   src="/demo/podcast-source-16x9.mp4"
@@ -160,13 +160,13 @@ export function ProductPreview() {
                 />
 
                 {/* Speaker Active HUD Tag */}
-                <div className="absolute top-3 left-3 rounded-full border border-[var(--linha-2)] bg-[#0b0a08]/90 px-3 py-1 font-mono text-[10px] text-[var(--marfim)] backdrop-blur-sm">
+                <div className="absolute top-3 left-3 rounded-full border border-[var(--linha-2)] bg-[var(--tinta)]/90 px-3 py-1 font-mono text-[10px] text-[var(--marfim)] backdrop-blur-sm">
                   Active Speaker Isolation • 1080p
                 </div>
               </div>
 
               {/* AI Timeline Peak Analysis */}
-              <div className="rounded-xl border border-[var(--linha)] bg-[#0b0a08]/60 p-3.5 space-y-2">
+              <div className="rounded-xl border border-[var(--linha)] bg-[var(--tinta)]/60 p-3.5 space-y-2">
                 <div className="flex justify-between text-[11px] font-mono text-[var(--fumaca)]">
                   <span className="flex items-center gap-1.5 text-[var(--marfim-2)]">
                     <FlameIcon className="h-3.5 w-3.5 text-[var(--cobre)]" />
@@ -174,7 +174,7 @@ export function ProductPreview() {
                   </span>
                   <span className="text-[var(--marfim)]">00:14:22 → 00:15:08</span>
                 </div>
-                <div className="h-2 w-full rounded-full bg-[#1d1914] overflow-hidden">
+                <div className="h-2 w-full rounded-full bg-[var(--superficie-2)] overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-[var(--cobre)] via-[var(--ouro)] to-[var(--patina)] w-4/5 ml-[10%]" />
                 </div>
                 <p className="text-[11px] text-[var(--fumaca)]">
@@ -194,7 +194,7 @@ export function ProductPreview() {
                 </div>
 
                 {/* Smartphone Device Mockup */}
-                <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl border-2 border-[var(--linha-2)] bg-[#0b0a08] shadow-[0_0_50px_rgba(0,0,0,0.9),0_0_20px_rgba(232,186,82,0.1)]">
+                <div className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl border-2 border-[var(--linha-2)] bg-[var(--tinta)] shadow-[0_0_50px_rgba(0,0,0,0.9),0_0_20px_rgba(232,186,82,0.1)]">
                   {/* Real Vertical Video Playback */}
                   <video
                     ref={video9x16Ref}
@@ -262,7 +262,7 @@ export function ProductPreview() {
                       )}
 
                       {preset === "DEV" && (
-                        <div className="inline-block bg-[#0b0a08]/95 border border-[var(--patina)]/50 px-3 py-1 rounded font-mono">
+                        <div className="inline-block bg-[var(--tinta)]/95 border border-[var(--patina)]/50 px-3 py-1 rounded font-mono">
                           <p className="text-[11px] text-[var(--patina)]">
                             &gt; {sampleWords[activeWordIndex]?.text ?? sampleWords[0]!.text} _
                           </p>
@@ -279,7 +279,7 @@ export function ProductPreview() {
                         </span>
                         <span className="text-[var(--prata)]">60 FPS</span>
                       </div>
-                      <div className="h-1 w-full bg-[#1d1914] rounded-full overflow-hidden">
+                      <div className="h-1 w-full bg-[var(--superficie-2)] rounded-full overflow-hidden">
                         <div
                           className="h-full bg-[var(--ouro)] transition-all duration-200"
                           style={{ width: `${(currentTime / 6.0) * 100}%` }}

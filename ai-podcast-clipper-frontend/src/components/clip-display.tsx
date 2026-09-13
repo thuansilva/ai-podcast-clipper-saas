@@ -12,7 +12,7 @@ export interface ClipDisplayProps {
 export function ClipDisplay({ clips, onDeleteClip }: ClipDisplayProps) {
   if (clips.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--linha)] bg-[#0b0a08]/60 p-12 text-center">
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[var(--linha)] bg-[var(--tinta)]/60 p-12 text-center">
         <Film className="mb-3 h-10 w-10 text-[var(--ouro)] opacity-40" />
         <h3 className="text-base font-medium text-[var(--marfim)]">Nenhum clipe gerado ainda</h3>
         <p className="mt-1 text-sm text-[var(--fumaca)] max-w-sm">

@@ -43,7 +43,7 @@ export function MultiPlatformSection() {
   ];
 
   return (
-    <section id="platforms" className="border-t border-[var(--linha)] py-20 bg-[#0b0a08]">
+    <section id="platforms" className="border-t border-[var(--linha)] py-20 bg-[var(--tinta)]">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <div className="text-center">
           <span className="font-mono text-xs tracking-wider text-[var(--ouro)] uppercase">
@@ -63,12 +63,12 @@ export function MultiPlatformSection() {
           {platforms.map((p, idx) => (
             <div
               key={idx}
-              className="relative flex flex-col justify-between rounded-xl border border-[var(--linha)] bg-[#161310] p-5 backdrop-blur-sm transition-all duration-200 hover:border-[var(--ouro)]/40 hover:bg-[#1d1914]"
+              className="relative flex flex-col justify-between rounded-xl border border-[var(--linha)] bg-[var(--superficie)] p-5 backdrop-blur-sm transition-all duration-200 hover:border-[var(--ouro)]/40 hover:bg-[var(--superficie-2)]"
             >
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-base font-semibold text-[var(--marfim)]">{p.name}</span>
-                  <span className="rounded-full border border-[var(--linha-2)] bg-[#0b0a08] px-2.5 py-0.5 font-mono text-[10px] text-[var(--marfim-2)]">
+                  <span className="rounded-full border border-[var(--linha-2)] bg-[var(--tinta)] px-2.5 py-0.5 font-mono text-[10px] text-[var(--marfim-2)]">
                     {p.tag}
                   </span>
                 </div>
@@ -86,7 +86,7 @@ export function MultiPlatformSection() {
           ))}
 
           {/* Master 6th Card: All-in-One Engine */}
-          <div className="relative flex flex-col justify-between rounded-xl border border-[var(--ouro)]/40 bg-gradient-to-br from-[#161310] via-[#1d1914] to-[#161310] p-5 shadow-[0_0_25px_rgba(232,186,82,0.06)] sm:col-span-2 lg:col-span-1">
+          <div className="relative flex flex-col justify-between rounded-xl border border-[var(--ouro)]/40 bg-gradient-to-br from-[var(--superficie)] via-[var(--superficie-2)] to-[var(--superficie)] p-5 shadow-[0_0_25px_rgba(232,186,82,0.06)] sm:col-span-2 lg:col-span-1">
             <div>
               <div className="flex items-center gap-2">
                 <SparklesIcon className="h-4 w-4 text-[var(--ouro)]" />

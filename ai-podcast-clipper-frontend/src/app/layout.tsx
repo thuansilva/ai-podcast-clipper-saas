@@ -20,8 +20,21 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <ClerkProvider dynamic>
-      <html lang="en" className={`${geist.variable} dark`}>
-        <body className="bg-[#0b0a08] text-[#f5f1e8] selection:bg-[#e8ba52]/20 selection:text-[#e8ba52] min-h-screen">
+      <html
+        lang="en"
+        data-theme="dark"
+        className={`${geist.variable} dark`}
+        suppressHydrationWarning
+      >
+        <head>
+          <script
+            id="theme-init"
+            dangerouslySetInnerHTML={{
+              __html: `(function(){try{var s=localStorage.getItem("theme");var t=s==="light"?"light":"dark";document.documentElement.setAttribute("data-theme",t);if(t==="dark"){document.documentElement.classList.add("dark");document.documentElement.classList.remove("light");}else{document.documentElement.classList.remove("dark");document.documentElement.classList.add("light");}}catch(e){}})();`,
+            }}
+          />
+        </head>
+        <body className="bg-[var(--tinta)] text-[var(--marfim)] selection:bg-[var(--ouro)]/20 selection:text-[var(--ouro)] min-h-screen">
           {children}
         </body>
       </html>

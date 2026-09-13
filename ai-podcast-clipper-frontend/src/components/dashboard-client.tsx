@@ -85,7 +85,7 @@ export function DashboardClient({
       </div>
 
       <Tabs defaultValue="upload">
-        <TabsList className="bg-[#161310] border border-[var(--linha)] rounded-full p-1 h-auto">
+        <TabsList className="bg-[var(--superficie)] border border-[var(--linha)] rounded-full p-1 h-auto">
           <TabsTrigger
             value="upload"
             className="rounded-full px-5 py-2 text-xs font-medium text-[var(--marfim-2)] data-[state=active]:bg-[var(--ouro)] data-[state=active]:text-[var(--tinta)] data-[state=active]:font-semibold transition-all cursor-pointer"
@@ -98,7 +98,7 @@ export function DashboardClient({
           >
             Meus Clipes
             {clips.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px] rounded-full bg-[#1d1914] text-[var(--marfim)] border border-[var(--linha)]">
+              <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px] rounded-full bg-[var(--superficie-2)] text-[var(--marfim)] border border-[var(--linha)]">
                 {clips.length}
               </Badge>
             )}
@@ -112,7 +112,7 @@ export function DashboardClient({
           />
 
           {uploadedFiles.length > 0 && (
-            <Card className="rounded-2xl border border-[var(--linha)] bg-[#161310] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+            <Card className="rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -145,9 +145,9 @@ export function DashboardClient({
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="max-h-[300px] overflow-auto rounded-xl border border-[var(--linha)] bg-[#0b0a08]">
+                <div className="max-h-[300px] overflow-auto rounded-xl border border-[var(--linha)] bg-[var(--tinta)]">
                   <Table>
-                    <TableHeader className="bg-[#1d1914] text-[var(--fumaca)] font-mono text-xs border-b border-[var(--linha)]">
+                    <TableHeader className="bg-[var(--superficie-2)] text-[var(--fumaca)] font-mono text-xs border-b border-[var(--linha)]">
                       <TableRow className="border-b border-[var(--linha)] hover:bg-transparent">
                         <TableHead className="text-[var(--marfim)]">File</TableHead>
                         <TableHead className="text-[var(--fumaca)]">Uploaded</TableHead>
@@ -157,7 +157,7 @@ export function DashboardClient({
                     </TableHeader>
                     <TableBody>
                       {uploadedFiles.map((item) => (
-                        <TableRow key={item.id} className="border-b border-[var(--linha)] hover:bg-[#1d1914]/50 transition-colors">
+                        <TableRow key={item.id} className="border-b border-[var(--linha)] hover:bg-[var(--superficie-2)]/50 transition-colors">
                           <TableCell className="max-w-xs truncate font-medium text-[var(--marfim)]">
                             {item.filename}
                           </TableCell>
@@ -166,7 +166,7 @@ export function DashboardClient({
                           </TableCell>
                           <TableCell>
                             {item.status === "queued" && (
-                              <Badge variant="outline" className="rounded-full border-[var(--linha-2)] bg-[#161310] text-[var(--prata)] font-mono text-[10px]">Queued</Badge>
+                              <Badge variant="outline" className="rounded-full border-[var(--linha-2)] bg-[var(--superficie)] text-[var(--prata)] font-mono text-[10px]">Queued</Badge>
                             )}
                             {item.status === "processing" && (
                               <Badge variant="outline" className="rounded-full border-[var(--ouro)]/40 bg-[var(--ouro)]/10 text-[var(--ouro)] font-mono text-[10px] animate-pulse">Processing</Badge>
@@ -204,7 +204,7 @@ export function DashboardClient({
         </TabsContent>
 
         <TabsContent value="my-clips">
-          <Card className="rounded-2xl border border-[var(--linha)] bg-[#161310] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+          <Card className="rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
             <CardHeader>
               <CardTitle className="text-lg font-medium text-[var(--marfim)]">Meus Clipes Gerados</CardTitle>
               <CardDescription className="text-xs text-[var(--fumaca)]">

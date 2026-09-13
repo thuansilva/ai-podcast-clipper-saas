@@ -45,7 +45,7 @@ export function FAQSection() {
   ];
 
   return (
-    <section id="faq" className="border-t border-[var(--linha)] py-20 bg-[#0b0a08]">
+    <section id="faq" className="border-t border-[var(--linha)] py-20 bg-[var(--tinta)]">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <div className="text-center">
           <span className="font-mono text-xs tracking-wider text-[var(--ouro)] uppercase">
@@ -65,7 +65,7 @@ export function FAQSection() {
             return (
               <div
                 key={idx}
-                className="overflow-hidden rounded-xl border border-[var(--linha)] bg-[#161310] transition-all duration-200 hover:border-[var(--linha-2)]"
+                className="overflow-hidden rounded-xl border border-[var(--linha)] bg-[var(--superficie)] transition-all duration-200 hover:border-[var(--linha-2)]"
               >
                 <button
                   onClick={() => setOpenIndex(isOpen ? null : idx)}
@@ -80,7 +80,7 @@ export function FAQSection() {
                   />
                 </button>
                 {isOpen && (
-                  <div className="border-t border-[var(--linha)] px-4 py-3.5 text-xs leading-relaxed text-[var(--marfim-2)] bg-[#1d1914]/60">
+                  <div className="border-t border-[var(--linha)] px-4 py-3.5 text-xs leading-relaxed text-[var(--marfim-2)] bg-[var(--superficie-2)]/60">
                     {faq.answer}
                   </div>
                 )}

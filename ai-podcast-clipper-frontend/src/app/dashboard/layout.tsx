@@ -43,7 +43,7 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-[#0b0a08] text-[#f5f1e8] selection:bg-[#e8ba52]/20 selection:text-[#e8ba52]">
+    <div className="relative flex min-h-screen flex-col bg-[var(--tinta)] text-[var(--marfim)] selection:bg-[var(--ouro)]/20 selection:text-[var(--ouro)]">
       {/* Subtle Ambient Filament Glow */}
       <div
         aria-hidden="true"

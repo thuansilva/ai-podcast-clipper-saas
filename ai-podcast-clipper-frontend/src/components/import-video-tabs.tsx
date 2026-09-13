@@ -242,7 +242,7 @@ export function ImportVideoTabs({
   );
 
   return (
-    <Card className="w-full rounded-2xl border border-[var(--linha)] bg-[#161310] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+    <Card className="w-full rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
       <CardHeader>
         <CardTitle className="text-lg font-semibold text-[var(--marfim)]">Importar Vídeo para Cortes</CardTitle>
         <CardDescription className="text-xs text-[var(--fumaca)]">
@@ -256,7 +256,7 @@ export function ImportVideoTabs({
           onValueChange={setActiveTab}
           className="w-full space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-2 bg-[#0b0a08] border border-[var(--linha)] rounded-full p-1 h-auto">
+          <TabsList className="grid w-full grid-cols-2 bg-[var(--tinta)] border border-[var(--linha)] rounded-full p-1 h-auto">
             <TabsTrigger
               value="upload"
               className="flex items-center justify-center gap-2 rounded-full py-2 text-xs font-medium text-[var(--marfim-2)] data-[state=active]:bg-[var(--ouro)] data-[state=active]:text-[var(--tinta)] data-[state=active]:font-semibold transition-all cursor-pointer"
@@ -286,7 +286,7 @@ export function ImportVideoTabs({
               maxFiles={1}
             >
               {(_dropzone: DropzoneState) => (
-                <div className="flex flex-col items-center justify-center space-y-4 rounded-2xl border-2 border-dashed border-[var(--linha-2)] bg-[#0b0a08]/80 hover:border-[var(--ouro)]/50 transition-colors p-8 text-center cursor-pointer">
+                <div className="flex flex-col items-center justify-center space-y-4 rounded-2xl border-2 border-dashed border-[var(--linha-2)] bg-[var(--tinta)]/80 hover:border-[var(--ouro)]/50 transition-colors p-8 text-center cursor-pointer">
                   <UploadCloud className="text-[var(--ouro)] h-12 w-12" />
                   <div>
                     <p className="font-medium text-[var(--marfim)]">Arraste e solte seu arquivo de vídeo</p>
@@ -308,7 +308,7 @@ export function ImportVideoTabs({
 
             {/* Selected File Details */}
             {file && (
-              <div className="rounded-xl border border-[var(--linha)] bg-[#1d1914] p-4 space-y-3">
+              <div className="rounded-xl border border-[var(--linha)] bg-[var(--superficie-2)] p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Film className="h-5 w-5 text-[var(--ouro)] shrink-0" />
@@ -326,7 +326,7 @@ export function ImportVideoTabs({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs rounded-full border-[var(--linha-2)] bg-[#161310] text-[var(--patina)] font-mono">
+                    <Badge variant="outline" className="text-xs rounded-full border-[var(--linha-2)] bg-[var(--superficie)] text-[var(--patina)] font-mono">
                       Custo: {creditsCost} crédito{creditsCost > 1 ? "s" : ""}
                     </Badge>
                     <Button
@@ -397,7 +397,7 @@ export function ImportVideoTabs({
                 onChange={(e) => setYoutubeUrl(e.target.value)}
                 disabled={importing}
                 aria-label="Link do YouTube"
-                className="bg-[#0b0a08] border border-[var(--linha)] text-[var(--marfim)] placeholder:text-[var(--fumaca)] focus:border-[var(--ouro)] rounded-xl"
+                className="bg-[var(--tinta)] border border-[var(--linha)] text-[var(--marfim)] placeholder:text-[var(--fumaca)] focus:border-[var(--ouro)] rounded-xl"
               />
 
               {/* Dynamic validation feedback */}

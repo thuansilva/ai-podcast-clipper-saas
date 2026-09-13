@@ -121,9 +121,9 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
 
   return (
     <>
-      <Card className="flex flex-col overflow-hidden rounded-2xl border border-[var(--linha)] bg-[#161310] text-[var(--marfim)] transition-all hover:border-[var(--linha-2)] hover:shadow-[0_0_24px_rgba(0,0,0,0.5)]">
+      <Card className="flex flex-col overflow-hidden rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] text-[var(--marfim)] transition-all hover:border-[var(--linha-2)] hover:shadow-[0_0_24px_rgba(0,0,0,0.5)]">
         {/* Player vertical 9:16 */}
-        <div className="relative aspect-[9/16] w-full overflow-hidden bg-[#0b0a08]">
+        <div className="relative aspect-[9/16] w-full overflow-hidden bg-[var(--tinta)]">
           {isLoadingUrl ? (
             <div className="flex h-full w-full items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-[var(--fumaca)]" />
@@ -148,13 +148,13 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
             {clip.viralityScore !== null && clip.viralityScore !== undefined ? (
               <Badge
                 variant="default"
-                className="border border-[var(--ouro)]/50 bg-[#161310]/90 font-mono text-[11px] font-semibold text-[var(--ouro)] shadow-xs backdrop-blur-md"
+                className="border border-[var(--ouro)]/50 bg-[var(--superficie)]/90 font-mono text-[11px] font-semibold text-[var(--ouro)] shadow-xs backdrop-blur-md"
                 data-testid="virality-badge"
               >
                 🔥 {clip.viralityScore}/10
               </Badge>
             ) : (
-              <Badge variant="secondary" className="border border-[var(--linha)] bg-[#161310]/80 text-[var(--fumaca)] backdrop-blur-xs">
+              <Badge variant="secondary" className="border border-[var(--linha)] bg-[var(--superficie)]/80 text-[var(--fumaca)] backdrop-blur-xs">
                 Score N/A
               </Badge>
             )}
@@ -162,7 +162,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
             {clip.durationSeconds > 0 && (
               <Badge
                 variant="secondary"
-                className="flex items-center gap-1 border border-[var(--linha)] bg-[#0b0a08]/80 font-mono text-[10px] text-[var(--marfim)] backdrop-blur-xs"
+                className="flex items-center gap-1 border border-[var(--linha)] bg-[var(--tinta)]/80 font-mono text-[10px] text-[var(--marfim)] backdrop-blur-xs"
               >
                 <Clock className="h-3 w-3 text-[var(--ouro)]" />
                 {Math.round(clip.durationSeconds)}s
@@ -193,7 +193,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
 
         <CardContent className="flex flex-1 flex-col justify-between space-y-3 p-4 pt-0">
           {clip.hook && (
-            <div className="space-y-1.5 rounded-xl border border-[var(--linha)] bg-[#0b0a08] p-3 text-xs">
+            <div className="space-y-1.5 rounded-xl border border-[var(--linha)] bg-[var(--tinta)] p-3 text-xs">
               <div className="flex items-center justify-between text-[11px] font-medium text-[var(--fumaca)]">
                 <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--marfim)]">
                   <Sparkles className="h-3 w-3 text-[var(--ouro)]" />
@@ -203,7 +203,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
                   variant="ghost"
                   size="sm"
                   onClick={handleCopyHook}
-                  className="h-6 px-1.5 text-xs text-[var(--fumaca)] hover:bg-[#1d1914] hover:text-[var(--marfim)] cursor-pointer"
+                  className="h-6 px-1.5 text-xs text-[var(--fumaca)] hover:bg-[var(--superficie-2)] hover:text-[var(--marfim)] cursor-pointer"
                   aria-label="Copiar Hook"
                 >
                   {copiedHook ? (
@@ -237,7 +237,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
         </CardContent>
 
         {/* Ações: Download, Edição e Exclusão */}
-        <CardFooter className="flex items-center gap-2 border-t border-[var(--linha)] p-4 pt-3 bg-[#161310]">
+        <CardFooter className="flex items-center gap-2 border-t border-[var(--linha)] p-4 pt-3 bg-[var(--superficie)]">
           <Button
             size="sm"
             onClick={handleDownload}

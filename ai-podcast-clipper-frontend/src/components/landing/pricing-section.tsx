@@ -60,7 +60,7 @@ export function PricingSection({ isAuthenticated }: PricingSectionProps) {
   ];
 
   return (
-    <section id="pricing" className="border-t border-[var(--linha)] py-20 bg-[#0b0a08]">
+    <section id="pricing" className="border-t border-[var(--linha)] py-20 bg-[var(--tinta)]">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <div className="text-center">
           <span className="font-mono text-xs tracking-wider text-[var(--ouro)] uppercase">
@@ -75,7 +75,7 @@ export function PricingSection({ isAuthenticated }: PricingSectionProps) {
         </div>
 
         {/* Guarantee Callout */}
-        <div className="mx-auto mt-8 max-w-2xl rounded-full border border-[var(--patina)]/30 bg-[#161310] p-3 text-center backdrop-blur-sm shadow-[0_0_20px_rgba(110,198,162,0.06)]">
+        <div className="mx-auto mt-8 max-w-2xl rounded-full border border-[var(--patina)]/30 bg-[var(--superficie)] p-3 text-center backdrop-blur-sm shadow-[0_0_20px_rgba(110,198,162,0.06)]">
           <div className="flex items-center justify-center gap-2 text-xs font-mono text-[var(--patina)]">
             <ShieldCheckIcon className="h-4 w-4 text-[var(--patina)]" />
             <span>Risk-Free: 10 Free Minutes on Sign-up • No Credit Card Required</span>
@@ -89,8 +89,8 @@ export function PricingSection({ isAuthenticated }: PricingSectionProps) {
               key={idx}
               className={`relative flex flex-col justify-between rounded-2xl border p-6 transition-all duration-200 ${
                 plan.isPopular
-                  ? "border-[var(--ouro)] bg-gradient-to-b from-[#1d1914] to-[#161310] shadow-[0_0_35px_rgba(232,186,82,0.14)]"
-                  : "border-[var(--linha)] bg-[#161310] hover:border-[var(--linha-2)] hover:bg-[#1d1914]"
+                  ? "border-[var(--ouro)] bg-gradient-to-b from-[var(--superficie-2)] to-[var(--superficie)] shadow-[0_0_35px_rgba(232,186,82,0.14)]"
+                  : "border-[var(--linha)] bg-[var(--superficie)] hover:border-[var(--linha-2)] hover:bg-[var(--superficie-2)]"
               }`}
             >
               {plan.isPopular && (
@@ -102,7 +102,7 @@ export function PricingSection({ isAuthenticated }: PricingSectionProps) {
               <div>
                 <div className="flex items-baseline justify-between">
                   <h3 className="text-lg font-semibold text-[var(--marfim)]">{plan.title}</h3>
-                  <span className="rounded-full border border-[var(--linha-2)] bg-[#0b0a08] px-2 py-0.5 font-mono text-[11px] text-[var(--marfim-2)]">
+                  <span className="rounded-full border border-[var(--linha-2)] bg-[var(--tinta)] px-2 py-0.5 font-mono text-[11px] text-[var(--marfim-2)]">
                     {plan.credits}
                   </span>
                 </div>

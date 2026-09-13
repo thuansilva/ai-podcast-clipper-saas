@@ -9,7 +9,10 @@
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 }
 
-:root {
+:root,
+[data-theme="dark"],
+.dark {
+  color-scheme: dark;
   --background: #0b0a08;
   --foreground: #f5f1e8;
   --card: #161310;
@@ -64,7 +67,7 @@
     0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
 
-  /* Noble Metals & Materials (aioson.com design system) */
+  /* Noble Metals & Materials (aioson.com dark design) */
   --tinta: #0b0a08;
   --tinta-2: #0f0d0a;
   --superficie: #161310;
@@ -73,8 +76,8 @@
   --marfim: #f5f1e8;
   --marfim-2: #cdc5b4;
   --fumaca: #8f8674;
-  --linha: #e0cba324;
-  --linha-2: #e9d6b147;
+  --linha: rgba(224, 203, 163, 0.14);
+  --linha-2: rgba(233, 214, 177, 0.28);
   --ouro: #e8ba52;
   --cobre: #d8895b;
   --patina: #6ec6a2;
@@ -85,80 +88,58 @@
   --perigo: #e25d5d;
 }
 
-.dark {
-  --background: #0b0a08;
-  --foreground: #f5f1e8;
-  --card: #161310;
-  --card-foreground: #f5f1e8;
-  --popover: #161310;
-  --popover-foreground: #f5f1e8;
-  --primary: #e8ba52;
-  --primary-foreground: #0b0a08;
-  --secondary: #1d1914;
-  --secondary-foreground: #f5f1e8;
-  --muted: #1d1914;
-  --muted-foreground: #8f8674;
-  --accent: #242019;
-  --accent-foreground: #f5f1e8;
-  --destructive: #e25d5d;
-  --destructive-foreground: #ffffff;
-  --border: rgba(224, 203, 163, 0.14);
-  --input: rgba(224, 203, 163, 0.18);
-  --ring: #e8ba52;
-  --chart-1: #e8ba52;
-  --chart-2: #d8895b;
-  --chart-3: #6ec6a2;
-  --chart-4: #b3c2d6;
-  --chart-5: #d18d80;
-  --sidebar: #0f0d0a;
-  --sidebar-foreground: #f5f1e8;
-  --sidebar-primary: #e8ba52;
-  --sidebar-primary-foreground: #0b0a08;
-  --sidebar-accent: #161310;
-  --sidebar-accent-foreground: #f5f1e8;
-  --sidebar-border: rgba(224, 203, 163, 0.14);
-  --sidebar-ring: #e8ba52;
-  --font-sans:
-    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
-    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
-  --font-mono:
-    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    "Courier New", monospace;
-  --radius: 0.5rem;
-  --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-  --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-  --shadow-sm:
-    0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-  --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-  --shadow-md:
-    0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
-  --shadow-lg:
-    0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
-  --shadow-xl:
-    0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
-  --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+[data-theme="light"],
+.light {
+  color-scheme: light;
 
-  /* Noble Metals & Materials */
-  --tinta: #0b0a08;
-  --tinta-2: #0f0d0a;
-  --superficie: #161310;
-  --superficie-2: #1d1914;
-  --solido: #242019;
-  --marfim: #f5f1e8;
-  --marfim-2: #cdc5b4;
-  --fumaca: #8f8674;
-  --linha: #e0cba324;
-  --linha-2: #e9d6b147;
-  --ouro: #e8ba52;
-  --cobre: #d8895b;
-  --patina: #6ec6a2;
-  --prata: #b3c2d6;
-  --rose: #d18d80;
-  --niobio: #b49bd8;
-  --granada: #c9697a;
-  --perigo: #e25d5d;
+  /* Noble Materials (aioson.com light design) */
+  --tinta: #f1ede3;
+  --tinta-2: #e9e4d6;
+  --superficie: #f9f6ee;
+  --superficie-2: #fffdf7;
+  --solido: #fffdf7;
+  --marfim: #1c1710;
+  --marfim-2: #4c4436;
+  --fumaca: #7d7362;
+  --linha: rgba(92, 74, 44, 0.14);
+  --linha-2: rgba(92, 74, 44, 0.26);
+  --ouro: #8a6512;
+  --cobre: #a2582f;
+  --patina: #177a58;
+  --prata: #5c6d80;
+  --rose: #9e5853;
+  --niobio: #6c4e9b;
+  --granada: #9c3f52;
+  --perigo: #bf3d47;
+
+  /* UI Tokens for Light Mode */
+  --background: #f1ede3;
+  --foreground: #1c1710;
+  --card: #f9f6ee;
+  --card-foreground: #1c1710;
+  --popover: #f9f6ee;
+  --popover-foreground: #1c1710;
+  --primary: #8a6512;
+  --primary-foreground: #fffdf7;
+  --secondary: #fffdf7;
+  --secondary-foreground: #1c1710;
+  --muted: #e9e4d6;
+  --muted-foreground: #7d7362;
+  --accent: #f9f6ee;
+  --accent-foreground: #1c1710;
+  --destructive: #bf3d47;
+  --destructive-foreground: #ffffff;
+  --border: rgba(92, 74, 44, 0.14);
+  --input: rgba(92, 74, 44, 0.22);
+  --ring: #8a6512;
+  --sidebar: #e9e4d6;
+  --sidebar-foreground: #1c1710;
+  --sidebar-primary: #8a6512;
+  --sidebar-primary-foreground: #fffdf7;
+  --sidebar-accent: #f9f6ee;
+  --sidebar-accent-foreground: #1c1710;
+  --sidebar-border: rgba(92, 74, 44, 0.14);
+  --sidebar-ring: #8a6512;
 }
 
 @theme inline {
@@ -262,10 +243,21 @@
 }
 
 .btn-ouro:hover {
-  background-color: #f3c87a;
-  border-color: #f3c87a;
+  filter: brightness(1.08);
   box-shadow: 0 0 24px rgba(232, 186, 82, 0.35);
   transform: translateY(-1px);
+}
+
+[data-theme="light"] .btn-ouro,
+.light .btn-ouro {
+  color: #fffdf7;
+  box-shadow: 0 2px 8px rgba(138, 101, 18, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+[data-theme="light"] .btn-ouro:hover,
+.light .btn-ouro:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 18px rgba(138, 101, 18, 0.35);
 }
 
 .btn-linha {
@@ -288,8 +280,28 @@
 .btn-linha:hover {
   border-color: var(--ouro);
   color: var(--ouro);
-  background-color: rgba(232, 186, 82, 0.06);
+  background-color: color-mix(in srgb, var(--ouro) 8%, transparent);
   transform: translateY(-1px);
+}
+
+/* cmd-icon-btn from aioson.com */
+.cmd-icon-btn {
+  border: 1px solid var(--linha-2);
+  border-radius: 0.625rem;
+  width: 36px;
+  height: 36px;
+  color: var(--marfim-2);
+  cursor: pointer;
+  transition: color 0.14s ease, border-color 0.14s ease, background-color 0.14s ease;
+  background: transparent;
+  place-items: center;
+  display: inline-grid;
+}
+
+.cmd-icon-btn:hover:not(:disabled) {
+  color: var(--marfim);
+  border-color: color-mix(in srgb, var(--ouro) 42%, var(--linha-2));
+  background: color-mix(in srgb, var(--superficie-2) 60%, transparent);
 }
 
 /* Atmospheric Contour Field & Prisma Effects */
@@ -302,6 +314,11 @@
   inset: 0 0 auto;
   overflow: hidden;
   z-index: 0;
+}
+
+[data-theme="light"] .site-field,
+.light .site-field {
+  background: linear-gradient(180deg, rgba(138, 101, 18, 0.06), transparent 78%);
 }
 
 .site-field-contours {
@@ -319,6 +336,16 @@
 
 .site-field-contours path:nth-child(2n) {
   stroke: rgba(179, 194, 214, 0.13);
+}
+
+[data-theme="light"] .site-field-contours path,
+.light .site-field-contours path {
+  stroke: rgba(138, 101, 18, 0.2);
+}
+
+[data-theme="light"] .site-field-contours path:nth-child(2n),
+.light .site-field-contours path:nth-child(2n) {
+  stroke: rgba(92, 109, 128, 0.18);
 }
 
 .site-field-contours g {

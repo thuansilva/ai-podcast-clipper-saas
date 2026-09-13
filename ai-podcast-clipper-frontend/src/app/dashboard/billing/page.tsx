@@ -67,8 +67,8 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
       className={cn(
         "relative flex flex-col justify-between rounded-2xl border p-6 transition-all duration-200",
         plan.isPopular
-          ? "border-[var(--ouro)] bg-gradient-to-b from-[#1d1914] to-[#161310] shadow-[0_0_35px_rgba(232,186,82,0.14)]"
-          : "border-[var(--linha)] bg-[#161310] hover:border-[var(--linha-2)] hover:bg-[#1d1914]",
+          ? "border-[var(--ouro)] bg-gradient-to-b from-[var(--superficie-2)] to-[var(--superficie)] shadow-[0_0_35px_rgba(232,186,82,0.14)]"
+          : "border-[var(--linha)] bg-[var(--superficie)] hover:border-[var(--linha-2)] hover:bg-[var(--superficie-2)]",
       )}
     >
       {plan.isPopular && (
@@ -147,7 +147,7 @@ export default function BillingPage() {
         ))}
       </div>
 
-      <div className="rounded-2xl border border-[var(--linha)] bg-[#161310] p-6 shadow-[0_0_20px_rgba(0,0,0,0.4)]">
+      <div className="rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] p-6 shadow-[0_0_20px_rgba(0,0,0,0.4)]">
         <h3 className="mb-4 text-base font-semibold text-[var(--marfim)]">How credits work</h3>
         <ul className="list-disc space-y-2 pl-5 text-xs text-[var(--marfim-2)]">
           <li>1 credit = 1 minute of podcast processing</li>

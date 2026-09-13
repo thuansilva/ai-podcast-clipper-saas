@@ -9,7 +9,7 @@ export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
     <section className="relative overflow-hidden pt-20 pb-16 md:pt-28 md:pb-24">
       <div className="mx-auto max-w-5xl px-4 text-center sm:px-6">
         {/* Studio Status Indicator */}
-        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--linha-2)] bg-[#161310]/90 px-4 py-1.5 font-mono text-xs text-[var(--marfim-2)] shadow-[0_0_15px_rgba(232,186,82,0.08)]">
+        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--linha-2)] bg-[var(--superficie)]/90 px-4 py-1.5 font-mono text-xs text-[var(--marfim-2)] shadow-[0_0_15px_rgba(232,186,82,0.08)]">
           <span className="h-2 w-2 rounded-full bg-[var(--ouro)] animate-pulse" />
           REC • AI 9:16 SMART REFRAME & DYNAMIC CAPTIONS
         </div>
