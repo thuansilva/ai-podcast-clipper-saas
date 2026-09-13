@@ -3,62 +3,64 @@ import { CheckIcon, XIcon } from "lucide-react";
 export function ComparisonSection() {
   const comparisons = [
     {
-      metric: "Tempo por Episódio",
-      manual: "3 a 5 horas caçando timecodes e cortando",
-      clipper: "Menos de 3 minutos automatizados",
+      metric: "Time Spent per Episode",
+      manual: "3 to 5 hours scrubbing timelines manually",
+      clipper: "Under 3 minutes fully automated",
     },
     {
-      metric: "Custo Médio por Corte",
-      manual: "R$ 50 a R$ 150 com editor freelancer",
-      clipper: "Menos de R$ 1,00 por corte finalizado",
+      metric: "Cost per Viral Clip",
+      manual: "$25 to $75+ per video with freelance editors",
+      clipper: "Less than $0.20 per finalized 1080p clip",
     },
     {
-      metric: "Reenquadramento 9:16",
-      manual: "Keyframes manuais para cada orador",
-      clipper: "Detecção facial e troca de câmera automática",
+      metric: "Smart 9:16 Reframe",
+      manual: "Manual keyframing and pan-and-scan",
+      clipper: "AI active speaker face tracking & instant crop",
     },
     {
-      metric: "Legendas Dinâmicas",
-      manual: "Digitação manual e ajuste de sync",
-      clipper: "Transcrição precisa em português sincronizada",
+      metric: "Word-by-Word Subtitles",
+      manual: "Manual transcription, proofreading & sync",
+      clipper: "99% accurate dynamic animated Hormozi presets",
     },
     {
-      metric: "Frequência de Postagem",
-      manual: "2 a 3 cortes por semana com esforço",
-      clipper: "10 a 20 cortes semanais sem sobrecarga",
+      metric: "Publishing Velocity",
+      manual: "2 to 3 clips per week with immense friction",
+      clipper: "15 to 20 clips weekly across all 5 networks",
     },
   ];
 
   return (
-    <section id="comparativo" className="border-t border-zinc-800/60 py-20">
+    <section id="comparison" className="border-t border-[var(--linha)] py-20 bg-[#0b0a08]">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <div className="text-center">
-          <span className="font-mono text-xs tracking-wider text-zinc-400 uppercase">Eficiência & ROI</span>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-100 sm:text-3xl">
-            Edição Manual vs. Podcast Clipper
+          <span className="font-mono text-xs tracking-wider text-[var(--ouro)] uppercase">
+            Production Efficiency & ROI
+          </span>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--marfim)] sm:text-3xl">
+            Manual Video Editing vs. Podcast Clipper
           </h2>
-          <p className="mt-2 text-sm text-zinc-400">
-            Pare de perder dias na timeline do editor. Publique com consistência sem aumentar seu custo.
+          <p className="mt-2 text-sm text-[var(--fumaca)]">
+            Stop wasting days inside editing timelines. Multiply your organic views without increasing payroll.
           </p>
         </div>
 
-        <div className="mt-12 overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
-          <div className="grid grid-cols-1 md:grid-cols-12 border-b border-zinc-800 bg-zinc-900/50 p-4 font-mono text-xs text-zinc-400">
-            <div className="md:col-span-4 font-semibold uppercase">Critério</div>
-            <div className="hidden md:block md:col-span-4 uppercase text-zinc-500">Edição Manual Tradicional</div>
-            <div className="hidden md:block md:col-span-4 uppercase text-zinc-200">Com o Podcast Clipper</div>
+        <div className="mt-12 overflow-hidden rounded-xl border border-[var(--linha)] bg-[#161310] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+          <div className="grid grid-cols-1 md:grid-cols-12 border-b border-[var(--linha)] bg-[#1d1914] p-4 font-mono text-xs text-[var(--fumaca)]">
+            <div className="md:col-span-4 font-semibold uppercase text-[var(--marfim)]">Dimension</div>
+            <div className="hidden md:block md:col-span-4 uppercase text-[var(--fumaca)]">Traditional Manual Editing</div>
+            <div className="hidden md:block md:col-span-4 uppercase text-[var(--ouro)] font-semibold">With Podcast Clipper Studio</div>
           </div>
 
-          <div className="divide-y divide-zinc-800/60">
+          <div className="divide-y divide-[var(--linha)]">
             {comparisons.map((item, idx) => (
-              <div key={idx} className="grid grid-cols-1 md:grid-cols-12 p-4 text-sm gap-2 md:gap-0 items-center">
-                <div className="md:col-span-4 font-medium text-zinc-200">{item.metric}</div>
-                <div className="md:col-span-4 flex items-center gap-2 text-zinc-400">
-                  <XIcon className="h-4 w-4 text-zinc-600 shrink-0" />
+              <div key={idx} className="grid grid-cols-1 md:grid-cols-12 p-4 text-sm gap-2 md:gap-0 items-center hover:bg-[#1d1914]/50 transition-colors">
+                <div className="md:col-span-4 font-medium text-[var(--marfim)]">{item.metric}</div>
+                <div className="md:col-span-4 flex items-center gap-2 text-[var(--fumaca)]">
+                  <XIcon className="h-4 w-4 text-[var(--cobre)]/80 shrink-0" />
                   <span className="text-xs sm:text-sm">{item.manual}</span>
                 </div>
-                <div className="md:col-span-4 flex items-center gap-2 text-zinc-100 font-medium">
-                  <CheckIcon className="h-4 w-4 text-emerald-400 shrink-0" />
+                <div className="md:col-span-4 flex items-center gap-2 text-[var(--marfim)] font-medium">
+                  <CheckIcon className="h-4 w-4 text-[var(--patina)] shrink-0" />
                   <span className="text-xs sm:text-sm">{item.clipper}</span>
                 </div>
               </div>

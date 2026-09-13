@@ -13,42 +13,49 @@ export function FAQSection() {
 
   const faqs: FAQItem[] = [
     {
-      question: "Como funcionam os créditos?",
+      question: "How do processing credits work?",
       answer:
-        "1 crédito equivale a 1 minuto de vídeo analisado e fatiado. Por exemplo, um episódio de 45 minutos consome 45 créditos e gera de 3 a 7 cortes verticais de alta retenção prontos para publicação.",
+        "1 credit equals 1 minute of source video analyzed and clipped. For instance, a 45-minute episode uses 45 credits and typically yields 4 to 8 high-retention vertical clips ready to publish.",
     },
     {
-      question: "Os créditos expiram se eu não usar este mês?",
+      question: "Do my credits ever expire?",
       answer:
-        "Não. Nossos pacotes são pay-as-you-go. Os créditos adquiridos nunca expiram e permanecem na sua conta até que você decida utilizá-los no seu próximo episódio.",
+        "Never. Our model is strictly pay-as-you-go. Unlike predatory monthly SaaS tiers that wipe your unused credits every 30 days, your credits stay safely in your account forever.",
     },
     {
-      question: "O reconhecimento de fala funciona com podcasts em português?",
+      question: "Which social media platforms are supported?",
       answer:
-        "Sim. Nosso modelo de transcrição foi calibrado especificamente com foco em português do Brasil, lidando com gírias, termos técnicos de negócios e sobreposição de falas com alta acurácia.",
+        "Every major vertical platform is natively supported: TikTok, Instagram Reels, YouTube Shorts, LinkedIn Video, and X (Twitter). Every clip is exported with automatic safe margins so text is never covered by native UI buttons.",
     },
     {
-      question: "Quais links de vídeo posso importar?",
+      question: "Can I customize the subtitle presets?",
       answer:
-        "Você pode colar links públicos ou não listados do YouTube, ou fazer upload direto de arquivos de vídeo MP4 e MOV salvos no seu computador.",
+        "Yes. Choose between Hormozi high-impact dynamic words, Clean Minimalist modern typography, or Developer Terminal aesthetics. You can preview all presets before downloading.",
     },
     {
-      question: "Como funciona a garantia e o suporte?",
+      question: "What video sources can I import?",
       answer:
-        "Todo novo usuário ganha 10 créditos gratuitos para testar a qualidade antes de comprar qualquer pacote. Se tiver qualquer dúvida ou problema com um corte, nossa equipe de suporte responde diretamente.",
+        "You can paste any public or unlisted YouTube video URL, or upload MP4 and MOV files directly from your computer.",
+    },
+    {
+      question: "Is there a free trial before paying?",
+      answer:
+        "Yes. Every new user receives 10 free credits immediately upon registration. No credit card is required to test the entire processing pipeline.",
     },
   ];
 
   return (
-    <section id="faq" className="border-t border-zinc-800/60 py-20">
+    <section id="faq" className="border-t border-[var(--linha)] py-20 bg-[#0b0a08]">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <div className="text-center">
-          <span className="font-mono text-xs tracking-wider text-zinc-400 uppercase">Tire suas dúvidas</span>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-100 sm:text-3xl">
-            Perguntas Frequentes
+          <span className="font-mono text-xs tracking-wider text-[var(--ouro)] uppercase">
+            Frequently Asked Questions
+          </span>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--marfim)] sm:text-3xl">
+            Everything You Need to Know
           </h2>
-          <p className="mt-2 text-sm text-zinc-400">
-            Respostas diretas sobre processamento, cobrança e suporte.
+          <p className="mt-2 text-sm text-[var(--fumaca)]">
+            Clear answers about processing, platform formatting, billing, and exports.
           </p>
         </div>
 
@@ -58,22 +65,22 @@ export function FAQSection() {
             return (
               <div
                 key={idx}
-                className="overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-950 transition-colors hover:border-zinc-700"
+                className="overflow-hidden rounded-xl border border-[var(--linha)] bg-[#161310] transition-all duration-200 hover:border-[var(--linha-2)]"
               >
                 <button
                   onClick={() => setOpenIndex(isOpen ? null : idx)}
-                  className="flex w-full items-center justify-between p-4 text-left text-sm font-medium text-zinc-200 transition-colors hover:text-white"
+                  className="flex w-full items-center justify-between p-4 text-left text-sm font-medium text-[var(--marfim)] transition-colors hover:text-[var(--ouro)] cursor-pointer"
                   aria-expanded={isOpen}
                 >
                   <span>{faq.question}</span>
                   <ChevronDownIcon
-                    className={`h-4 w-4 text-zinc-400 transition-transform duration-200 ${
-                      isOpen ? "rotate-180 text-zinc-200" : ""
+                    className={`h-4 w-4 text-[var(--fumaca)] transition-transform duration-200 ${
+                      isOpen ? "rotate-180 text-[var(--ouro)]" : ""
                     }`}
                   />
                 </button>
                 {isOpen && (
-                  <div className="border-t border-zinc-800/60 px-4 py-3 text-xs leading-relaxed text-zinc-400 bg-zinc-900/30">
+                  <div className="border-t border-[var(--linha)] px-4 py-3.5 text-xs leading-relaxed text-[var(--marfim-2)] bg-[#1d1914]/60">
                     {faq.answer}
                   </div>
                 )}

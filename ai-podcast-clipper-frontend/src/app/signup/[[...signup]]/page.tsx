@@ -5,8 +5,8 @@ import { studioClerkAppearance } from "~/lib/clerk-appearance";
 export default function SignUpPage() {
   return (
     <AuthSplitLayout
-      title="Crie sua conta no estúdio"
-      subtitle="Comece com 10 créditos gratuitos para processar e extrair seus primeiros cortes virais."
+      title="Create your Studio account"
+      subtitle="Get started with 10 free minutes. Upload and generate your first viral clips in minutes."
     >
       <SignUp
         path="/signup"

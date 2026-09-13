@@ -11,11 +11,12 @@ describe("HomePage", () => {
     const Component = await HomePage();
     render(Component);
 
-    expect(screen.getByText(/De podcasts longos a cortes virais/i)).toBeInTheDocument();
-    expect(screen.getByText(/Demonstração Real/i)).toBeInTheDocument();
-    expect(screen.getByText(/Edição Manual vs. Podcast Clipper/i)).toBeInTheDocument();
-    expect(screen.getByText(/Pague pelo que usar/i)).toBeInTheDocument();
-    expect(screen.getByText(/Perguntas Frequentes/i)).toBeInTheDocument();
+    expect(screen.getByText(/Turn 1-hour podcasts into/i)).toBeInTheDocument();
+    expect(screen.getByText(/See the Intelligent Reframe in Action/i)).toBeInTheDocument();
+    expect(screen.getByText(/One Click. Formatted for Every Major Feed/i)).toBeInTheDocument();
+    expect(screen.getByText(/Manual Video Editing vs. Podcast Clipper/i)).toBeInTheDocument();
+    expect(screen.getByText(/No Monthly Subscriptions/i)).toBeInTheDocument();
+    expect(screen.getByText(/Frequently Asked Questions/i)).toBeInTheDocument();
   });
 
   it("passes isAuthenticated=true to sections when user is logged in", async () => {
@@ -25,6 +26,6 @@ describe("HomePage", () => {
     const Component = await HomePage();
     render(Component);
 
-    expect(screen.getByRole("link", { name: /acessar painel/i })).toHaveAttribute("href", "/dashboard");
+    expect(screen.getByRole("link", { name: /go to dashboard/i })).toHaveAttribute("href", "/dashboard");
   });
 });

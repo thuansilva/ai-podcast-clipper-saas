@@ -10,38 +10,38 @@
 }
 
 :root {
-  --background: oklch(0.98 0 0);
-  --foreground: oklch(0.24 0 0);
-  --card: oklch(0.99 0 0);
-  --card-foreground: oklch(0.24 0 0);
-  --popover: oklch(0.99 0 0);
-  --popover-foreground: oklch(0.24 0 0);
-  --primary: oklch(0.43 0.04 41.99);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.92 0.07 74.37);
-  --secondary-foreground: oklch(0.35 0.07 40.83);
-  --muted: oklch(0.95 0 0);
-  --muted-foreground: oklch(0.5 0 0);
-  --accent: oklch(0.93 0 0);
-  --accent-foreground: oklch(0.24 0 0);
-  --destructive: oklch(0.63 0.19 33.34);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.88 0 0);
-  --input: oklch(0.88 0 0);
-  --ring: oklch(0.43 0.04 41.99);
-  --chart-1: oklch(0.43 0.04 41.99);
-  --chart-2: oklch(0.92 0.07 74.37);
-  --chart-3: oklch(0.93 0 0);
-  --chart-4: oklch(0.94 0.05 75.5);
-  --chart-5: oklch(0.43 0.04 41.67);
-  --sidebar: oklch(0.99 0 0);
-  --sidebar-foreground: oklch(0.26 0 0);
-  --sidebar-primary: oklch(0.33 0 0);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.98 0 0);
-  --sidebar-accent-foreground: oklch(0.33 0 0);
-  --sidebar-border: oklch(0.94 0 0);
-  --sidebar-ring: oklch(0.77 0 0);
+  --background: #0b0a08;
+  --foreground: #f5f1e8;
+  --card: #161310;
+  --card-foreground: #f5f1e8;
+  --popover: #161310;
+  --popover-foreground: #f5f1e8;
+  --primary: #e8ba52;
+  --primary-foreground: #0b0a08;
+  --secondary: #1d1914;
+  --secondary-foreground: #f5f1e8;
+  --muted: #1d1914;
+  --muted-foreground: #8f8674;
+  --accent: #242019;
+  --accent-foreground: #f5f1e8;
+  --destructive: #e25d5d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(224, 203, 163, 0.14);
+  --input: rgba(224, 203, 163, 0.18);
+  --ring: #e8ba52;
+  --chart-1: #e8ba52;
+  --chart-2: #d8895b;
+  --chart-3: #6ec6a2;
+  --chart-4: #b3c2d6;
+  --chart-5: #d18d80;
+  --sidebar: #0f0d0a;
+  --sidebar-foreground: #f5f1e8;
+  --sidebar-primary: #e8ba52;
+  --sidebar-primary-foreground: #0b0a08;
+  --sidebar-accent: #161310;
+  --sidebar-accent-foreground: #f5f1e8;
+  --sidebar-border: rgba(224, 203, 163, 0.14);
+  --sidebar-ring: #e8ba52;
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
@@ -63,41 +63,61 @@
   --shadow-xl:
     0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+
+  /* Noble Metals & Materials (aioson.com design system) */
+  --tinta: #0b0a08;
+  --tinta-2: #0f0d0a;
+  --superficie: #161310;
+  --superficie-2: #1d1914;
+  --solido: #242019;
+  --marfim: #f5f1e8;
+  --marfim-2: #cdc5b4;
+  --fumaca: #8f8674;
+  --linha: #e0cba324;
+  --linha-2: #e9d6b147;
+  --ouro: #e8ba52;
+  --cobre: #d8895b;
+  --patina: #6ec6a2;
+  --prata: #b3c2d6;
+  --rose: #d18d80;
+  --niobio: #b49bd8;
+  --granada: #c9697a;
+  --perigo: #e25d5d;
 }
 
 .dark {
-  --background: oklch(0.18 0 0);
-  --foreground: oklch(0.95 0 0);
-  --card: oklch(0.21 0 0);
-  --card-foreground: oklch(0.95 0 0);
-  --popover: oklch(0.21 0 0);
-  --popover-foreground: oklch(0.95 0 0);
-  --primary: oklch(0.92 0.05 66.17);
-  --primary-foreground: oklch(0.2 0.02 200.2);
-  --secondary: oklch(0.32 0.02 63.7);
-  --secondary-foreground: oklch(0.92 0.05 66.17);
-  --muted: oklch(0.25 0 0);
-  --muted-foreground: oklch(0.77 0 0);
-  --accent: oklch(0.29 0 0);
-  --accent-foreground: oklch(0.95 0 0);
-  --destructive: oklch(0.63 0.19 33.34);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.24 0.01 91.75);
-  --input: oklch(0.4 0 0);
-  --ring: oklch(0.92 0.05 66.17);
-  --chart-1: oklch(0.92 0.05 66.17);
-  --chart-2: oklch(0.32 0.02 63.7);
-  --chart-3: oklch(0.29 0 0);
-  --chart-4: oklch(0.35 0.02 67);
-  --chart-5: oklch(0.92 0.05 67.09);
-  --sidebar: oklch(0.21 0.01 285.89);
-  --sidebar-foreground: oklch(0.97 0 286.38);
-  --sidebar-primary: oklch(0.49 0.22 264.38);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.27 0.01 286.03);
-  --sidebar-accent-foreground: oklch(0.97 0 286.38);
-  --sidebar-border: oklch(0.27 0.01 286.03);
-  --sidebar-ring: oklch(0.87 0.01 286.29);
+  --background: #0b0a08;
+  --foreground: #f5f1e8;
+  --card: #161310;
+  --card-foreground: #f5f1e8;
+  --popover: #161310;
+  --popover-foreground: #f5f1e8;
+  --primary: #e8ba52;
+  --primary-foreground: #0b0a08;
+  --secondary: #1d1914;
+  --secondary-foreground: #f5f1e8;
+  --muted: #1d1914;
+  --muted-foreground: #8f8674;
+  --accent: #242019;
+  --accent-foreground: #f5f1e8;
+  --destructive: #e25d5d;
+  --destructive-foreground: #ffffff;
+  --border: rgba(224, 203, 163, 0.14);
+  --input: rgba(224, 203, 163, 0.18);
+  --ring: #e8ba52;
+  --chart-1: #e8ba52;
+  --chart-2: #d8895b;
+  --chart-3: #6ec6a2;
+  --chart-4: #b3c2d6;
+  --chart-5: #d18d80;
+  --sidebar: #0f0d0a;
+  --sidebar-foreground: #f5f1e8;
+  --sidebar-primary: #e8ba52;
+  --sidebar-primary-foreground: #0b0a08;
+  --sidebar-accent: #161310;
+  --sidebar-accent-foreground: #f5f1e8;
+  --sidebar-border: rgba(224, 203, 163, 0.14);
+  --sidebar-ring: #e8ba52;
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
@@ -119,9 +139,48 @@
   --shadow-xl:
     0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
   --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+
+  /* Noble Metals & Materials */
+  --tinta: #0b0a08;
+  --tinta-2: #0f0d0a;
+  --superficie: #161310;
+  --superficie-2: #1d1914;
+  --solido: #242019;
+  --marfim: #f5f1e8;
+  --marfim-2: #cdc5b4;
+  --fumaca: #8f8674;
+  --linha: #e0cba324;
+  --linha-2: #e9d6b147;
+  --ouro: #e8ba52;
+  --cobre: #d8895b;
+  --patina: #6ec6a2;
+  --prata: #b3c2d6;
+  --rose: #d18d80;
+  --niobio: #b49bd8;
+  --granada: #c9697a;
+  --perigo: #e25d5d;
 }
 
 @theme inline {
+  --color-tinta: var(--tinta);
+  --color-tinta-2: var(--tinta-2);
+  --color-superficie: var(--superficie);
+  --color-superficie-2: var(--superficie-2);
+  --color-solido: var(--solido);
+  --color-marfim: var(--marfim);
+  --color-marfim-2: var(--marfim-2);
+  --color-fumaca: var(--fumaca);
+  --color-linha: var(--linha);
+  --color-linha-2: var(--linha-2);
+  --color-ouro: var(--ouro);
+  --color-cobre: var(--cobre);
+  --color-patina: var(--patina);
+  --color-prata: var(--prata);
+  --color-rose: var(--rose);
+  --color-niobio: var(--niobio);
+  --color-granada: var(--granada);
+  --color-perigo: var(--perigo);
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -182,3 +241,231 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Noble Buttons & Controls (aioson style) */
+.btn-ouro {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.35rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 650;
+  background-color: var(--ouro);
+  color: var(--tinta);
+  border: 1px solid var(--ouro);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.btn-ouro:hover {
+  background-color: #f3c87a;
+  border-color: #f3c87a;
+  box-shadow: 0 0 24px rgba(232, 186, 82, 0.35);
+  transform: translateY(-1px);
+}
+
+.btn-linha {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.35rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  background-color: transparent;
+  color: var(--marfim);
+  border: 1px solid var(--linha-2);
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.btn-linha:hover {
+  border-color: var(--ouro);
+  color: var(--ouro);
+  background-color: rgba(232, 186, 82, 0.06);
+  transform: translateY(-1px);
+}
+
+/* Atmospheric Contour Field & Prisma Effects */
+.site-field {
+  pointer-events: none;
+  contain: layout paint;
+  height: 640px;
+  background: linear-gradient(180deg, rgba(232, 186, 82, 0.05), transparent 78%);
+  position: fixed;
+  inset: 0 0 auto;
+  overflow: hidden;
+  z-index: 0;
+}
+
+.site-field-contours {
+  width: 120%;
+  height: 520px;
+  margin-left: -10%;
+}
+
+.site-field-contours path {
+  fill: none;
+  stroke: rgba(232, 186, 82, 0.16);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+
+.site-field-contours path:nth-child(2n) {
+  stroke: rgba(179, 194, 214, 0.13);
+}
+
+.site-field-contours g {
+  transform-origin: 50%;
+  animation: 18s ease-in-out infinite alternate campo-deriva;
+}
+
+@keyframes campo-deriva {
+  0% {
+    opacity: 0.72;
+    transform: scaleY(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scaleY(1.07);
+  }
+}
+
+.prisma-feixe {
+  position: absolute;
+  opacity: 0;
+  background: linear-gradient(90deg, transparent, rgba(232, 186, 82, 0.38) 46%, #f5f1e8);
+  width: 92%;
+  height: 2px;
+  filter: blur(0.7px) drop-shadow(0 0 12px rgba(232, 186, 82, 0.55));
+  border-radius: 2px;
+  animation: 9.5s cubic-bezier(0.22, 0.61, 0.28, 1) infinite prisma-feixe;
+  top: 32%;
+  left: -30%;
+}
+
+.prisma-marca {
+  position: absolute;
+  opacity: 0;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  background: linear-gradient(155deg, rgba(232, 186, 82, 0.7), rgba(179, 194, 214, 0.52) 46%, rgba(110, 198, 162, 0.52));
+  width: 56px;
+  height: 50px;
+  filter: drop-shadow(0 0 22px rgba(232, 186, 82, 0.38));
+  animation: 9.5s ease-in-out infinite prisma-marca;
+  top: calc(32% - 30px);
+  left: 62%;
+}
+
+.prisma-raio {
+  position: absolute;
+  opacity: 0;
+  transform-origin: 0;
+  width: 64%;
+  height: 1.4px;
+  animation: 9.5s cubic-bezier(0.16, 0.75, 0.3, 1) infinite prisma-raio;
+  top: calc(32% + 1px);
+  left: 62.6%;
+}
+
+.prisma-raio--ouro {
+  --angulo: -16deg;
+  background: linear-gradient(90deg, #e8ba52, transparent 76%);
+}
+
+.prisma-raio--prata {
+  --angulo: -9.5deg;
+  background: linear-gradient(90deg, #b3c2d6, transparent 76%);
+  animation-delay: 90ms;
+}
+
+.prisma-raio--rose {
+  --angulo: -3deg;
+  background: linear-gradient(90deg, #d18d80, transparent 76%);
+  animation-delay: 180ms;
+}
+
+.prisma-raio--cobre {
+  --angulo: 4deg;
+  background: linear-gradient(90deg, #d8895b, transparent 76%);
+  animation-delay: 270ms;
+}
+
+.prisma-raio--patina {
+  --angulo: 12deg;
+  background: linear-gradient(90deg, #6ec6a2, transparent 76%);
+  animation-delay: 360ms;
+}
+
+@keyframes prisma-feixe {
+  0%, 5% {
+    opacity: 0;
+    transform: translate(-16%);
+  }
+  11% {
+    opacity: 0.85;
+  }
+  24% {
+    opacity: 1;
+    transform: translate(0, 0);
+  }
+  38% {
+    opacity: 0.2;
+    transform: translate(2%);
+  }
+  50%, 100% {
+    opacity: 0;
+    transform: translate(2%);
+  }
+}
+
+@keyframes prisma-marca {
+  0%, 19% {
+    opacity: 0.11;
+  }
+  25% {
+    opacity: 0.88;
+  }
+  33% {
+    opacity: 0.44;
+  }
+  56% {
+    opacity: 0.2;
+  }
+  70%, 100% {
+    opacity: 0.11;
+  }
+}
+
+@keyframes prisma-raio {
+  0%, 17% {
+    opacity: 0.13;
+    transform: rotate(var(--angulo)) scaleX(1);
+  }
+  21% {
+    opacity: 0;
+    transform: rotate(var(--angulo)) scaleX(1);
+  }
+  22%, 24% {
+    opacity: 0;
+    transform: rotate(var(--angulo)) scaleX(0.02);
+  }
+  32% {
+    opacity: 0.9;
+  }
+  62% {
+    opacity: 0.4;
+    transform: rotate(var(--angulo)) scaleX(1);
+  }
+  78%, 100% {
+    opacity: 0.13;
+    transform: rotate(var(--angulo)) scaleX(1);
+  }
+}
+

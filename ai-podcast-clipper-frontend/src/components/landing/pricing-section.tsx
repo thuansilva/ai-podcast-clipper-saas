@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CheckIcon, ZapIcon } from "lucide-react";
+import { CheckIcon, ZapIcon, ShieldCheckIcon } from "lucide-react";
 
 export interface PricingSectionProps {
   isAuthenticated: boolean;
@@ -10,102 +10,115 @@ export function PricingSection({ isAuthenticated }: PricingSectionProps) {
 
   const plans = [
     {
-      title: "Pack Inicial",
+      title: "Starter Pack",
       price: "$9.99",
-      approxBrl: "~R$ 50",
-      credits: "50 créditos",
-      description: "Ideal para testar em um episódio completo de podcast.",
+      unitPrice: "$0.20 / min",
+      credits: "50 Credits",
+      description: "Perfect for testing your first full podcast episode.",
       features: [
-        "50 minutos de processamento",
-        "Download de todos os cortes em 1080p",
-        "Detecção facial ativa em 9:16",
-        "Legendas automáticas sincronizadas",
-        "Créditos que nunca expiram",
+        "50 minutes of AI video processing",
+        "Unlimited 1080p 60FPS downloads",
+        "Smart 9:16 active-speaker crop",
+        "Animated Hormozi dynamic captions",
+        "Credits never expire",
       ],
       isPopular: false,
-      ctaText: "Comprar 50 Créditos",
+      ctaText: "Get 50 Credits",
     },
     {
-      title: "Pack Criador",
+      title: "Creator Pack",
       price: "$24.99",
-      approxBrl: "~R$ 130",
-      credits: "150 créditos",
-      description: "O melhor custo-benefício para canais com episódios regulares.",
+      unitPrice: "$0.16 / min",
+      credits: "150 Credits",
+      description: "Best value for active podcasters releasing weekly episodes.",
       features: [
-        "150 minutos de processamento (~3 episódios)",
-        "Economia de 17% por crédito",
-        "Download ilimitado de cortes",
-        "Prioridade na fila de renderização",
-        "Créditos que nunca expiram",
+        "150 minutes of processing (~3 full episodes)",
+        "Save 17% per processed minute",
+        "Priority rendering queue",
+        "All subtitle presets included",
+        "Credits never expire",
       ],
       isPopular: true,
-      ctaText: "Comprar 150 Créditos",
+      ctaText: "Get 150 Credits",
     },
     {
-      title: "Pack Estúdio",
+      title: "Studio Pack",
       price: "$69.99",
-      approxBrl: "~R$ 380",
-      credits: "500 créditos",
-      description: "Para agências de mídia e podcasts de alta frequência semanal.",
+      unitPrice: "$0.14 / min",
+      credits: "500 Credits",
+      description: "Designed for production studios, agencies, and high-volume media teams.",
       features: [
-        "500 minutos de processamento (~10 episódios)",
-        "Economia de 30% por crédito",
-        "Fila de processamento ultra rápida",
-        "Suporte técnico prioritário",
-        "Créditos que nunca expiram",
+        "500 minutes of processing (~10 full episodes)",
+        "Save 30% per processed minute",
+        "Ultra-fast parallel render slots",
+        "Dedicated priority email support",
+        "Credits never expire",
       ],
       isPopular: false,
-      ctaText: "Comprar 500 Créditos",
+      ctaText: "Get 500 Credits",
     },
   ];
 
   return (
-    <section id="precos" className="border-t border-zinc-800/60 py-20 bg-zinc-950">
+    <section id="pricing" className="border-t border-[var(--linha)] py-20 bg-[#0b0a08]">
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         <div className="text-center">
-          <span className="font-mono text-xs tracking-wider text-zinc-400 uppercase">Preços Transparentes</span>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-100 sm:text-3xl">
-            Pague pelo que usar. Sem mensalidade forçada.
+          <span className="font-mono text-xs tracking-wider text-[var(--ouro)] uppercase">
+            Simple Pay-As-You-Go
+          </span>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-[var(--marfim)] sm:text-3xl">
+            No Monthly Subscriptions. Pay Only for What You Use.
           </h2>
-          <p className="mt-2 text-sm text-zinc-400">
-            Compre créditos quando precisar. Créditos nunca expiram e ficam salvos na sua conta.
+          <p className="mt-2 text-sm text-[var(--fumaca)]">
+            Top up credits when you need them. Unused credits remain in your balance forever.
           </p>
         </div>
 
-        <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
+        {/* Guarantee Callout */}
+        <div className="mx-auto mt-8 max-w-2xl rounded-full border border-[var(--patina)]/30 bg-[#161310] p-3 text-center backdrop-blur-sm shadow-[0_0_20px_rgba(110,198,162,0.06)]">
+          <div className="flex items-center justify-center gap-2 text-xs font-mono text-[var(--patina)]">
+            <ShieldCheckIcon className="h-4 w-4 text-[var(--patina)]" />
+            <span>Risk-Free: 10 Free Minutes on Sign-up • No Credit Card Required</span>
+          </div>
+        </div>
+
+        {/* Pricing Cards */}
+        <div className="mt-10 grid grid-cols-1 gap-6 md:grid-cols-3">
           {plans.map((plan, idx) => (
             <div
               key={idx}
-              className={`relative flex flex-col justify-between rounded-xl border p-6 transition-all ${
+              className={`relative flex flex-col justify-between rounded-2xl border p-6 transition-all duration-200 ${
                 plan.isPopular
-                  ? "border-zinc-500 bg-zinc-900/60 shadow-xl"
-                  : "border-zinc-800 bg-zinc-950/60 hover:border-zinc-700"
+                  ? "border-[var(--ouro)] bg-gradient-to-b from-[#1d1914] to-[#161310] shadow-[0_0_35px_rgba(232,186,82,0.14)]"
+                  : "border-[var(--linha)] bg-[#161310] hover:border-[var(--linha-2)] hover:bg-[#1d1914]"
               }`}
             >
               {plan.isPopular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full border border-zinc-600 bg-zinc-100 px-3 py-0.5 font-mono text-[10px] font-semibold text-zinc-950 uppercase tracking-wider">
-                  Mais Popular
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full border border-[var(--ouro)] bg-[var(--ouro)] px-3.5 py-0.5 font-mono text-[10px] font-bold text-[var(--tinta)] uppercase tracking-wider shadow-sm">
+                  Most Popular
                 </div>
               )}
 
               <div>
                 <div className="flex items-baseline justify-between">
-                  <h3 className="text-lg font-semibold text-zinc-100">{plan.title}</h3>
-                  <span className="font-mono text-xs text-zinc-400">{plan.credits}</span>
+                  <h3 className="text-lg font-semibold text-[var(--marfim)]">{plan.title}</h3>
+                  <span className="rounded-full border border-[var(--linha-2)] bg-[#0b0a08] px-2 py-0.5 font-mono text-[11px] text-[var(--marfim-2)]">
+                    {plan.credits}
+                  </span>
                 </div>
-                <p className="mt-2 text-xs text-zinc-400 leading-relaxed">{plan.description}</p>
+                <p className="mt-2 text-xs text-[var(--fumaca)] leading-relaxed">{plan.description}</p>
 
                 <div className="mt-6 flex items-baseline gap-2">
-                  <span className="text-3xl font-bold tracking-tight text-zinc-100">{plan.price}</span>
-                  <span className="font-mono text-xs text-zinc-500">{plan.approxBrl}</span>
+                  <span className="text-3xl font-bold tracking-tight text-[var(--marfim)]">{plan.price}</span>
+                  <span className="font-mono text-xs text-[var(--fumaca)]">({plan.unitPrice})</span>
                 </div>
 
-                <div className="my-6 border-t border-zinc-800/80" />
+                <div className="my-6 border-t border-[var(--linha)]" />
 
-                <ul className="space-y-2.5 text-xs text-zinc-300">
+                <ul className="space-y-2.5 text-xs text-[var(--marfim-2)]">
                   {plan.features.map((feat, fIdx) => (
                     <li key={fIdx} className="flex items-center gap-2">
-                      <CheckIcon className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+                      <CheckIcon className="h-3.5 w-3.5 text-[var(--patina)] shrink-0" />
                       <span>{feat}</span>
                     </li>
                   ))}
@@ -115,10 +128,10 @@ export function PricingSection({ isAuthenticated }: PricingSectionProps) {
               <div className="mt-8">
                 <Link
                   href={targetHref}
-                  className={`flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-medium transition-colors ${
+                  className={`w-full ${
                     plan.isPopular
-                      ? "bg-zinc-100 text-zinc-950 hover:bg-zinc-200"
-                      : "border border-zinc-800 bg-zinc-900 text-zinc-200 hover:bg-zinc-800"
+                      ? "btn-ouro !w-full !text-xs !py-2.5"
+                      : "btn-linha !w-full !text-xs !py-2.5"
                   }`}
                 >
                   <ZapIcon className="h-3.5 w-3.5" />

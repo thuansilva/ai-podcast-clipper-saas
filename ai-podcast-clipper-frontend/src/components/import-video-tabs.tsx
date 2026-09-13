@@ -242,10 +242,10 @@ export function ImportVideoTabs({
   );
 
   return (
-    <Card className="w-full">
+    <Card className="w-full rounded-2xl border border-[var(--linha)] bg-[#161310] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
       <CardHeader>
-        <CardTitle>Importar Vídeo para Cortes</CardTitle>
-        <CardDescription>
+        <CardTitle className="text-lg font-semibold text-[var(--marfim)]">Importar Vídeo para Cortes</CardTitle>
+        <CardDescription className="text-xs text-[var(--fumaca)]">
           Envie um arquivo de vídeo do seu dispositivo ou importe diretamente pelo link do YouTube.
         </CardDescription>
       </CardHeader>
@@ -256,17 +256,17 @@ export function ImportVideoTabs({
           onValueChange={setActiveTab}
           className="w-full space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-2 bg-[#0b0a08] border border-[var(--linha)] rounded-full p-1 h-auto">
             <TabsTrigger
               value="upload"
-              className="flex items-center justify-center gap-2 cursor-pointer"
+              className="flex items-center justify-center gap-2 rounded-full py-2 text-xs font-medium text-[var(--marfim-2)] data-[state=active]:bg-[var(--ouro)] data-[state=active]:text-[var(--tinta)] data-[state=active]:font-semibold transition-all cursor-pointer"
             >
               <UploadCloud className="h-4 w-4" />
               <span>Upload de Arquivo</span>
             </TabsTrigger>
             <TabsTrigger
               value="youtube"
-              className="flex items-center justify-center gap-2 cursor-pointer"
+              className="flex items-center justify-center gap-2 rounded-full py-2 text-xs font-medium text-[var(--marfim-2)] data-[state=active]:bg-[var(--ouro)] data-[state=active]:text-[var(--tinta)] data-[state=active]:font-semibold transition-all cursor-pointer"
             >
               <Youtube className="h-4 w-4" />
               <span>Link do YouTube</span>
@@ -286,20 +286,19 @@ export function ImportVideoTabs({
               maxFiles={1}
             >
               {(_dropzone: DropzoneState) => (
-                <div className="flex flex-col items-center justify-center space-y-4 rounded-lg p-8 text-center cursor-pointer">
-                  <UploadCloud className="text-muted-foreground h-12 w-12" />
+                <div className="flex flex-col items-center justify-center space-y-4 rounded-2xl border-2 border-dashed border-[var(--linha-2)] bg-[#0b0a08]/80 hover:border-[var(--ouro)]/50 transition-colors p-8 text-center cursor-pointer">
+                  <UploadCloud className="text-[var(--ouro)] h-12 w-12" />
                   <div>
-                    <p className="font-medium">Arraste e solte seu arquivo de vídeo</p>
-                    <p className="text-muted-foreground text-sm">
+                    <p className="font-medium text-[var(--marfim)]">Arraste e solte seu arquivo de vídeo</p>
+                    <p className="text-sm text-[var(--fumaca)]">
                       ou clique para selecionar (MP4 ou MOV até 500MB)
                     </p>
                   </div>
                   <Button
                     type="button"
-                    variant="default"
                     size="sm"
                     disabled={uploading}
-                    className="cursor-pointer"
+                    className="btn-ouro !text-xs !py-1.5 !px-4 cursor-pointer"
                   >
                     Selecionar Arquivo
                   </Button>
@@ -309,15 +308,15 @@ export function ImportVideoTabs({
 
             {/* Selected File Details */}
             {file && (
-              <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+              <div className="rounded-xl border border-[var(--linha)] bg-[#1d1914] p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Film className="h-5 w-5 text-muted-foreground shrink-0" />
+                    <Film className="h-5 w-5 text-[var(--ouro)] shrink-0" />
                     <div>
-                      <p className="font-medium text-sm truncate max-w-sm">
+                      <p className="font-medium text-sm text-[var(--marfim)] truncate max-w-sm">
                         {file.name}
                       </p>
-                      <p className="text-muted-foreground text-xs">
+                      <p className="text-xs text-[var(--fumaca)] font-mono">
                         {(file.size / (1024 * 1024)).toFixed(1)} MB
                         {durationSeconds !== null && (
                           <> • {Math.floor(durationSeconds / 60)}m {durationSeconds % 60}s</>
@@ -327,7 +326,7 @@ export function ImportVideoTabs({
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-xs rounded-full border-[var(--linha-2)] bg-[#161310] text-[var(--patina)] font-mono">
                       Custo: {creditsCost} crédito{creditsCost > 1 ? "s" : ""}
                     </Badge>
                     <Button
@@ -339,7 +338,7 @@ export function ImportVideoTabs({
                         setDurationSeconds(null);
                       }}
                       disabled={uploading}
-                      className="text-xs text-muted-foreground hover:text-foreground"
+                      className="text-xs text-[var(--fumaca)] hover:text-[var(--perigo)] cursor-pointer"
                     >
                       Remover
                     </Button>
@@ -350,7 +349,7 @@ export function ImportVideoTabs({
                 {isUploadInsufficientCredits && (
                   <div
                     role="alert"
-                    className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm font-medium"
+                    className="flex items-center gap-2 rounded-xl border border-[var(--perigo)]/40 bg-[var(--perigo)]/10 p-3 text-[var(--perigo)] text-sm font-medium"
                   >
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     <span>
@@ -370,7 +369,7 @@ export function ImportVideoTabs({
                 type="button"
                 onClick={handleUploadSubmit}
                 disabled={!file || uploading || isUploadInsufficientCredits}
-                className="w-full sm:w-auto cursor-pointer"
+                className="btn-ouro !w-full sm:!w-auto !py-2.5 !px-6 !text-xs cursor-pointer"
               >
                 {uploading ? (
                   <>
@@ -387,7 +386,7 @@ export function ImportVideoTabs({
           {/* ABA 2: LINK DO YOUTUBE */}
           <TabsContent value="youtube" className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="youtube-url-input" className="text-sm font-medium">
+              <Label htmlFor="youtube-url-input" className="text-sm font-medium text-[var(--marfim)]">
                 Link do Vídeo do YouTube
               </Label>
               <Input
@@ -398,20 +397,21 @@ export function ImportVideoTabs({
                 onChange={(e) => setYoutubeUrl(e.target.value)}
                 disabled={importing}
                 aria-label="Link do YouTube"
+                className="bg-[#0b0a08] border border-[var(--linha)] text-[var(--marfim)] placeholder:text-[var(--fumaca)] focus:border-[var(--ouro)] rounded-xl"
               />
 
               {/* Dynamic validation feedback */}
               {trimmedYouTubeUrl.length > 0 && (
                 <div className="pt-1">
                   {isYouTubeValid ? (
-                    <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-xs font-medium">
+                    <div className="flex items-center gap-1.5 text-[var(--patina)] text-xs font-medium font-mono">
                       <CheckCircle2 className="h-3.5 w-3.5" />
                       <span>
                         URL válida do YouTube (Vídeo ID: {extractYouTubeVideoId(trimmedYouTubeUrl)})
                       </span>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-1.5 text-destructive text-xs font-medium">
+                    <div className="flex items-center gap-1.5 text-[var(--perigo)] text-xs font-medium">
                       <AlertCircle className="h-3.5 w-3.5" />
                       <span>
                         Insira uma URL válida do YouTube (ex: https://www.youtube.com/watch?v=...)
@@ -426,7 +426,7 @@ export function ImportVideoTabs({
             {isYouTubeInsufficientCredits && (
               <div
                 role="alert"
-                className="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm font-medium"
+                className="flex items-center gap-2 rounded-xl border border-[var(--perigo)]/40 bg-[var(--perigo)]/10 p-3 text-[var(--perigo)] text-sm font-medium"
               >
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>
@@ -444,7 +444,7 @@ export function ImportVideoTabs({
                 type="button"
                 onClick={handleYouTubeSubmit}
                 disabled={!isYouTubeValid || importing || isYouTubeInsufficientCredits}
-                className="w-full sm:w-auto cursor-pointer"
+                className="btn-ouro !w-full sm:!w-auto !py-2.5 !px-6 !text-xs cursor-pointer"
               >
                 {importing ? (
                   <>

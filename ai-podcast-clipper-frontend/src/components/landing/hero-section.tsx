@@ -3,55 +3,59 @@ import { ChevronDownIcon, PlayIcon } from "lucide-react";
 
 export function HeroSection({ isAuthenticated }: { isAuthenticated: boolean }) {
   const primaryHref = isAuthenticated ? "/dashboard" : "/signup";
-  const primaryText = isAuthenticated ? "Ir para o Painel de Vídeos →" : "Criar Meus Primeiros Cortes →";
+  const primaryText = isAuthenticated ? "Go to Video Studio →" : "Claim 10 Free Credits →";
 
   return (
     <section className="relative overflow-hidden pt-20 pb-16 md:pt-28 md:pb-24">
       <div className="mx-auto max-w-5xl px-4 text-center sm:px-6">
-        {/* Badge de Estúdio */}
-        <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/60 px-3 py-1 font-mono text-xs text-zinc-400">
-          <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-          REC • REENQUADRAMENTO FACIAL EM 9:16 & LEGENDAS AUTOMÁTICAS
+        {/* Studio Status Indicator */}
+        <div className="inline-flex items-center gap-2 rounded-full border border-[var(--linha-2)] bg-[#161310]/90 px-4 py-1.5 font-mono text-xs text-[var(--marfim-2)] shadow-[0_0_15px_rgba(232,186,82,0.08)]">
+          <span className="h-2 w-2 rounded-full bg-[var(--ouro)] animate-pulse" />
+          REC • AI 9:16 SMART REFRAME & DYNAMIC CAPTIONS
         </div>
 
-        {/* Título Principal */}
-        <h1 className="mt-6 text-4xl font-semibold tracking-tight text-zinc-100 sm:text-5xl md:text-6xl md:leading-[1.15]">
-          De podcasts longos a cortes virais. <br className="hidden sm:inline" />
-          <span className="text-zinc-400">Em 3 minutos, sem abrir o Premiere.</span>
+        {/* Main Headline */}
+        <h1 className="mt-6 text-4xl font-semibold tracking-tight text-[var(--marfim)] sm:text-5xl md:text-6xl md:leading-[1.15]">
+          Turn 1-hour podcasts into <br className="hidden sm:inline" />
+          <span className="bg-gradient-to-r from-[var(--ouro)] via-[var(--marfim)] to-[var(--cobre)] bg-clip-text text-transparent">
+            10 viral clips in 3 minutes.
+          </span>
         </h1>
 
-        {/* Subtítulo focado em valor real */}
-        <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-zinc-400 sm:text-lg">
-          Cole a URL do seu episódio do YouTube. Nossa engine detecta os momentos de maior retenção, reenquadra
-          automaticamente os participantes para formato vertical e gera legendas dinâmicas sincronizadas prontas para TikTok,
-          Reels e Shorts.
+        {/* Irresistible Value Proposition Subtitle */}
+        <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-[var(--marfim-2)] sm:text-lg">
+          Paste your YouTube URL. Our engine detects high-retention hooks, auto-reframes the active speaker
+          into 9:16 vertical video, and generates animated word-by-word subtitles ready for TikTok, Reels, and Shorts.
+          Without touching Premiere or CapCut.
         </p>
 
         {/* CTAs */}
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row sm:gap-4">
           <Link
             href={primaryHref}
-            className="w-full rounded-lg bg-zinc-100 px-6 py-3.5 text-sm font-medium text-zinc-950 shadow-sm transition-colors hover:bg-zinc-200 sm:w-auto"
+            className="btn-ouro w-full sm:w-auto !py-3.5 !px-8 text-sm"
           >
             {primaryText}
           </Link>
           <a
-            href="#demonstracao"
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/50 px-5 py-3.5 text-sm font-medium text-zinc-300 transition-colors hover:bg-zinc-800 sm:w-auto"
+            href="#demo"
+            className="btn-linha w-full sm:w-auto !py-3.5 !px-6 text-sm"
           >
-            <PlayIcon className="h-4 w-4 text-zinc-400" />
-            Ver Exemplo de Corte
-            <ChevronDownIcon className="h-4 w-4 text-zinc-500" />
+            <PlayIcon className="h-4 w-4 text-[var(--ouro)]" />
+            Watch Live Transformation
+            <ChevronDownIcon className="h-4 w-4 text-[var(--fumaca)]" />
           </a>
         </div>
 
-        {/* Prova de Garantia */}
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-6 font-mono text-xs text-zinc-500">
-          <span>✓ 10 créditos grátis ao cadastrar</span>
-          <span>•</span>
-          <span>✓ Sem cartão de crédito obrigatório</span>
-          <span>•</span>
-          <span>✓ Exportação em 1080p a 60 FPS</span>
+        {/* Trust & Guarantee Banner */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-5 font-mono text-xs text-[var(--fumaca)]">
+          <span className="text-[var(--ouro)]">✓ 10 free minutes on signup</span>
+          <span className="text-[var(--linha-2)]">•</span>
+          <span className="text-[var(--marfim-2)]">✓ No credit card required</span>
+          <span className="text-[var(--linha-2)]">•</span>
+          <span className="text-[var(--prata)]">✓ 1080p 60 FPS export</span>
+          <span className="text-[var(--linha-2)]">•</span>
+          <span className="text-[var(--patina)] font-medium">✓ Credits never expire</span>
         </div>
       </div>
     </section>

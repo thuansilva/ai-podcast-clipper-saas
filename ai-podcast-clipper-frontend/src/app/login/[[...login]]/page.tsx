@@ -5,8 +5,8 @@ import { studioClerkAppearance } from "~/lib/clerk-appearance";
 export default function LoginPage() {
   return (
     <AuthSplitLayout
-      title="Bem-vindo de volta ao estúdio"
-      subtitle="Entre na sua conta para continuar gerenciando e exportando seus cortes virais."
+      title="Welcome back to the Studio"
+      subtitle="Sign in to continue creating, customizing, and exporting your viral podcast clips."
     >
       <SignIn
         path="/login"

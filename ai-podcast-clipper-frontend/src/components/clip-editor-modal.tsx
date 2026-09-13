@@ -159,21 +159,21 @@ export function ClipEditorModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="clip-editor-title"
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-xs animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-200"
     >
       {/* Modal Card */}
       <div
-        className="relative w-full max-w-xl rounded-xl border bg-card p-6 shadow-2xl text-card-foreground"
+        className="relative w-full max-w-xl rounded-2xl border border-[var(--linha)] bg-[#161310] p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-[var(--marfim)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-start justify-between border-b pb-4">
+        <div className="flex items-start justify-between border-b border-[var(--linha)] pb-4">
           <div>
-            <h2 id="clip-editor-title" className="text-lg font-semibold flex items-center gap-2">
-              <Subtitles className="h-5 w-5 text-primary" />
+            <h2 id="clip-editor-title" className="text-lg font-semibold flex items-center gap-2 text-[var(--marfim)]">
+              <Subtitles className="h-5 w-5 text-[var(--ouro)]" />
               Editar Legendas e Transcrição
             </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
+            <p className="text-xs text-[var(--fumaca)] mt-0.5">
               Personalize o estilo visual e ajuste as palavras faladas no clipe: &ldquo;{clip.title}&rdquo;
             </p>
           </div>
@@ -182,7 +182,7 @@ export function ClipEditorModal({
             size="sm"
             onClick={onClose}
             aria-label="Fechar"
-            className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground"
+            className="h-8 w-8 p-0 text-[var(--fumaca)] hover:text-[var(--marfim)] hover:bg-[#1d1914] rounded-full"
           >
             <X className="h-4 w-4" />
           </Button>
@@ -191,7 +191,7 @@ export function ClipEditorModal({
         <div className="space-y-6 py-4">
           {/* Preset Selector */}
           <div className="space-y-2">
-            <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <Label className="text-xs font-semibold uppercase tracking-wider text-[var(--fumaca)]">
               Estilo de Legenda
             </Label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
@@ -202,24 +202,28 @@ export function ClipEditorModal({
                     key={preset.id}
                     type="button"
                     onClick={() => setSelectedPreset(preset.id)}
-                    className={`flex flex-col items-start p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                       isSelected
-                        ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary"
-                        : "border-border hover:bg-muted/50"
+                        ? "border-[var(--ouro)] bg-[var(--ouro)]/10 shadow-[0_0_15px_rgba(232,186,82,0.15)] ring-1 ring-[var(--ouro)]"
+                        : "border-[var(--linha)] bg-[#0b0a08] hover:border-[var(--linha-2)]"
                     }`}
                   >
                     <div className="flex items-center justify-between w-full mb-1">
-                      <span className="font-semibold text-xs text-foreground">
+                      <span className="font-semibold text-xs text-[var(--marfim)]">
                         {preset.name}
                       </span>
                       <Badge
-                        variant={isSelected ? "default" : "secondary"}
-                        className="text-[10px] px-1.5 py-0"
+                        variant="outline"
+                        className={`text-[10px] px-1.5 py-0 font-mono ${
+                          isSelected
+                            ? "border-[var(--ouro)]/40 bg-[var(--ouro)]/20 text-[var(--ouro)]"
+                            : "border-[var(--linha)] bg-[#161310] text-[var(--fumaca)]"
+                        }`}
                       >
                         {preset.badge}
                       </Badge>
                     </div>
-                    <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">
+                    <p className="text-[11px] text-[var(--fumaca)] line-clamp-2 leading-relaxed">
                       {preset.description}
                     </p>
                   </button>
@@ -233,11 +237,11 @@ export function ClipEditorModal({
             <div className="flex items-center justify-between">
               <Label
                 htmlFor="transcript-editor"
-                className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                className="text-xs font-semibold uppercase tracking-wider text-[var(--fumaca)]"
               >
                 Palavras da Transcrição
               </Label>
-              <span className="text-[11px] text-muted-foreground font-mono">
+              <span className="text-[11px] text-[var(--fumaca)] font-mono">
                 {words.length} palavra{words.length !== 1 ? "s" : ""}
               </span>
             </div>
@@ -248,26 +252,26 @@ export function ClipEditorModal({
               onChange={(e) => handleTextChange(e.target.value)}
               placeholder="Digite ou edite a transcrição das palavras do clipe..."
               rows={4}
-              className="w-full rounded-md border border-input bg-background p-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+              className="w-full rounded-xl border border-[var(--linha)] bg-[#0b0a08] p-3 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] focus-visible:outline-hidden focus-visible:border-[var(--ouro)] focus-visible:ring-1 focus-visible:ring-[var(--ouro)] disabled:cursor-not-allowed disabled:opacity-50 resize-y font-mono"
             />
           </div>
 
           {/* Words Preview Chips */}
           {words.length > 0 && (
             <div className="space-y-1.5">
-              <span className="text-[11px] font-medium text-muted-foreground">
+              <span className="text-[11px] font-medium text-[var(--fumaca)]">
                 Prévia das Palavras e Timestamps:
               </span>
-              <div className="max-h-28 overflow-y-auto rounded-md border border-border/60 bg-muted/30 p-2.5 flex flex-wrap gap-1.5">
+              <div className="max-h-28 overflow-y-auto rounded-xl border border-[var(--linha)] bg-[#0b0a08] p-2.5 flex flex-wrap gap-1.5">
                 {words.map((item, idx) => (
                   <span
                     key={idx}
-                    className="inline-flex items-center gap-1 rounded bg-background px-2 py-0.5 text-xs border border-border/80"
+                    className="inline-flex items-center gap-1 rounded-full bg-[#1d1914] px-2.5 py-0.5 text-xs border border-[var(--linha)]"
                     title={`${item.start?.toFixed(1)}s - ${item.end?.toFixed(1)}s`}
                   >
-                    <span className="font-medium text-foreground">{item.word}</span>
+                    <span className="font-medium text-[var(--marfim)]">{item.word}</span>
                     {typeof item.start === "number" && (
-                      <span className="text-[10px] text-muted-foreground font-mono">
+                      <span className="text-[10px] text-[var(--ouro)] font-mono">
                         {item.start.toFixed(1)}s
                       </span>
                     )}
@@ -279,12 +283,12 @@ export function ClipEditorModal({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 border-t pt-4">
+        <div className="flex items-center justify-end gap-3 border-t border-[var(--linha)] pt-4">
           <Button
-            variant="outline"
             size="sm"
             onClick={onClose}
             disabled={isSaving}
+            className="btn-linha !h-8 !px-4 !text-xs cursor-pointer"
           >
             Cancelar
           </Button>
@@ -292,7 +296,7 @@ export function ClipEditorModal({
             size="sm"
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center gap-1.5"
+            className="btn-ouro !h-8 !px-4 !text-xs flex items-center gap-1.5 cursor-pointer"
           >
             {isSaving ? (
               <>
@@ -301,7 +305,7 @@ export function ClipEditorModal({
               </>
             ) : (
               <>
-                <Sparkles className="h-4 w-4 text-amber-300" />
+                <Sparkles className="h-4 w-4 text-[var(--tinta)]" />
                 <span>Salvar e Re-renderizar</span>
               </>
             )}

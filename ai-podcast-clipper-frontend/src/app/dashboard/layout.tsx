@@ -43,10 +43,17 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <NavHeader credits={user.credits} email={user.email} />
-      <main className="container mx-auto flex-1 py-6">{children}</main>
-      <Toaster />
+    <div className="relative flex min-h-screen flex-col bg-[#0b0a08] text-[#f5f1e8] selection:bg-[#e8ba52]/20 selection:text-[#e8ba52]">
+      {/* Subtle Ambient Filament Glow */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 h-[450px] w-full max-w-5xl bg-[radial-gradient(ellipse_at_top,rgba(232,186,82,0.04),transparent_70%)] z-0"
+      />
+      <div className="relative z-10 flex flex-col flex-1">
+        <NavHeader credits={user.credits} email={user.email} />
+        <main className="container mx-auto flex-1 py-6">{children}</main>
+        <Toaster />
+      </div>
     </div>
   );
 }

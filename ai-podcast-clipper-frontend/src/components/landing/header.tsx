@@ -3,59 +3,62 @@ import { SparklesIcon, ArrowRightIcon } from "lucide-react";
 
 export function Header({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-zinc-800/60 bg-zinc-950/85 backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full border-b border-[var(--linha)] bg-[#0b0a08]/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link href="/" className="flex items-center gap-2.5 transition-opacity hover:opacity-90">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900">
-            <SparklesIcon className="h-4 w-4 text-zinc-200" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-full border border-[var(--ouro)]/40 bg-[#161310] shadow-[0_0_12px_rgba(232,186,82,0.15)]">
+            <SparklesIcon className="h-4 w-4 text-[var(--ouro)]" />
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-base font-semibold tracking-tight text-zinc-100">Podcast Clipper</span>
-            <span className="rounded border border-zinc-800 bg-zinc-900 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400">
+            <span className="text-base font-semibold tracking-tight text-[var(--marfim)]">Podcast Clipper</span>
+            <span className="rounded-full border border-[var(--linha-2)] bg-[#161310] px-2 py-0.5 font-mono text-[10px] text-[var(--ouro)] tracking-widest">
               STUDIO
             </span>
           </div>
         </Link>
 
-        {/* Links de Navegação */}
-        <nav className="hidden items-center gap-6 text-sm text-zinc-400 md:flex">
-          <Link href="#demonstracao" className="transition-colors hover:text-zinc-100">
-            Demonstração
+        {/* Navigation Links */}
+        <nav className="hidden items-center gap-6 text-sm text-[var(--fumaca)] md:flex">
+          <Link href="#demo" className="transition-colors hover:text-[var(--marfim)]">
+            Live Demo
           </Link>
-          <Link href="#comparativo" className="transition-colors hover:text-zinc-100">
-            Comparativo
+          <Link href="#platforms" className="transition-colors hover:text-[var(--marfim)]">
+            Platforms
           </Link>
-          <Link href="#precos" className="transition-colors hover:text-zinc-100">
-            Preços
+          <Link href="#comparison" className="transition-colors hover:text-[var(--marfim)]">
+            Comparison
           </Link>
-          <Link href="#faq" className="transition-colors hover:text-zinc-100">
+          <Link href="#pricing" className="transition-colors hover:text-[var(--marfim)]">
+            Pricing
+          </Link>
+          <Link href="#faq" className="transition-colors hover:text-[var(--marfim)]">
             FAQ
           </Link>
         </nav>
 
-        {/* Ações */}
+        {/* Action Buttons */}
         <div className="flex items-center gap-3">
           {isAuthenticated ? (
             <Link
               href="/dashboard"
-              className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-100 px-4 py-2 text-xs font-medium text-zinc-950 transition-colors hover:bg-zinc-200"
+              className="btn-ouro !text-xs !py-1.5 !px-4"
             >
-              Acessar Painel
+              Go to Dashboard
               <ArrowRightIcon className="h-3.5 w-3.5" />
             </Link>
           ) : (
             <>
               <Link
                 href="/login"
-                className="text-xs font-medium text-zinc-300 transition-colors hover:text-white"
+                className="text-xs font-medium text-[var(--marfim-2)] transition-colors hover:text-[var(--ouro)]"
               >
-                Entrar
+                Sign In
               </Link>
               <Link
                 href="/signup"
-                className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-100 px-3.5 py-2 text-xs font-medium text-zinc-950 transition-colors hover:bg-zinc-200"
+                className="btn-ouro !text-xs !py-1.5 !px-4"
               >
-                Começar Agora
+                Start Free
                 <ArrowRightIcon className="h-3.5 w-3.5" />
               </Link>
             </>

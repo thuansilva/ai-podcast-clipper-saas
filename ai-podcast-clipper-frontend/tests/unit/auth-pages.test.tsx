@@ -33,8 +33,8 @@ describe("Auth Pages", () => {
     render(<LoginPage />);
     expect(screen.getByTestId("clerk-signin")).toBeInTheDocument();
     expect(screen.getAllByText("Podcast Clipper")[0]).toBeInTheDocument();
-    expect(screen.getByText("Bem-vindo de volta ao estúdio")).toBeInTheDocument();
-    expect(screen.getByText(/Entre na sua conta para continuar gerenciando/i)).toBeInTheDocument();
+    expect(screen.getByText("Welcome back to the Studio")).toBeInTheDocument();
+    expect(screen.getByText(/Sign in to continue creating/i)).toBeInTheDocument();
 
     expect(SignIn).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -52,8 +52,8 @@ describe("Auth Pages", () => {
     render(<SignUpPage />);
     expect(screen.getByTestId("clerk-signup")).toBeInTheDocument();
     expect(screen.getAllByText("Podcast Clipper")[0]).toBeInTheDocument();
-    expect(screen.getByText("Crie sua conta no estúdio")).toBeInTheDocument();
-    expect(screen.getByText(/Comece com 10 créditos gratuitos/i)).toBeInTheDocument();
+    expect(screen.getByText("Create your Studio account")).toBeInTheDocument();
+    expect(screen.getByText(/Get started with 10 free minutes/i)).toBeInTheDocument();
 
     expect(SignUp).toHaveBeenCalledWith(
       expect.objectContaining({

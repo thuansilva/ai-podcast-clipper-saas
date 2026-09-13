@@ -121,12 +121,12 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
 
   return (
     <>
-      <Card className="flex flex-col overflow-hidden border-border/80 transition-all hover:shadow-md">
+      <Card className="flex flex-col overflow-hidden rounded-2xl border border-[var(--linha)] bg-[#161310] text-[var(--marfim)] transition-all hover:border-[var(--linha-2)] hover:shadow-[0_0_24px_rgba(0,0,0,0.5)]">
         {/* Player vertical 9:16 */}
-        <div className="relative aspect-[9/16] w-full overflow-hidden bg-black">
+        <div className="relative aspect-[9/16] w-full overflow-hidden bg-[#0b0a08]">
           {isLoadingUrl ? (
             <div className="flex h-full w-full items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <Loader2 className="h-8 w-8 animate-spin text-[var(--fumaca)]" />
             </div>
           ) : playUrl ? (
             <video
@@ -137,8 +137,8 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
               aria-label={`Vídeo do clipe ${clip.title}`}
             />
           ) : (
-            <div className="flex h-full w-full flex-col items-center justify-center text-muted-foreground">
-              <Play className="h-10 w-10 opacity-40" />
+            <div className="flex h-full w-full flex-col items-center justify-center text-[var(--fumaca)]">
+              <Play className="h-10 w-10 opacity-40 text-[var(--ouro)]" />
               <span className="mt-2 text-xs">Vídeo indisponível</span>
             </div>
           )}
@@ -148,13 +148,13 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
             {clip.viralityScore !== null && clip.viralityScore !== undefined ? (
               <Badge
                 variant="default"
-                className="bg-red-500/90 font-semibold text-white shadow-xs backdrop-blur-xs hover:bg-red-500"
+                className="border border-[var(--ouro)]/50 bg-[#161310]/90 font-mono text-[11px] font-semibold text-[var(--ouro)] shadow-xs backdrop-blur-md"
                 data-testid="virality-badge"
               >
                 🔥 {clip.viralityScore}/10
               </Badge>
             ) : (
-              <Badge variant="secondary" className="backdrop-blur-xs">
+              <Badge variant="secondary" className="border border-[var(--linha)] bg-[#161310]/80 text-[var(--fumaca)] backdrop-blur-xs">
                 Score N/A
               </Badge>
             )}
@@ -162,9 +162,9 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
             {clip.durationSeconds > 0 && (
               <Badge
                 variant="secondary"
-                className="flex items-center gap-1 bg-black/60 font-mono text-[10px] text-white backdrop-blur-xs"
+                className="flex items-center gap-1 border border-[var(--linha)] bg-[#0b0a08]/80 font-mono text-[10px] text-[var(--marfim)] backdrop-blur-xs"
               >
-                <Clock className="h-3 w-3" />
+                <Clock className="h-3 w-3 text-[var(--ouro)]" />
                 {Math.round(clip.durationSeconds)}s
               </Badge>
             )}
@@ -175,7 +175,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
         <CardHeader className="p-4 pb-2">
           <div className="flex items-start justify-between gap-2">
             <h3
-              className="line-clamp-2 text-sm font-semibold leading-snug"
+              className="line-clamp-2 text-sm font-semibold leading-snug text-[var(--marfim)]"
               title={clip.title}
             >
               {clip.title}
@@ -183,7 +183,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
             {clip.subtitlePreset && (
               <Badge
                 variant="outline"
-                className="shrink-0 px-1.5 py-0 text-[10px] uppercase font-mono"
+                className="shrink-0 rounded-full border border-[var(--ouro)]/30 bg-[var(--ouro)]/10 px-2 py-0 text-[10px] uppercase font-mono text-[var(--ouro)]"
               >
                 {clip.subtitlePreset}
               </Badge>
@@ -193,21 +193,21 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
 
         <CardContent className="flex flex-1 flex-col justify-between space-y-3 p-4 pt-0">
           {clip.hook && (
-            <div className="space-y-1.5 rounded-lg border border-border/50 bg-muted/60 p-2.5 text-xs">
-              <div className="flex items-center justify-between text-[11px] font-medium text-muted-foreground">
-                <span className="flex items-center gap-1 text-foreground">
-                  <Sparkles className="h-3 w-3 text-amber-500" />
+            <div className="space-y-1.5 rounded-xl border border-[var(--linha)] bg-[#0b0a08] p-3 text-xs">
+              <div className="flex items-center justify-between text-[11px] font-medium text-[var(--fumaca)]">
+                <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--marfim)]">
+                  <Sparkles className="h-3 w-3 text-[var(--ouro)]" />
                   Hook Sugerido
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleCopyHook}
-                  className="h-6 px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  className="h-6 px-1.5 text-xs text-[var(--fumaca)] hover:bg-[#1d1914] hover:text-[var(--marfim)] cursor-pointer"
                   aria-label="Copiar Hook"
                 >
                   {copiedHook ? (
-                    <span className="flex items-center gap-1 font-medium text-green-600 dark:text-green-400">
+                    <span className="flex items-center gap-1 font-medium text-[var(--patina)]">
                       <Check className="h-3 w-3" /> Copiado!
                     </span>
                   ) : (
@@ -217,7 +217,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
                   )}
                 </Button>
               </div>
-              <p className="italic text-foreground/90 line-clamp-2">
+              <p className="italic text-[var(--marfim-2)] line-clamp-2">
                 &ldquo;{clip.hook}&rdquo;
               </p>
             </div>
@@ -225,10 +225,10 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
 
           {clip.reason && (
             <p
-              className="text-[11px] text-muted-foreground line-clamp-2"
+              className="text-[11px] text-[var(--fumaca)] line-clamp-2"
               title={clip.reason}
             >
-              <span className="font-medium text-foreground/80">
+              <span className="font-medium text-[var(--marfim)]">
                 Por que viraliza:
               </span>{" "}
               {clip.reason}
@@ -237,13 +237,12 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
         </CardContent>
 
         {/* Ações: Download, Edição e Exclusão */}
-        <CardFooter className="flex items-center gap-2 border-t border-border/40 p-4 pt-3">
+        <CardFooter className="flex items-center gap-2 border-t border-[var(--linha)] p-4 pt-3 bg-[#161310]">
           <Button
-            variant="default"
             size="sm"
             onClick={handleDownload}
             disabled={!playUrl}
-            className="flex-1 text-xs"
+            className="btn-ouro flex-1 text-xs !h-8"
             aria-label="Download"
           >
             <Download className="mr-1.5 h-3.5 w-3.5" />
@@ -251,10 +250,9 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
           </Button>
 
           <Button
-            variant="outline"
             size="sm"
             onClick={() => setIsEditorOpen(true)}
-            className="px-2.5 text-xs"
+            className="btn-linha px-2.5 text-xs !h-8"
             title="Editar Clipe"
             aria-label="Editar"
           >
@@ -263,11 +261,10 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
           </Button>
 
           <Button
-            variant="destructive"
             size="sm"
             onClick={handleDelete}
             disabled={isDeleting}
-            className="px-2.5 text-xs"
+            className="rounded-full border border-[var(--perigo)]/30 bg-[var(--perigo)]/10 text-[var(--perigo)] hover:bg-[var(--perigo)] hover:text-white px-2.5 text-xs !h-8 transition-colors cursor-pointer"
             title="Excluir Clipe"
             aria-label="Excluir"
           >

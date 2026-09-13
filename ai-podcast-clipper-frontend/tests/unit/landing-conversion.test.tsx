@@ -4,12 +4,22 @@ import { ComparisonSection } from "~/components/landing/comparison-section";
 import { PricingSection } from "~/components/landing/pricing-section";
 import { FAQSection } from "~/components/landing/faq-section";
 import { Footer } from "~/components/landing/footer";
+import { MultiPlatformSection } from "~/components/landing/multi-platform-section";
 
 describe("Landing Conversion Components", () => {
+  it("renders MultiPlatformSection with social networks", () => {
+    render(<MultiPlatformSection />);
+    expect(screen.getByText("TikTok")).toBeInTheDocument();
+    expect(screen.getByText("Instagram Reels")).toBeInTheDocument();
+    expect(screen.getByText("YouTube Shorts")).toBeInTheDocument();
+    expect(screen.getByText("LinkedIn Video")).toBeInTheDocument();
+    expect(screen.getByText(/One Click. Formatted for Every Major Feed/i)).toBeInTheDocument();
+  });
+
   it("renders ComparisonSection with manual vs clipper comparison", () => {
     render(<ComparisonSection />);
-    expect(screen.getByText(/Edição Manual Tradicional/i)).toBeInTheDocument();
-    expect(screen.getByText(/Com o Podcast Clipper/i)).toBeInTheDocument();
+    expect(screen.getByText(/Traditional Manual Editing/i)).toBeInTheDocument();
+    expect(screen.getByText(/With Podcast Clipper Studio/i)).toBeInTheDocument();
   });
 
   it("renders PricingSection with 3 packages and correct pricing", () => {
@@ -17,18 +27,18 @@ describe("Landing Conversion Components", () => {
     expect(screen.getByText("$9.99")).toBeInTheDocument();
     expect(screen.getByText("$24.99")).toBeInTheDocument();
     expect(screen.getByText("$69.99")).toBeInTheDocument();
-    expect(screen.getByText(/Créditos nunca expiram/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Credits never expire/i).length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders FAQSection with answers to common creator questions", () => {
     render(<FAQSection />);
-    expect(screen.getByText(/Como funcionam os créditos\?/i)).toBeInTheDocument();
-    expect(screen.getByText(/Os créditos expiram se eu não usar este mês\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/How do processing credits work\?/i)).toBeInTheDocument();
+    expect(screen.getByText(/Do my credits ever expire\?/i)).toBeInTheDocument();
   });
 
   it("renders Footer with copyright and status info", () => {
     render(<Footer />);
-    expect(screen.getByText(/Podcast Clipper Studio/i)).toBeInTheDocument();
-    expect(screen.getByText(/Todos os sistemas operacionais/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Podcast Clipper Studio/i)[0]).toBeInTheDocument();
+    expect(screen.getByText(/All Systems Operational/i)).toBeInTheDocument();
   });
 });

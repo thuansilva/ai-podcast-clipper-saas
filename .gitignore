@@ -26,6 +26,7 @@ pnpm-debug.log*
 .idea/
 
 *.mp4
+!ai-podcast-clipper-frontend/public/demo/*.mp4
 
 # Superpowers internal workspace
 .superpowers/

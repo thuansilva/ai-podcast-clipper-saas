@@ -76,21 +76,29 @@ export function DashboardClient({
   return (
     <div className="mx-auto flex max-w-5xl flex-col space-y-6 px-4 py-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--marfim)]">
           Estúdio de Cortes
         </h1>
-        <p className="text-muted-foreground text-sm">
+        <p className="text-sm text-[var(--fumaca)]">
           Transforme podcasts e vídeos em clipes verticais prontos para TikTok, Reels e Shorts.
         </p>
       </div>
 
       <Tabs defaultValue="upload">
-        <TabsList>
-          <TabsTrigger value="upload">Importar Vídeo</TabsTrigger>
-          <TabsTrigger value="my-clips">
+        <TabsList className="bg-[#161310] border border-[var(--linha)] rounded-full p-1 h-auto">
+          <TabsTrigger
+            value="upload"
+            className="rounded-full px-5 py-2 text-xs font-medium text-[var(--marfim-2)] data-[state=active]:bg-[var(--ouro)] data-[state=active]:text-[var(--tinta)] data-[state=active]:font-semibold transition-all cursor-pointer"
+          >
+            Importar Vídeo
+          </TabsTrigger>
+          <TabsTrigger
+            value="my-clips"
+            className="rounded-full px-5 py-2 text-xs font-medium text-[var(--marfim-2)] data-[state=active]:bg-[var(--ouro)] data-[state=active]:text-[var(--tinta)] data-[state=active]:font-semibold transition-all cursor-pointer"
+          >
             Meus Clipes
             {clips.length > 0 && (
-              <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px]">
+              <Badge variant="secondary" className="ml-1.5 px-1.5 py-0 text-[10px] rounded-full bg-[#1d1914] text-[var(--marfim)] border border-[var(--linha)]">
                 {clips.length}
               </Badge>
             )}
@@ -104,12 +112,12 @@ export function DashboardClient({
           />
 
           {uploadedFiles.length > 0 && (
-            <Card>
+            <Card className="rounded-2xl border border-[var(--linha)] bg-[#161310] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-lg font-medium">Fila de Processamento</CardTitle>
-                    <CardDescription>
+                    <CardTitle className="text-lg font-medium text-[var(--marfim)]">Fila de Processamento</CardTitle>
+                    <CardDescription className="text-xs text-[var(--fumaca)]">
                       Acompanhe o status e a geração dos seus cortes em tempo real
                     </CardDescription>
                   </div>
@@ -117,16 +125,16 @@ export function DashboardClient({
                     {hasActiveProcessing && (
                       <Badge
                         variant="outline"
-                        className="flex items-center gap-1.5 border-amber-500/40 text-amber-500 text-xs animate-pulse"
+                        className="flex items-center gap-1.5 rounded-full border-[var(--ouro)]/40 bg-[var(--ouro)]/10 text-[var(--ouro)] font-mono text-xs animate-pulse"
                       >
                         <Loader2 className="h-3 w-3 animate-spin" /> Polling ativo (4s)
                       </Badge>
                     )}
                     <Button
-                      variant="outline"
                       size="sm"
                       onClick={handleRefresh}
                       disabled={refreshing}
+                      className="btn-linha !h-8 !px-3 !text-xs"
                     >
                       {refreshing && (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -137,50 +145,50 @@ export function DashboardClient({
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="max-h-[300px] overflow-auto rounded-md border">
+                <div className="max-h-[300px] overflow-auto rounded-xl border border-[var(--linha)] bg-[#0b0a08]">
                   <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>File</TableHead>
-                        <TableHead>Uploaded</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Clips created</TableHead>
+                    <TableHeader className="bg-[#1d1914] text-[var(--fumaca)] font-mono text-xs border-b border-[var(--linha)]">
+                      <TableRow className="border-b border-[var(--linha)] hover:bg-transparent">
+                        <TableHead className="text-[var(--marfim)]">File</TableHead>
+                        <TableHead className="text-[var(--fumaca)]">Uploaded</TableHead>
+                        <TableHead className="text-[var(--fumaca)]">Status</TableHead>
+                        <TableHead className="text-[var(--fumaca)]">Clips created</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {uploadedFiles.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="max-w-xs truncate font-medium">
+                        <TableRow key={item.id} className="border-b border-[var(--linha)] hover:bg-[#1d1914]/50 transition-colors">
+                          <TableCell className="max-w-xs truncate font-medium text-[var(--marfim)]">
                             {item.filename}
                           </TableCell>
-                          <TableCell className="text-muted-foreground text-sm">
+                          <TableCell className="text-[var(--fumaca)] text-sm font-mono">
                             {new Date(item.createdAt).toLocaleDateString()}
                           </TableCell>
                           <TableCell>
                             {item.status === "queued" && (
-                              <Badge variant="outline">Queued</Badge>
+                              <Badge variant="outline" className="rounded-full border-[var(--linha-2)] bg-[#161310] text-[var(--prata)] font-mono text-[10px]">Queued</Badge>
                             )}
                             {item.status === "processing" && (
-                              <Badge variant="outline">Processing</Badge>
+                              <Badge variant="outline" className="rounded-full border-[var(--ouro)]/40 bg-[var(--ouro)]/10 text-[var(--ouro)] font-mono text-[10px] animate-pulse">Processing</Badge>
                             )}
                             {item.status === "processed" && (
-                              <Badge variant="outline">Processed</Badge>
+                              <Badge variant="outline" className="rounded-full border-[var(--patina)]/40 bg-[var(--patina)]/10 text-[var(--patina)] font-mono text-[10px]">Processed</Badge>
                             )}
                             {item.status === "no credits" && (
-                              <Badge variant="destructive">No credits</Badge>
+                              <Badge variant="destructive" className="rounded-full border-[var(--perigo)]/40 bg-[var(--perigo)]/10 text-[var(--perigo)] font-mono text-[10px]">No credits</Badge>
                             )}
                             {item.status === "failed" && (
-                              <Badge variant="destructive">Failed</Badge>
+                              <Badge variant="destructive" className="rounded-full border-[var(--perigo)]/40 bg-[var(--perigo)]/10 text-[var(--perigo)] font-mono text-[10px]">Failed</Badge>
                             )}
                           </TableCell>
                           <TableCell>
                             {item.clipsCount > 0 ? (
-                              <span>
+                              <span className="font-mono text-xs text-[var(--patina)]">
                                 {item.clipsCount} clip
                                 {item.clipsCount !== 1 ? "s" : ""}
                               </span>
                             ) : (
-                              <span className="text-muted-foreground">
+                              <span className="text-[var(--fumaca)] font-mono text-xs">
                                 No clips yet
                               </span>
                             )}
@@ -196,10 +204,10 @@ export function DashboardClient({
         </TabsContent>
 
         <TabsContent value="my-clips">
-          <Card>
+          <Card className="rounded-2xl border border-[var(--linha)] bg-[#161310] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
             <CardHeader>
-              <CardTitle>Meus Clipes Gerados</CardTitle>
-              <CardDescription>
+              <CardTitle className="text-lg font-medium text-[var(--marfim)]">Meus Clipes Gerados</CardTitle>
+              <CardDescription className="text-xs text-[var(--fumaca)]">
                 Visualize, edite legendas e faça download dos seus cortes prontos para publicação.
               </CardDescription>
             </CardHeader>

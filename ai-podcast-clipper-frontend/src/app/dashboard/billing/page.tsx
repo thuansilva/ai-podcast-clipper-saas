@@ -65,41 +65,51 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
   return (
     <Card
       className={cn(
-        "relative flex flex-col",
-        plan.isPopular && "border-primary border-2",
+        "relative flex flex-col justify-between rounded-2xl border p-6 transition-all duration-200",
+        plan.isPopular
+          ? "border-[var(--ouro)] bg-gradient-to-b from-[#1d1914] to-[#161310] shadow-[0_0_35px_rgba(232,186,82,0.14)]"
+          : "border-[var(--linha)] bg-[#161310] hover:border-[var(--linha-2)] hover:bg-[#1d1914]",
       )}
     >
       {plan.isPopular && (
-        <div className="bg-primary text-primary-foreground absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 transform rounded-full px-3 py-1 text-sm font-medium whitespace-nowrap">
+        <div className="bg-[var(--ouro)] text-[var(--tinta)] absolute -top-3 left-1/2 -translate-x-1/2 rounded-full px-3.5 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider shadow-sm">
           Most Popular
         </div>
       )}
-      <CardHeader className="flex-1">
-        <CardTitle>{plan.title}</CardTitle>
-        <div className="text-4xl font-bold">{plan.price} </div>
+      <CardHeader className="flex-1 p-0 pb-6">
+        <CardTitle className="text-lg font-semibold text-[var(--marfim)]">{plan.title}</CardTitle>
+        <div className="mt-2 text-4xl font-bold text-[var(--marfim)]">{plan.price} </div>
         {plan.savePercentage && (
-          <p className="text-sm font-medium text-green-600">
+          <p className="mt-1 font-mono text-xs font-semibold text-[var(--patina)]">
             {plan.savePercentage}
           </p>
         )}
-        <CardDescription>{plan.description}</CardDescription>
+        <CardDescription className="mt-2 text-xs text-[var(--fumaca)] leading-relaxed">{plan.description}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-2">
-        <ul className="text-muted-foreground space-y-2 text-sm">
+      <CardContent className="space-y-3 p-0 pb-6 border-t border-[var(--linha)] pt-4">
+        <ul className="space-y-2.5 text-xs text-[var(--marfim-2)]">
           {plan.features.map((feature, index) => (
             <li key={index} className="flex items-center gap-2">
-              <CheckIcon className="text-primary size-4" />
-              {feature}
+              <CheckIcon className="text-[var(--patina)] size-3.5 shrink-0" />
+              <span>{feature}</span>
             </li>
           ))}
         </ul>
       </CardContent>
-      <CardFooter>
+      <CardFooter className="p-0">
         <form
           action={() => createCheckoutSession(plan.priceId)}
           className="w-full"
         >
-          <Button variant={plan.buttonVariant} className="w-full" type="submit">
+          <Button
+            className={cn(
+              "w-full cursor-pointer",
+              plan.isPopular
+                ? "btn-ouro !w-full !py-2.5 !text-xs"
+                : "btn-linha !w-full !py-2.5 !text-xs",
+            )}
+            type="submit"
+          >
             {plan.buttonText}
           </Button>
         </form>
@@ -113,21 +123,19 @@ export default function BillingPage() {
     <div className="mx-auto flex flex-col space-y-8 px-4 py-12">
       <div className="relative flex items-center justify-center gap-4">
         <Button
-          className="absolute top-0 left-0"
-          variant="outline"
-          size="icon"
+          className="absolute top-0 left-0 btn-linha !size-9 !p-0 !rounded-full"
           asChild
         >
           <Link href="/dashboard">
-            <ArrowLeftIcon className="size-4" />
+            <ArrowLeftIcon className="size-4 text-[var(--marfim)]" />
           </Link>
         </Button>
         <div className="space-y-2 text-center">
-          <h1 className="text-2xl font-bold tracking-tight sm:text-4xl">
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--marfim)] sm:text-4xl">
             Buy Credits
           </h1>
-          <p className="text-muted-foreground">
-            Purchase credits to generate more podcast clips. The more credtis
+          <p className="text-sm text-[var(--fumaca)]">
+            Purchase credits to generate more podcast clips. The more credits
             you buy, the better the value.
           </p>
         </div>
@@ -139,9 +147,9 @@ export default function BillingPage() {
         ))}
       </div>
 
-      <div className="bg-muted/50 rounded-lg p-6">
-        <h3 className="mb-4 text-lg font-semibold">How credits work</h3>
-        <ul className="text-muted-foreground list-disc space-y-2 pl-5 text-sm">
+      <div className="rounded-2xl border border-[var(--linha)] bg-[#161310] p-6 shadow-[0_0_20px_rgba(0,0,0,0.4)]">
+        <h3 className="mb-4 text-base font-semibold text-[var(--marfim)]">How credits work</h3>
+        <ul className="list-disc space-y-2 pl-5 text-xs text-[var(--marfim-2)]">
           <li>1 credit = 1 minute of podcast processing</li>
           <li>
             The program will create around 1 clip per 5 minutes of podcast
