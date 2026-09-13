@@ -33,25 +33,25 @@ const SUBTITLE_PRESETS: {
   badge: string;
   description: string;
 }[] = [
-  {
-    id: "HORMOZI",
-    name: "HORMOZI",
-    badge: "🔥 Viral",
-    description: "Palavras em destaque animadas com alto contraste e dinamismo.",
-  },
-  {
-    id: "MINIMAL",
-    name: "MINIMAL",
-    badge: "✨ Clean",
-    description: "Estilo minimalista e discreto, focado em leitura clara.",
-  },
-  {
-    id: "NEON",
-    name: "NEON",
-    badge: "⚡ Vibrante",
-    description: "Cores neon brilhantes para visual moderno e chamativo.",
-  },
-];
+    {
+      id: "HORMOZI",
+      name: "HORMOZI",
+      badge: "🔥 Viral",
+      description: "Palavras em destaque com dinamismo.",
+    },
+    {
+      id: "MINIMAL",
+      name: "MINIMAL",
+      badge: "✨ Clean",
+      description: "Estilo minimalista e discreto, focado em leitura clara.",
+    },
+    {
+      id: "NEON",
+      name: "NEON",
+      badge: "⚡ Vibrante",
+      description: "Cores neon brilhantes para visual moderno e chamativo.",
+    },
+  ];
 
 function parseTranscriptWords(raw: unknown): TranscriptWordItem[] {
   if (!raw) return [];
@@ -202,11 +202,10 @@ export function ClipEditorModal({
                     key={preset.id}
                     type="button"
                     onClick={() => setSelectedPreset(preset.id)}
-                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
-                      isSelected
+                    className={`flex flex-col items-start p-3.5 rounded-xl border text-left transition-all cursor-pointer ${isSelected
                         ? "border-[var(--ouro)] bg-[var(--ouro)]/10 shadow-[0_0_15px_rgba(232,186,82,0.15)] ring-1 ring-[var(--ouro)]"
                         : "border-[var(--linha)] bg-[var(--tinta)] hover:border-[var(--linha-2)]"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between w-full mb-1">
                       <span className="font-semibold text-xs text-[var(--marfim)]">
@@ -214,11 +213,10 @@ export function ClipEditorModal({
                       </span>
                       <Badge
                         variant="outline"
-                        className={`text-[10px] px-1.5 py-0 font-mono ${
-                          isSelected
+                        className={`text-[10px] px-1.5 py-0 font-mono ${isSelected
                             ? "border-[var(--ouro)]/40 bg-[var(--ouro)]/20 text-[var(--ouro)]"
                             : "border-[var(--linha)] bg-[var(--superficie)] text-[var(--fumaca)]"
-                        }`}
+                          }`}
                       >
                         {preset.badge}
                       </Badge>

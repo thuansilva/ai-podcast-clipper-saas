@@ -346,5 +346,142 @@ describe("ImportVideoTabs (Task 6)", () => {
         screen.getByRole("button", { name: /enviar e gerar cortes/i }),
       ).toBeDisabled();
     });
+  describe("5. Modo de Corte Manual", () => {
+    it("deve alternar entre Auto IA e Corte Manual e renderizar campos iniciais", () => {
+      render(<ImportVideoTabs userCredits={10} />);
+      
+      // Inicialmente em Auto IA
+      expect(screen.getByRole("button", { name: /auto ia \(recomendado\)/i })).toBeInTheDocument();
+      const manualModeBtn = screen.getByRole("button", { name: /corte manual preciso/i });
+      expect(manualModeBtn).toBeInTheDocument();
+      
+      fireEvent.click(manualModeBtn);
+      
+      // Verifica campos iniciais do corte manual
+      expect(screen.getByPlaceholderText("Título opcional (ex: Gancho)")).toBeInTheDocument();
+      expect(screen.getByDisplayValue("00:00")).toBeInTheDocument(); // Start input
+      expect(screen.getByDisplayValue("00:30")).toBeInTheDocument(); // End input
+      expect(screen.getByRole("button", { name: /\+25s/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /\+30s/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /\+60s/i })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /adicionar outro corte/i })).toBeInTheDocument();
+    });
+
+    it("deve calcular o tempo final automaticamente ao usar quick chips", () => {
+      render(<ImportVideoTabs userCredits={10} />);
+      fireEvent.click(screen.getByRole("button", { name: /corte manual preciso/i }));
+      
+      // Atualiza start para "01:00"
+      const startInputs = screen.getAllByPlaceholderText("00:00");
+      fireEvent.change(startInputs[0]!, { target: { value: "01:00" } });
+      
+      // Clica em +30s
+      fireEvent.click(screen.getByRole("button", { name: /\+30s/i }));
+      
+      // End input deve ser "01:30"
+      const endInputs = screen.getAllByPlaceholderText("00:30");
+      expect(endInputs[0]!).toHaveValue("01:30");
+      
+      // Clica em +60s
+      fireEvent.click(screen.getByRole("button", { name: /\+60s/i }));
+      expect(endInputs[0]!).toHaveValue("02:00");
+    });
+
+    it("deve permitir adicionar e remover cortes manuais e validar créditos", () => {
+      render(<ImportVideoTabs userCredits={2} />); switchToTab(/link do youtube/i);
+      fireEvent.click(screen.getByRole("button", { name: /corte manual preciso/i }));
+      
+      // Adiciona um segundo corte
+      fireEvent.click(screen.getByRole("button", { name: /adicionar outro corte/i }));
+      
+      let startInputs = screen.getAllByPlaceholderText("00:00");
+      expect(startInputs.length).toBe(2);
+      
+      // Cada corte tem 30s (00:00 a 00:30) = 1 crédito por corte. Total 2.
+      // Testa aviso de saldo insuficiente se adicionar um 3º corte (1 crédito extra)
+      fireEvent.click(screen.getByRole("button", { name: /adicionar outro corte/i }));
+      expect(screen.getByText(/saldo insuficiente: você possui 2 créditos, mas os cortes manuais requerem 3 créditos/i)).toBeInTheDocument();
+      
+      // Remove o terceiro corte
+      const removeButtons = screen.getAllByRole("button", { name: /remover/i });
+      fireEvent.click(removeButtons[2]!);
+      
+      // Alerta deve sumir
+      expect(screen.queryByText(/saldo insuficiente/i)).not.toBeInTheDocument();
+    });
+
+    it("deve enviar payload de cortes manuais ao importar do youtube", async () => {
+      vi.mocked(importYouTubeVideo).mockResolvedValueOnce({
+        success: true,
+        uploadedFileId: "file-123",
+      });
+
+      render(<ImportVideoTabs userCredits={10} />);
+      switchToTab(/link do youtube/i);
+      
+      // Insere URL válida
+      const input = screen.getByPlaceholderText(/youtube\.com/i);
+      fireEvent.change(input, { target: { value: "https://youtu.be/dQw4w9WgXcQ" } });
+      
+      // Modo manual
+      fireEvent.click(screen.getByRole("button", { name: /corte manual preciso/i }));
+      
+      // Edita o primeiro corte
+      const titleInput = screen.getByPlaceholderText("Título opcional (ex: Gancho)");
+      fireEvent.change(titleInput, { target: { value: "Intro" } });
+      
+      // Submit
+      fireEvent.click(screen.getByRole("button", { name: /importar do youtube/i }));
+      
+      await waitFor(() => {
+        expect(importYouTubeVideo).toHaveBeenCalledWith({
+          url: "https://youtu.be/dQw4w9WgXcQ",
+          preset: "HORMOZI",
+          mode: "manual",
+          manualCuts: [
+            { title: "Intro", startTime: 0, endTime: 30 }
+          ]
+        });
+      });
+    });
+
+    it("deve enviar payload de cortes manuais ao realizar upload local", async () => {
+      vi.mocked(generateUploadUrl).mockResolvedValueOnce({
+        success: true,
+        signedUrl: "https://s3.amazonaws.com/test-bucket/signed-url",
+        key: "test-key",
+        uploadedFileId: "uploaded-456",
+      });
+
+      vi.mocked(processVideo).mockResolvedValueOnce();
+
+      const { container } = render(<ImportVideoTabs userCredits={10} />);
+      
+      const fileInput = container.querySelector('input[type="file"]');
+      const file = new File(["dummy"], "video.mp4", { type: "video/mp4" });
+      fireEvent.change(fileInput!, { target: { files: [file] } });
+
+      await waitFor(() => {
+        expect(screen.getByText(/video\.mp4/i)).toBeInTheDocument();
+      });
+
+      // Modo manual
+      fireEvent.click(screen.getByRole("button", { name: /corte manual preciso/i }));
+      
+      // Submit
+      const uploadBtn = screen.getByRole("button", { name: /enviar e gerar cortes/i });
+      fireEvent.click(uploadBtn);
+
+      await waitFor(() => {
+        expect(processVideo).toHaveBeenCalledWith(
+          "uploaded-456",
+          "HORMOZI",
+          "manual",
+          [ { title: "", startTime: 0, endTime: 30 } ]
+        );
+      });
+    });
   });
+
+});
 });

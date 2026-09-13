@@ -11,8 +11,14 @@ import {
 } from "~/infrastructure/factories/use-case-factories";
 import { DomainError } from "~/domain/errors/domain-error";
 import type { SubtitlePreset } from "~/domain/entities/clip";
+import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 
-export async function processVideo(uploadedFileId: string, preset?: string) {
+export async function processVideo(
+  uploadedFileId: string,
+  preset?: string,
+  mode?: ProcessingMode,
+  manualCuts?: ManualCutDTO[],
+) {
   const uploadedVideo = await db.uploadedFile.findUniqueOrThrow({
     where: {
       id: uploadedFileId,
@@ -32,6 +38,8 @@ export async function processVideo(uploadedFileId: string, preset?: string) {
       uploadedFileId: uploadedVideo.id,
       userId: uploadedVideo.userId,
       preset,
+      mode,
+      manualCuts,
     },
   });
 

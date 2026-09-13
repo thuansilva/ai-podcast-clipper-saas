@@ -45,4 +45,29 @@ describe("ImportYouTubeVideoUseCase", () => {
 
     expect(queueGateway.sentEvents).toHaveLength(0);
   });
+
+  it("deve repassar mode e manualCuts para a fila quando fornecidos", async () => {
+    const manualCuts = [
+      { id: "cut-1", title: "Corte 1", startTime: 10, endTime: 45 },
+      { id: "cut-2", title: "Corte 2", startTime: 60, endTime: 95 },
+    ];
+
+    const result = await useCase.execute({
+      userId: "user-1",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      preset: "HORMOZI",
+      mode: "manual",
+      manualCuts,
+    });
+
+    expect(result.success).toBe(true);
+    expect(queueGateway.sentEvents).toHaveLength(1);
+    expect(queueGateway.sentEvents[0]).toEqual({
+      uploadedFileId: result.uploadedFileId,
+      userId: "user-1",
+      preset: "HORMOZI",
+      mode: "manual",
+      manualCuts,
+    });
+  });
 });

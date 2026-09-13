@@ -43,6 +43,8 @@ export class ImportYouTubeVideoUseCase {
       uploadedFileId: uploadedFile.id,
       userId: input.userId,
       preset: input.preset,
+      mode: input.mode,
+      manualCuts: input.manualCuts,
     });
 
     return {

@@ -4,10 +4,13 @@ import { revalidatePath } from "next/cache";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { makeImportYouTubeVideoUseCase } from "~/infrastructure/factories/use-case-factories";
 import { DomainError } from "~/domain/errors/domain-error";
+import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 
 export interface ImportYouTubeVideoInput {
   url: string;
   preset?: string;
+  mode?: ProcessingMode;
+  manualCuts?: ManualCutDTO[];
 }
 
 export interface ImportYouTubeVideoResult {
@@ -23,6 +26,8 @@ export interface ImportYouTubeVideoResult {
 export async function importYouTubeVideo({
   url,
   preset,
+  mode,
+  manualCuts,
 }: ImportYouTubeVideoInput): Promise<ImportYouTubeVideoResult> {
   const userId = await makeAuthGateway().getUserId();
   if (!userId) {
@@ -35,6 +40,8 @@ export async function importYouTubeVideo({
       userId,
       url,
       preset,
+      mode,
+      manualCuts,
     });
 
     revalidatePath("/dashboard");

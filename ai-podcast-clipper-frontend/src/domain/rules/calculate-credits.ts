@@ -9,3 +9,32 @@ export function calculateVideoCredits(durationSeconds: number): number {
   }
   return Math.max(1, Math.ceil(durationSeconds / 60));
 }
+
+export interface ManualCutDurationItem {
+  startTime: number;
+  endTime: number;
+}
+
+/**
+ * Regra: Cálculo de Créditos para Cortes Manuais
+ * - Se lista vazia ou nula, retorna 0.
+ * - Para cada corte: duração = Math.max(0, cut.endTime - cut.startTime).
+ * - Se duração === 0, adiciona 0.
+ * - Caso contrário, cada fração de até 60 segundos custa 1 crédito: Math.max(1, Math.ceil(duration / 60)).
+ * - Retorna a soma de todos os cortes.
+ */
+export function calculateManualCutsCredits(cuts: ManualCutDurationItem[]): number {
+  if (!cuts || cuts.length === 0) {
+    return 0;
+  }
+
+  return cuts.reduce((totalCredits, cut) => {
+    const duration = Math.max(0, cut.endTime - cut.startTime);
+    if (duration === 0) {
+      return totalCredits;
+    }
+    const credits = Math.max(1, Math.ceil(duration / 60));
+    return totalCredits + credits;
+  }, 0);
+}
+

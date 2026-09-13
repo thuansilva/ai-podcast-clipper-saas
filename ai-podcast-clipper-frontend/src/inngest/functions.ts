@@ -7,11 +7,15 @@ import {
   makeRefundCreditsUseCase,
 } from "~/infrastructure/factories/use-case-factories";
 import { Prisma } from "@prisma/client";
+import { calculateManualCutsCredits } from "~/domain/rules/calculate-credits";
+import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 
 export interface ProcessVideoEventData {
   uploadedFileId: string;
   userId?: string;
   preset?: string;
+  mode?: ProcessingMode;
+  manualCuts?: ManualCutDTO[];
 }
 
 export interface ModalClipPayload {
@@ -172,11 +176,19 @@ export async function processVideoHandler({
           });
         }
 
+        const isManual =
+          event.data.mode === "manual" &&
+          Array.isArray(event.data.manualCuts) &&
+          event.data.manualCuts.length > 0;
+
         const holdCreditsUseCase = makeHoldCreditsUseCase();
         const holdResult = await holdCreditsUseCase.execute({
           userId: uploadedFile.userId,
           durationSeconds,
           fileId: uploadedFile.id,
+          amount: isManual
+            ? calculateManualCutsCredits(event.data.manualCuts!)
+            : undefined,
         });
 
         return {
@@ -215,6 +227,12 @@ export async function processVideoHandler({
         body: JSON.stringify({
           s3_key: reservation.s3Key,
           preset: preset ?? "HORMOZI",
+          mode: event.data.mode ?? "auto",
+          manual_cuts: event.data.manualCuts?.map((c) => ({
+            title: c.title,
+            start: c.startTime,
+            end: c.endTime,
+          })),
         }),
       });
 

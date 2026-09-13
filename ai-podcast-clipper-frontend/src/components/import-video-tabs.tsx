@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Dropzone, { type DropzoneState } from "shadcn-dropzone";
 import { toast } from "sonner";
-import { AlertCircle, CheckCircle2, Film, Loader2, UploadCloud, Youtube } from "lucide-react";
+import { AlertCircle, CheckCircle2, Film, Loader2, UploadCloud, Youtube, Plus, Trash2, Clock } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import {
@@ -21,6 +21,14 @@ import { extractYouTubeVideoId, isValidYouTubeUrl } from "~/lib/youtube";
 import { generateUploadUrl } from "~/actions/s3";
 import { processVideo } from "~/actions/generation";
 import { importYouTubeVideo } from "~/actions/youtube";
+import {
+  parseTimestampToSeconds,
+  formatSecondsToTimestamp,
+  addSecondsToTimestamp,
+  validateManualCut,
+} from "~/domain/rules/timestamp-parser";
+import { calculateManualCutsCredits } from "~/domain/rules/calculate-credits";
+import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 
 export type SubtitlePreset = "HORMOZI" | "MINIMAL" | "NEON";
 
@@ -35,38 +43,65 @@ const SUBTITLE_PRESETS: {
   badge: string;
   description: string;
 }[] = [
-  {
-    id: "HORMOZI",
-    name: "HORMOZI",
-    badge: "🔥 Viral",
-    description: "Palavras em destaque animadas com alto contraste e dinamismo.",
-  },
-  {
-    id: "MINIMAL",
-    name: "MINIMAL",
-    badge: "✨ Clean",
-    description: "Estilo minimalista e discreto, focado em leitura clara.",
-  },
-  {
-    id: "NEON",
-    name: "NEON",
-    badge: "⚡ Vibrante",
-    description: "Cores neon brilhantes para visual moderno e chamativo.",
-  },
-];
+    {
+      id: "HORMOZI",
+      name: "HORMOZI",
+      badge: "🔥 Viral",
+      description: "Palavras em destaque com dinamismo.",
+    },
+    {
+      id: "MINIMAL",
+      name: "MINIMAL",
+      badge: "✨ Clean",
+      description: "Estilo minimalista e discreto, focado em leitura clara.",
+    },
+    {
+      id: "NEON",
+      name: "NEON",
+      badge: "⚡ Vibrante",
+      description: "Cores neon brilhantes para visual moderno e chamativo.",
+    },
+  ];
 
 export function ImportVideoTabs({
   userCredits,
   onUploadSuccess,
 }: ImportVideoTabsProps) {
+
   // Tab State
   const [activeTab, setActiveTab] = useState<string>("upload");
 
+  // Mode State
+  const [mode, setMode] = useState<ProcessingMode>("auto");
+
+  // Cut ID counter
+  const cutIdCounter = useRef(2);
+
+  // Video preview ref and url
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const [filePreviewUrl, setFilePreviewUrl] = useState<string | null>(null);
+
+  // Manual Cuts State
+  const [manualCuts, setManualCuts] = useState<{ id: string; title: string; start: string; end: string }[]>([
+    { id: "cut-1", title: "", start: "00:00", end: "00:30" },
+  ]);
   // Subtitle Preset State (shared across tabs)
   const [selectedPreset, setSelectedPreset] = useState<SubtitlePreset>("HORMOZI");
 
   // Upload MP4 State
   const [file, setFile] = useState<File | null>(null);
+
+  useEffect(() => {
+    if (file) {
+      const url = URL.createObjectURL(file);
+      setFilePreviewUrl(url);
+      return () => {
+        URL.revokeObjectURL(url);
+        setFilePreviewUrl(null);
+      };
+    }
+  }, [file]);
+
   const [durationSeconds, setDurationSeconds] = useState<number | null>(null);
   const [uploading, setUploading] = useState<boolean>(false);
 
@@ -74,14 +109,30 @@ export function ImportVideoTabs({
   const [youtubeUrl, setYoutubeUrl] = useState<string>("");
   const [importing, setImporting] = useState<boolean>(false);
 
-  // Credit calculation for local upload
-  const creditsCost = durationSeconds ? calculateVideoCredits(durationSeconds) : 1;
-  const isUploadInsufficientCredits = file !== null && userCredits < creditsCost;
+  const parsedManualCuts: ManualCutDTO[] = manualCuts.map((c) => ({
+    title: c.title,
+    startTime: parseTimestampToSeconds(c.start) ?? 0,
+    endTime: parseTimestampToSeconds(c.end) ?? 0,
+  }));
+  const manualCreditsCost = calculateManualCutsCredits(parsedManualCuts);
 
-  // Validation for YouTube
+  const uploadCreditsCost = mode === "auto" ? (durationSeconds ? calculateVideoCredits(durationSeconds) : 1) : manualCreditsCost;
+  const isUploadInsufficientCredits = file !== null && userCredits < uploadCreditsCost;
+
   const trimmedYouTubeUrl = youtubeUrl.trim();
   const isYouTubeValid = isValidYouTubeUrl(trimmedYouTubeUrl);
-  const isYouTubeInsufficientCredits = userCredits < 1;
+
+  const youtubeCreditsCost = mode === "auto" ? 1 : manualCreditsCost;
+  const isYouTubeInsufficientCredits = userCredits < youtubeCreditsCost;
+
+  const currentMaxDuration = activeTab === "upload" ? (durationSeconds ?? undefined) : undefined;
+
+  const hasManualCutsError = mode === "manual" && manualCuts.some(c => {
+    const start = parseTimestampToSeconds(c.start) ?? NaN;
+    const end = parseTimestampToSeconds(c.end) ?? NaN;
+    const { valid } = validateManualCut(start, end, currentMaxDuration);
+    return !valid;
+  });
 
   // Read video duration on file drop
   const handleDrop = (acceptedFiles: File[]) => {
@@ -150,7 +201,11 @@ export function ImportVideoTabs({
         throw new Error(`Falha no upload com status: ${uploadResponse.status}`);
       }
 
-      await processVideo(uploadedFileId, selectedPreset);
+      if (mode === "manual") {
+        await processVideo(uploadedFileId, selectedPreset, mode, parsedManualCuts);
+      } else {
+        await processVideo(uploadedFileId, selectedPreset);
+      }
 
       setFile(null);
       setDurationSeconds(null);
@@ -177,10 +232,17 @@ export function ImportVideoTabs({
     setImporting(true);
 
     try {
-      const result = await importYouTubeVideo({
-        url: trimmedYouTubeUrl,
-        preset: selectedPreset,
-      });
+      const result = await importYouTubeVideo(
+        mode === "manual" ? {
+          url: trimmedYouTubeUrl,
+          preset: selectedPreset,
+          mode: "manual",
+          manualCuts: parsedManualCuts,
+        } : {
+          url: trimmedYouTubeUrl,
+          preset: selectedPreset,
+        }
+      );
 
       if (result.success) {
         toast.success("Vídeo do YouTube importado!", {
@@ -205,8 +267,158 @@ export function ImportVideoTabs({
       setImporting(false);
     }
   };
+  const renderModeSelector = () => (
+    <div className="flex bg-[var(--superficie-2)] p-1 rounded-xl border border-[var(--linha)] w-full">
+      <Button
+        type="button"
+        variant={mode === "auto" ? "default" : "ghost"}
+        onClick={() => setMode("auto")}
+        className={`flex-1 rounded-lg text-xs font-medium cursor-pointer ${mode === "auto" ? "btn-ouro text-[var(--tinta)]" : "text-[var(--fumaca)] hover:text-[var(--marfim)] hover:bg-[var(--linha)]/50"}`}
+      >
+        Auto IA (Recomendado)
+      </Button>
+      <Button
+        type="button"
+        variant={mode === "manual" ? "default" : "ghost"}
+        onClick={() => setMode("manual")}
+        className={`flex-1 rounded-lg text-xs font-medium cursor-pointer ${mode === "manual" ? "btn-ouro text-[var(--tinta)]" : "text-[var(--fumaca)] hover:text-[var(--marfim)] hover:bg-[var(--linha)]/50"}`}
+      >
+        Corte Manual Preciso
+      </Button>
+    </div>
+  );
+
+  const handleUpdateCut = (id: string, field: keyof typeof manualCuts[0], value: string) => {
+    setManualCuts(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
+  };
+
+  const addManualCut = () => {
+    setManualCuts(prev => [
+      ...prev,
+      { id: `cut-${cutIdCounter.current++}`, title: "", start: "00:00", end: "00:30" }
+    ]);
+  };
+
+  const removeManualCut = (id: string) => {
+    setManualCuts(prev => prev.filter(c => c.id !== id));
+  };
+
+  const renderManualCuts = (isVideoLoaded: boolean) => {
+    if (mode !== "manual") return null;
+    return (
+      <div className="space-y-3">
+        {manualCuts.map((cut, index) => {
+          const startSecs = parseTimestampToSeconds(cut.start) ?? NaN;
+          const endSecs = parseTimestampToSeconds(cut.end) ?? NaN;
+          const { valid, error } = validateManualCut(startSecs, endSecs, currentMaxDuration);
+
+          return (
+            <Card key={cut.id} className="bg-[var(--tinta)] border-[var(--linha)] rounded-xl overflow-hidden">
+              <CardContent className="p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Badge variant="outline" className="text-[10px] bg-[var(--superficie)] text-[var(--patina)] border-[var(--linha)]">
+                    Corte {index + 1}
+                  </Badge>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeManualCut(cut.id)}
+                    disabled={manualCuts.length <= 1}
+                    className="h-6 w-6 text-[var(--fumaca)] hover:text-[var(--perigo)] hover:bg-[var(--perigo)]/10"
+                    aria-label="Remover corte"
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+
+                <div className="space-y-1">
+                  <Input
+                    placeholder="Título opcional (ex: Gancho)"
+                    value={cut.title}
+                    onChange={(e) => handleUpdateCut(cut.id, "title", e.target.value)}
+                    className="h-8 text-xs bg-[var(--superficie)] border-[var(--linha)] text-[var(--marfim)]"
+                  />
+                </div>
+
+                <div className="flex items-end gap-2">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[10px] text-[var(--fumaca)]">Início</Label>
+                    <Input
+                      placeholder="00:00"
+                      value={cut.start}
+                      onChange={(e) => handleUpdateCut(cut.id, "start", e.target.value)}
+                      className="h-8 text-xs font-mono bg-[var(--superficie)] border-[var(--linha)] text-[var(--marfim)]"
+                    />
+                  </div>
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-[10px] text-[var(--fumaca)]">Fim</Label>
+                    <Input
+                      placeholder="00:30"
+                      value={cut.end}
+                      onChange={(e) => handleUpdateCut(cut.id, "end", e.target.value)}
+                      className="h-8 text-xs font-mono bg-[var(--superficie)] border-[var(--linha)] text-[var(--marfim)]"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] text-[var(--fumaca)] mr-1">Rápido:</span>
+                  {[25, 30, 60].map(delta => (
+                    <Button
+                      key={delta}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleUpdateCut(cut.id, "end", addSecondsToTimestamp(cut.start, delta))}
+                      className="h-6 px-2 text-[10px] bg-[var(--superficie)] border-[var(--linha)] text-[var(--marfim)] hover:border-[var(--ouro)] hover:text-[var(--ouro)] transition-colors"
+                    >
+                      +{delta}s
+                    </Button>
+                  ))}
+                  {isVideoLoaded && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        if (previewVideoRef.current) {
+                          handleUpdateCut(cut.id, "start", formatSecondsToTimestamp(previewVideoRef.current.currentTime));
+                        }
+                      }}
+                      className="h-6 px-2 text-[10px] bg-[var(--superficie)] border-[var(--linha)] text-[var(--marfim)] hover:border-[var(--ouro)] hover:text-[var(--ouro)] transition-colors ml-auto"
+                    >
+                      <Clock className="h-3 w-3 mr-1" /> Marcar tempo atual
+                    </Button>
+                  )}
+                </div>
+
+                {!valid && error && (
+                  <div className="flex items-center gap-1.5 text-[var(--perigo)] text-[10px] font-medium mt-1">
+                    <AlertCircle className="h-3 w-3" />
+                    <span>{error}</span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={addManualCut}
+          className="w-full h-8 text-xs border-dashed border-[var(--linha)] bg-[var(--superficie)] text-[var(--fumaca)] hover:text-[var(--marfim)] hover:border-[var(--ouro)]/50"
+        >
+          <Plus className="h-3 w-3 mr-1" /> Adicionar outro corte
+        </Button>
+      </div>
+    );
+  };
 
   const renderPresetSelector = () => (
+
     <div className="space-y-2">
       <div className="flex items-center justify-between">
         <Label className="text-sm font-medium">Preset de Legendas</Label>
@@ -327,7 +539,7 @@ export function ImportVideoTabs({
 
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-xs rounded-full border-[var(--linha-2)] bg-[var(--superficie)] text-[var(--patina)] font-mono">
-                      Custo: {creditsCost} crédito{creditsCost > 1 ? "s" : ""}
+                      Custo: {uploadCreditsCost} crédito{uploadCreditsCost > 1 ? "s" : ""}
                     </Badge>
                     <Button
                       type="button"
@@ -345,6 +557,18 @@ export function ImportVideoTabs({
                   </div>
                 </div>
 
+                {filePreviewUrl && (
+                  <div className="mt-3 rounded-xl border border-[var(--linha)] overflow-hidden bg-black/40">
+                    <video
+                      ref={previewVideoRef}
+                      src={filePreviewUrl}
+                      controls
+                      playsInline
+                      className="w-full max-h-52 object-contain"
+                    />
+                  </div>
+                )}
+
                 {/* Insufficient credits alert */}
                 {isUploadInsufficientCredits && (
                   <div
@@ -353,14 +577,20 @@ export function ImportVideoTabs({
                   >
                     <AlertCircle className="h-4 w-4 shrink-0" />
                     <span>
-                      Saldo insuficiente: você possui {userCredits} crédito{userCredits !== 1 ? "s" : ""}, mas este vídeo requer {creditsCost} crédito{creditsCost !== 1 ? "s" : ""}.
+                      Saldo insuficiente: você possui {userCredits} crédito{userCredits !== 1 ? "s" : ""}, mas {mode === "manual" ? "os cortes manuais requerem" : "este vídeo requer"} {uploadCreditsCost} crédito{uploadCreditsCost !== 1 ? "s" : ""}.
                     </span>
                   </div>
                 )}
               </div>
             )}
 
+            {/* Mode Selector */}
+            {renderModeSelector()}
+            {renderManualCuts(!!file)}
+
             {/* Subtitle Preset Selector */}
+
+
             {renderPresetSelector()}
 
             {/* Submit Button */}
@@ -368,7 +598,7 @@ export function ImportVideoTabs({
               <Button
                 type="button"
                 onClick={handleUploadSubmit}
-                disabled={!file || uploading || isUploadInsufficientCredits}
+                disabled={!file || uploading || isUploadInsufficientCredits || hasManualCutsError}
                 className="btn-ouro !w-full sm:!w-auto !py-2.5 !px-6 !text-xs cursor-pointer"
               >
                 {uploading ? (
@@ -422,6 +652,10 @@ export function ImportVideoTabs({
               )}
             </div>
 
+            {/* Mode Selector */}
+            {renderModeSelector()}
+            {renderManualCuts(false)}
+
             {/* YouTube Insufficient Credits Alert */}
             {isYouTubeInsufficientCredits && (
               <div
@@ -430,7 +664,7 @@ export function ImportVideoTabs({
               >
                 <AlertCircle className="h-4 w-4 shrink-0" />
                 <span>
-                  Saldo insuficiente: você possui 0 créditos. Recarregue seus créditos para importar vídeos.
+                  Saldo insuficiente: você possui {userCredits} crédito{userCredits !== 1 ? "s" : ""}, mas {mode === "manual" ? "os cortes manuais requerem" : "a importação requer"} {youtubeCreditsCost} crédito{youtubeCreditsCost !== 1 ? "s" : ""}.
                 </span>
               </div>
             )}
@@ -443,7 +677,7 @@ export function ImportVideoTabs({
               <Button
                 type="button"
                 onClick={handleYouTubeSubmit}
-                disabled={!isYouTubeValid || importing || isYouTubeInsufficientCredits}
+                disabled={!isYouTubeValid || importing || isYouTubeInsufficientCredits || hasManualCutsError}
                 className="btn-ouro !w-full sm:!w-auto !py-2.5 !px-6 !text-xs cursor-pointer"
               >
                 {importing ? (

@@ -14,6 +14,8 @@ export class InngestQueueGateway implements IQueueGateway {
         uploadedFileId: payload.uploadedFileId,
         userId: payload.userId,
         preset: payload.preset,
+        mode: payload.mode,
+        manualCuts: payload.manualCuts,
       },
     });
   }

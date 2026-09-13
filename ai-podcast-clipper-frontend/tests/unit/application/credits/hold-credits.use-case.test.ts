@@ -89,4 +89,44 @@ describe("HoldCreditsUseCase", () => {
       })
     ).rejects.toThrow(NotFoundError);
   });
+
+  it("deve usar o amount explicitamente fornecido ignorando o cálculo baseado em durationSeconds", async () => {
+    await userRepo.create({
+      id: "user-1",
+      email: "test@example.com",
+      credits: 10,
+      reservedCredits: 0,
+    });
+
+    const file = await fileRepo.create({
+      userId: "user-1",
+      s3Key: "test/file.mp4",
+      sourceType: "UPLOAD",
+      durationSeconds: 600, // 600s calcularia 10 créditos
+    });
+
+    // Passa amount: 3 explicitamente (ex: corte manual de 125s total)
+    const result = await useCase.execute({
+      userId: "user-1",
+      durationSeconds: 600,
+      fileId: file.id,
+      amount: 3,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.heldCredits).toBe(3);
+
+    const user = await userRepo.findById("user-1");
+    expect(user?.credits).toBe(7);
+    expect(user?.reservedCredits).toBe(3);
+
+    const txs = await txRepo.findByUserId("user-1");
+    expect(txs).toHaveLength(1);
+    expect(txs[0]?.type).toBe("HOLD");
+    expect(txs[0]?.amount).toBe(3);
+
+    const updatedFile = await fileRepo.findById(file.id);
+    expect(updatedFile?.creditsCost).toBe(3);
+  });
 });
+

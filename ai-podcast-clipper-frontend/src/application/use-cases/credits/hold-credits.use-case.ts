@@ -19,7 +19,8 @@ export class HoldCreditsUseCase {
   ) {}
 
   async execute(input: HoldCreditsInput): Promise<HoldCreditsOutput> {
-    const requiredCredits = calculateVideoCredits(input.durationSeconds);
+    const requiredCredits =
+      input.amount ?? calculateVideoCredits(input.durationSeconds);
 
     const user = await this.userRepository.findById(input.userId);
     if (!user) {

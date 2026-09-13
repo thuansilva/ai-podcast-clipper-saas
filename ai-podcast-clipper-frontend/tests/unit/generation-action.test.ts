@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { deleteClip, updateClip, getClipPlayUrl } from "~/actions/generation";
+import { deleteClip, updateClip, getClipPlayUrl, processVideo } from "~/actions/generation";
 import { db } from "~/server/db";
+import { inngest } from "~/inngest/client";
 import { DeleteObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { revalidatePath } from "next/cache";
 
@@ -206,4 +207,87 @@ describe("Generation Server Actions", () => {
       expect(result.url).toBe("https://s3.example.com/clip.mp4");
     });
   });
+
+  describe("processVideo", () => {
+    it("não deve disparar evento se o arquivo já estiver marcado como uploaded", async () => {
+      vi.mocked(db.uploadedFile.findUniqueOrThrow).mockResolvedValueOnce({
+        id: "file-already-uploaded",
+        uploaded: true,
+        userId: "user-123",
+      } as any);
+
+      await processVideo("file-already-uploaded");
+
+      expect(inngest.send).not.toHaveBeenCalled();
+      expect(db.uploadedFile.update).not.toHaveBeenCalled();
+      expect(revalidatePath).not.toHaveBeenCalled();
+    });
+
+    it("deve disparar evento no Inngest, atualizar status para uploaded e revalidar /dashboard", async () => {
+      vi.mocked(db.uploadedFile.findUniqueOrThrow).mockResolvedValueOnce({
+        id: "file-new",
+        uploaded: false,
+        userId: "user-123",
+      } as any);
+
+      vi.mocked(inngest.send).mockResolvedValueOnce({} as any);
+      vi.mocked(db.uploadedFile.update).mockResolvedValueOnce({} as any);
+
+      await processVideo("file-new", "HORMOZI");
+
+      expect(inngest.send).toHaveBeenCalledWith({
+        name: "process-video-events",
+        data: {
+          uploadedFileId: "file-new",
+          userId: "user-123",
+          preset: "HORMOZI",
+          mode: undefined,
+          manualCuts: undefined,
+        },
+      });
+
+      expect(db.uploadedFile.update).toHaveBeenCalledWith({
+        where: { id: "file-new" },
+        data: { uploaded: true },
+      });
+
+      expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
+    });
+
+    it("deve repassar mode e manualCuts para o Inngest quando fornecidos", async () => {
+      vi.mocked(db.uploadedFile.findUniqueOrThrow).mockResolvedValueOnce({
+        id: "file-manual",
+        uploaded: false,
+        userId: "user-123",
+      } as any);
+
+      vi.mocked(inngest.send).mockResolvedValueOnce({} as any);
+      vi.mocked(db.uploadedFile.update).mockResolvedValueOnce({} as any);
+
+      const manualCuts = [
+        { id: "cut-1", title: "Corte Manual", startTime: 10, endTime: 40 },
+      ];
+
+      await processVideo("file-manual", "HORMOZI", "manual", manualCuts);
+
+      expect(inngest.send).toHaveBeenCalledWith({
+        name: "process-video-events",
+        data: {
+          uploadedFileId: "file-manual",
+          userId: "user-123",
+          preset: "HORMOZI",
+          mode: "manual",
+          manualCuts,
+        },
+      });
+
+      expect(db.uploadedFile.update).toHaveBeenCalledWith({
+        where: { id: "file-manual" },
+        data: { uploaded: true },
+      });
+
+      expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
+    });
+  });
 });
+

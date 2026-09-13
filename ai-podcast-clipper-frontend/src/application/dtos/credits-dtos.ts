@@ -2,6 +2,7 @@ export interface HoldCreditsInput {
   userId: string;
   durationSeconds: number;
   fileId: string;
+  amount?: number;
 }
 
 export interface HoldCreditsOutput {

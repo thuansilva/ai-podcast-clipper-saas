@@ -136,4 +136,55 @@ describe("importYouTubeVideo Server Action", () => {
       error: "Database connection failure",
     });
   });
+
+  it("deve repassar mode e manualCuts para o Inngest quando fornecidos", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    vi.mocked(db.uploadedFile.create).mockResolvedValueOnce({
+      id: "uploaded-file-xyz",
+      userId: "user-123",
+      s3Key: "youtube/123/original.mp4",
+      displayName: "YouTube Video (dQw4w9WgXcQ)",
+      sourceType: "YOUTUBE",
+      youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      durationSeconds: 0,
+      creditsCost: 0,
+      uploaded: true,
+      status: "queued",
+      errorMessage: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any);
+
+    vi.mocked(inngest.send).mockResolvedValueOnce({} as any);
+
+    const manualCuts = [
+      { id: "cut-1", title: "Corte Manual 1", startTime: 15, endTime: 45 },
+    ];
+
+    const result = await importYouTubeVideo({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      preset: "HORMOZI",
+      mode: "manual",
+      manualCuts,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      uploadedFileId: "uploaded-file-xyz",
+    });
+
+    expect(inngest.send).toHaveBeenCalledWith({
+      name: "process-video-events",
+      data: {
+        uploadedFileId: "uploaded-file-xyz",
+        userId: "user-123",
+        preset: "HORMOZI",
+        mode: "manual",
+        manualCuts,
+      },
+    });
+
+    expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
+  });
 });
