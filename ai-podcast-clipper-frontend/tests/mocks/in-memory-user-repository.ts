@@ -1,4 +1,7 @@
 import type { UserEntity } from "~/domain/entities/user";
+import { InsufficientCreditsError } from "~/domain/errors/insufficient-credits-error";
+import { DomainError } from "~/domain/errors/domain-error";
+import { NotFoundError } from "~/domain/errors/not-found-error";
 import type {
   IUserRepository,
   CreateUserData,
@@ -69,16 +72,27 @@ export class InMemoryUserRepository implements IUserRepository {
 
   async updateCredits(
     userId: string,
-    data: {
-      creditsDecrement?: number;
-      creditsIncrement?: number;
-      reservedCreditsIncrement?: number;
-      reservedCreditsDecrement?: number;
-    }
+    data: CreditsUpdateInput
   ): Promise<UserEntity> {
     const user = this.users.get(userId);
     if (!user) {
-      throw new Error(`User ${userId} not found`);
+      throw new NotFoundError("Usuário", userId);
+    }
+
+    if (
+      data.creditsDecrement !== undefined &&
+      user.credits < data.creditsDecrement
+    ) {
+      throw new InsufficientCreditsError(data.creditsDecrement, user.credits);
+    }
+
+    if (
+      data.reservedCreditsDecrement !== undefined &&
+      user.reservedCredits < data.reservedCreditsDecrement
+    ) {
+      throw new DomainError(
+        `Saldo insuficiente de créditos reservados: necessários ${data.reservedCreditsDecrement}, disponíveis ${user.reservedCredits}.`
+      );
     }
 
     const updated: UserEntity = {

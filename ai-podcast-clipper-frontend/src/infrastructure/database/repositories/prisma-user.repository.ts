@@ -1,5 +1,9 @@
 import { db } from "~/server/db";
+import type { Prisma } from "@prisma/client";
 import type { UserEntity } from "~/domain/entities/user";
+import { InsufficientCreditsError } from "~/domain/errors/insufficient-credits-error";
+import { DomainError } from "~/domain/errors/domain-error";
+import { NotFoundError } from "~/domain/errors/not-found-error";
 import type {
   IUserRepository,
   CreateUserData,
@@ -173,8 +177,17 @@ export class PrismaUserRepository implements IUserRepository {
     userId: string,
     data: CreditsUpdateInput
   ): Promise<UserEntity> {
-    const user = await db.user.update({
-      where: { id: userId },
+    const whereConditions: Prisma.UserWhereInput = { id: userId };
+
+    if (data.creditsDecrement !== undefined) {
+      whereConditions.credits = { gte: data.creditsDecrement };
+    }
+    if (data.reservedCreditsDecrement !== undefined) {
+      whereConditions.reservedCredits = { gte: data.reservedCreditsDecrement };
+    }
+
+    const updateResult = await db.user.updateMany({
+      where: whereConditions,
       data: {
         ...(data.creditsDecrement !== undefined && {
           credits: { decrement: data.creditsDecrement },
@@ -189,27 +202,38 @@ export class PrismaUserRepository implements IUserRepository {
           reservedCredits: { decrement: data.reservedCreditsDecrement },
         }),
       },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        credits: true,
-        reservedCredits: true,
-        stripeCustomerId: true,
-        image: true,
-        plan: true,
-      },
     });
 
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      credits: user.credits,
-      reservedCredits: user.reservedCredits,
-      stripeCustomerId: user.stripeCustomerId,
-      image: user.image,
-      plan: user.plan,
-    };
+    if (updateResult.count === 0) {
+      const current = await this.findById(userId);
+      if (!current) {
+        throw new NotFoundError("Usuário", userId);
+      }
+      if (
+        data.creditsDecrement !== undefined &&
+        current.credits < data.creditsDecrement
+      ) {
+        throw new InsufficientCreditsError(
+          data.creditsDecrement,
+          current.credits
+        );
+      }
+      if (
+        data.reservedCreditsDecrement !== undefined &&
+        current.reservedCredits < data.reservedCreditsDecrement
+      ) {
+        throw new DomainError(
+          `Saldo insuficiente de créditos reservados: necessários ${data.reservedCreditsDecrement}, disponíveis ${current.reservedCredits}.`
+        );
+      }
+      throw new DomainError("Falha ao atualizar créditos do usuário.");
+    }
+
+    const updated = await this.findById(userId);
+    if (!updated) {
+      throw new NotFoundError("Usuário", userId);
+    }
+
+    return updated;
   }
 }

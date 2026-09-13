@@ -156,4 +156,121 @@ describe("CreditService Integration Tests", () => {
       expect(transaction?.type).toBe("REFUND");
     });
   });
+
+  describe("Race Conditions & Concurrency Protection", () => {
+    it("deve impedir saldo negativo e permitir apenas 1 sucesso quando 5 requisições concorrentes tentarem reservar todo o saldo (10 créditos)", async () => {
+      const user = await createTestUser(10, 0);
+
+      // Criar 5 arquivos de vídeo para simular 5 jobs concorrentes
+      const files = await Promise.all([
+        createTestFile(user.id),
+        createTestFile(user.id),
+        createTestFile(user.id),
+        createTestFile(user.id),
+        createTestFile(user.id),
+      ]);
+
+      // Dispara 5 requisições de 10 créditos simultâneas (durationSeconds = 600s -> 10 créditos)
+      const results = await Promise.allSettled(
+        files.map((file) => CreditService.holdCredits(user.id, 600, file.id))
+      );
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+
+      // Exatamente 1 deve ter sucesso e 4 devem falhar por saldo insuficiente
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(4);
+
+      // Todas as rejeições devem conter mensagem de saldo insuficiente
+      for (const r of rejected) {
+        if (r.status === "rejected") {
+          expect(String(r.reason)).toMatch(/insufficient credits|saldo insuficiente/i);
+        }
+      }
+
+      // Validação rigorosa no banco de dados
+      const freshUser = await db.user.findUnique({
+        where: { id: user.id },
+      });
+      expect(freshUser?.credits).toBe(0); // NUNCA deve ser negativo (-40)
+      expect(freshUser?.reservedCredits).toBe(10);
+
+      // Apenas 1 transação de HOLD registrada
+      const holdTransactions = await db.creditTransaction.findMany({
+        where: { userId: user.id, type: "HOLD" },
+      });
+      expect(holdTransactions).toHaveLength(1);
+      expect(holdTransactions[0]?.amount).toBe(10);
+    });
+
+    it("deve debitar de forma atômica e consistente quando requisições parciais competirem por créditos", async () => {
+      const user = await createTestUser(10, 0);
+
+      // 4 arquivos competindo por 3 créditos cada (total de 12 solicitados para 10 disponíveis)
+      const files = await Promise.all([
+        createTestFile(user.id),
+        createTestFile(user.id),
+        createTestFile(user.id),
+        createTestFile(user.id),
+      ]);
+
+      // durationSeconds = 180s -> 3 créditos cada
+      const results = await Promise.allSettled(
+        files.map((file) => CreditService.holdCredits(user.id, 180, file.id))
+      );
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+
+      // 3 requisições consomem 9 créditos; a 4ª falha porque resta apenas 1 crédito
+      expect(fulfilled).toHaveLength(3);
+      expect(rejected).toHaveLength(1);
+
+      const freshUser = await db.user.findUnique({
+        where: { id: user.id },
+      });
+      expect(freshUser?.credits).toBe(1); // 10 - 9 = 1
+      expect(freshUser?.reservedCredits).toBe(9); // 3 * 3 = 9
+
+      const holdTransactions = await db.creditTransaction.findMany({
+        where: { userId: user.id, type: "HOLD" },
+      });
+      expect(holdTransactions).toHaveLength(3);
+    });
+
+    it("deve impedir consumo concorrente duplicado de créditos reservados", async () => {
+      const user = await createTestUser(5, 10);
+      const file1 = await createTestFile(user.id);
+      const file2 = await createTestFile(user.id);
+
+      // Duas chamadas simultâneas tentando consumir 10 créditos reservados
+      const results = await Promise.allSettled([
+        CreditService.consumeCredits(user.id, 10, file1.id),
+        CreditService.consumeCredits(user.id, 10, file2.id),
+      ]);
+
+      const fulfilled = results.filter((r) => r.status === "fulfilled");
+      const rejected = results.filter((r) => r.status === "rejected");
+
+      // Apenas 1 deve conseguir consumir os 10 créditos reservados
+      expect(fulfilled).toHaveLength(1);
+      expect(rejected).toHaveLength(1);
+
+      if (rejected[0]?.status === "rejected") {
+        expect(String(rejected[0].reason)).toMatch(/saldo insuficiente de créditos reservados/i);
+      }
+
+      const freshUser = await db.user.findUnique({
+        where: { id: user.id },
+      });
+      expect(freshUser?.credits).toBe(5);
+      expect(freshUser?.reservedCredits).toBe(0); // NUNCA negativo (-10)
+
+      const consumeTransactions = await db.creditTransaction.findMany({
+        where: { userId: user.id, type: "CONSUME" },
+      });
+      expect(consumeTransactions).toHaveLength(1);
+    });
+  });
 });

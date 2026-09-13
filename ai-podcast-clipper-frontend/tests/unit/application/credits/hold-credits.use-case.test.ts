@@ -128,5 +128,52 @@ describe("HoldCreditsUseCase", () => {
     const updatedFile = await fileRepo.findById(file.id);
     expect(updatedFile?.creditsCost).toBe(3);
   });
+
+  it("deve impedir race condition e permitir apenas 1 sucesso quando 5 chamadas concorrentes disputarem 10 créditos", async () => {
+    await userRepo.create({
+      id: "user-concurrency",
+      email: "concurrency@example.com",
+      credits: 10,
+      reservedCredits: 0,
+    });
+
+    const files = await Promise.all(
+      [1, 2, 3, 4, 5].map((i) =>
+        fileRepo.create({
+          userId: "user-concurrency",
+          s3Key: `test/file-${i}.mp4`,
+          sourceType: "UPLOAD",
+          durationSeconds: 600, // 10 créditos
+        })
+      )
+    );
+
+    const results = await Promise.allSettled(
+      files.map((file) =>
+        useCase.execute({
+          userId: "user-concurrency",
+          durationSeconds: 600,
+          fileId: file.id,
+        })
+      )
+    );
+
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(4);
+
+    // Todas as rejeições devem ser InsufficientCreditsError
+    for (const r of rejected) {
+      if (r.status === "rejected") {
+        expect(r.reason).toBeInstanceOf(InsufficientCreditsError);
+      }
+    }
+
+    const user = await userRepo.findById("user-concurrency");
+    expect(user?.credits).toBe(0);
+    expect(user?.reservedCredits).toBe(10);
+  });
 });
 
