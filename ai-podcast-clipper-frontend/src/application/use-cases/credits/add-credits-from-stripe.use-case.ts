@@ -45,6 +45,10 @@ export class AddCreditsFromStripeWebhookUseCase {
         creditsIncrement: creditsToAdd,
       });
 
+      if (input.priceId === input.largePackPriceId) {
+        await this.userRepository.update(user.id, { plan: "STUDIO" });
+      }
+
       await this.creditTransactionRepository.create({
         userId: user.id,
         amount: creditsToAdd,

@@ -37,12 +37,14 @@ export interface DashboardClientProps {
   }[];
   clips: Clip[];
   userCredits: number;
+  userPlan?: string;
 }
 
 export function DashboardClient({
   uploadedFiles,
   clips,
   userCredits,
+  userPlan = "STARTER",
 }: DashboardClientProps) {
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
@@ -108,6 +110,7 @@ export function DashboardClient({
         <TabsContent value="upload" className="space-y-6">
           <ImportVideoTabs
             userCredits={userCredits}
+            userPlan={userPlan}
             onUploadSuccess={handleRefresh}
           />
 

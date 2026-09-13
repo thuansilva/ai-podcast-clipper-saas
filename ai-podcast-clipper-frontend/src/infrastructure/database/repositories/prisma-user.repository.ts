@@ -19,6 +19,7 @@ export class PrismaUserRepository implements IUserRepository {
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
+        plan: true,
       },
     });
 
@@ -32,6 +33,7 @@ export class PrismaUserRepository implements IUserRepository {
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
+      plan: user.plan,
     };
   }
 
@@ -46,6 +48,7 @@ export class PrismaUserRepository implements IUserRepository {
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
+        plan: true,
       },
     });
 
@@ -59,6 +62,7 @@ export class PrismaUserRepository implements IUserRepository {
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
+      plan: user.plan,
     };
   }
 
@@ -75,6 +79,7 @@ export class PrismaUserRepository implements IUserRepository {
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
+        plan: true,
       },
     });
 
@@ -88,6 +93,7 @@ export class PrismaUserRepository implements IUserRepository {
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
+      plan: user.plan,
     };
   }
 
@@ -101,6 +107,7 @@ export class PrismaUserRepository implements IUserRepository {
         stripeCustomerId: data.stripeCustomerId ?? null,
         credits: data.credits ?? 10,
         reservedCredits: data.reservedCredits ?? 0,
+        plan: data.plan ?? "STARTER",
       },
       select: {
         id: true,
@@ -110,6 +117,7 @@ export class PrismaUserRepository implements IUserRepository {
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
+        plan: true,
       },
     });
 
@@ -121,6 +129,7 @@ export class PrismaUserRepository implements IUserRepository {
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
+      plan: user.plan,
     };
   }
 
@@ -134,6 +143,7 @@ export class PrismaUserRepository implements IUserRepository {
         ...(data.stripeCustomerId !== undefined && {
           stripeCustomerId: data.stripeCustomerId,
         }),
+        ...(data.plan !== undefined && { plan: data.plan }),
       },
       select: {
         id: true,
@@ -143,6 +153,7 @@ export class PrismaUserRepository implements IUserRepository {
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
+        plan: true,
       },
     });
 
@@ -154,6 +165,7 @@ export class PrismaUserRepository implements IUserRepository {
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
+      plan: user.plan,
     };
   }
 
@@ -185,6 +197,7 @@ export class PrismaUserRepository implements IUserRepository {
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
+        plan: true,
       },
     });
 
@@ -196,6 +209,7 @@ export class PrismaUserRepository implements IUserRepository {
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
+      plan: user.plan,
     };
   }
 }

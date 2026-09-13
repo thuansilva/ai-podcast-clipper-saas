@@ -8,6 +8,7 @@ export interface CreateUserData {
   stripeCustomerId?: string | null;
   credits?: number;
   reservedCredits?: number;
+  plan?: string;
 }
 
 export interface UpdateUserData {
@@ -15,6 +16,7 @@ export interface UpdateUserData {
   name?: string | null;
   image?: string | null;
   stripeCustomerId?: string | null;
+  plan?: string;
 }
 
 export interface CreditsUpdateInput {

@@ -6,4 +6,5 @@ export interface UserEntity {
   reservedCredits: number;
   stripeCustomerId?: string | null;
   image?: string | null;
+  plan?: string;
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Dropzone, { type DropzoneState } from "shadcn-dropzone";
+import type { FileRejection } from "react-dropzone";
 import { toast } from "sonner";
 import { AlertCircle, CheckCircle2, Film, Loader2, UploadCloud, Youtube, Plus, Trash2, Clock } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
@@ -28,12 +29,18 @@ import {
   validateManualCut,
 } from "~/domain/rules/timestamp-parser";
 import { calculateManualCutsCredits } from "~/domain/rules/calculate-credits";
+import {
+  validateVideoDuration,
+  validateFileSize,
+  MAX_FILE_SIZE_BYTES,
+} from "~/domain/rules/video-limits";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 
 export type SubtitlePreset = "HORMOZI" | "MINIMAL" | "NEON";
 
 export interface ImportVideoTabsProps {
   userCredits: number;
+  userPlan?: string;
   onUploadSuccess?: () => void;
 }
 
@@ -65,6 +72,7 @@ const SUBTITLE_PRESETS: {
 
 export function ImportVideoTabs({
   userCredits,
+  userPlan = "STARTER",
   onUploadSuccess,
 }: ImportVideoTabsProps) {
 
@@ -135,10 +143,31 @@ export function ImportVideoTabs({
   });
 
   // Read video duration on file drop
-  const handleDrop = (acceptedFiles: File[]) => {
+  const handleDrop = (
+    acceptedFiles: File[],
+    fileRejections?: FileRejection[]
+  ) => {
+    if (fileRejections && fileRejections.length > 0) {
+      const isSizeError = fileRejections.some((r) =>
+        r.errors.some((e) => e.code === "file-too-large")
+      );
+      if (isSizeError) {
+        toast.error("O arquivo selecionado é muito grande. O limite máximo permitido é de 2 GB por arquivo.");
+        return;
+      }
+      toast.error("Arquivo rejeitado. Verifique o formato e o tamanho.");
+      return;
+    }
+
     if (!acceptedFiles || acceptedFiles.length === 0) return;
     const selectedFile = acceptedFiles[0];
     if (!selectedFile) return;
+
+    const sizeValidation = validateFileSize(selectedFile.size);
+    if (!sizeValidation.valid) {
+      toast.error(sizeValidation.error ?? "Arquivo muito grande.");
+      return;
+    }
 
     setFile(selectedFile);
 
@@ -158,6 +187,13 @@ export function ImportVideoTabs({
             URL.revokeObjectURL(objectUrl);
           }
           const dur = Math.round(video.duration);
+          const durationValidation = validateVideoDuration(dur, userPlan);
+          if (!durationValidation.valid) {
+            toast.error(durationValidation.error ?? "Duração excede o limite permitido.");
+            setFile(null);
+            setDurationSeconds(null);
+            return;
+          }
           setDurationSeconds(dur > 0 ? dur : null);
         };
 
@@ -177,6 +213,15 @@ export function ImportVideoTabs({
 
   const handleUploadSubmit = async () => {
     if (!file || isUploadInsufficientCredits) return;
+
+    if (durationSeconds) {
+      const durationValidation = validateVideoDuration(durationSeconds, userPlan);
+      if (!durationValidation.valid) {
+        toast.error(durationValidation.error ?? "Duração excede o limite permitido.");
+        return;
+      }
+    }
+
     setUploading(true);
 
     try {
@@ -455,11 +500,24 @@ export function ImportVideoTabs({
 
   return (
     <Card className="w-full rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] shadow-[0_0_30px_rgba(0,0,0,0.5)]">
-      <CardHeader>
-        <CardTitle className="text-lg font-semibold text-[var(--marfim)]">Importar Vídeo para Cortes</CardTitle>
-        <CardDescription className="text-xs text-[var(--fumaca)]">
-          Envie um arquivo de vídeo do seu dispositivo ou importe diretamente pelo link do YouTube.
-        </CardDescription>
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <CardTitle className="text-lg font-semibold text-[var(--marfim)]">Importar Vídeo para Cortes</CardTitle>
+            <CardDescription className="text-xs text-[var(--fumaca)]">
+              Envie um arquivo de vídeo do seu dispositivo ou importe diretamente pelo link do YouTube.
+            </CardDescription>
+          </div>
+          <Badge
+            variant="outline"
+            className="w-fit self-start sm:self-auto rounded-full border-[var(--linha-2)] bg-[var(--tinta)] text-[var(--ouro)] text-[11px] font-mono px-3 py-1"
+            data-testid="plan-limit-badge"
+          >
+            {userPlan.toUpperCase() === "STUDIO"
+              ? "Plano Studio: Máx. 3h por vídeo"
+              : "Plano Starter: Máx. 2h por vídeo"}
+          </Badge>
+        </div>
       </CardHeader>
 
       <CardContent>
@@ -493,7 +551,7 @@ export function ImportVideoTabs({
                 "video/mp4": [".mp4"],
                 "video/quicktime": [".mov"],
               }}
-              maxSize={500 * 1024 * 1024}
+              maxSize={MAX_FILE_SIZE_BYTES}
               disabled={uploading}
               maxFiles={1}
             >
@@ -503,7 +561,7 @@ export function ImportVideoTabs({
                   <div>
                     <p className="font-medium text-[var(--marfim)]">Arraste e solte seu arquivo de vídeo</p>
                     <p className="text-sm text-[var(--fumaca)]">
-                      ou clique para selecionar (MP4 ou MOV até 500MB)
+                      ou clique para selecionar (MP4 ou MOV até 2 GB)
                     </p>
                   </div>
                   <Button

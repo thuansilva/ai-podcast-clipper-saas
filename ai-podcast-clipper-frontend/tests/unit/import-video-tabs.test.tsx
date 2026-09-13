@@ -75,6 +75,14 @@ describe("ImportVideoTabs (Task 6)", () => {
       expect(screen.getByPlaceholderText(/youtube\.com/i)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: /importar do youtube/i })).toBeInTheDocument();
     });
+
+    it("deve exibir o badge do plano com limite correto (Starter = 2h, Studio = 3h)", () => {
+      const { rerender } = render(<ImportVideoTabs userCredits={10} userPlan="STARTER" />);
+      expect(screen.getByTestId("plan-limit-badge")).toHaveTextContent("Plano Starter: Máx. 2h por vídeo");
+
+      rerender(<ImportVideoTabs userCredits={10} userPlan="STUDIO" />);
+      expect(screen.getByTestId("plan-limit-badge")).toHaveTextContent("Plano Studio: Máx. 3h por vídeo");
+    });
   });
 
   describe("2. Validação de URL do YouTube e submissão", () => {
@@ -346,6 +354,72 @@ describe("ImportVideoTabs (Task 6)", () => {
         screen.getByRole("button", { name: /enviar e gerar cortes/i }),
       ).toBeDisabled();
     });
+
+    it("deve rejeitar arquivo local com erro se duração exceder 2h no plano STARTER", async () => {
+      const originalCreateObjectURL = URL.createObjectURL;
+      const originalRevokeObjectURL = URL.revokeObjectURL;
+
+      URL.createObjectURL = vi.fn(() => "blob:mock-long-url");
+      URL.revokeObjectURL = vi.fn();
+
+      const originalCreateElement = document.createElement.bind(document);
+      vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
+        if (tagName === "video") {
+          const videoElement = originalCreateElement("video");
+          Object.defineProperty(videoElement, "duration", {
+            value: 8000, // > 7200s (2h)
+            writable: true,
+          });
+          setTimeout(() => {
+            if (videoElement.onloadedmetadata) {
+              videoElement.onloadedmetadata(new Event("loadedmetadata"));
+            }
+          }, 0);
+          return videoElement;
+        }
+        return originalCreateElement(tagName);
+      });
+
+      const { container } = render(<ImportVideoTabs userCredits={200} userPlan="STARTER" />);
+      const fileInput = container.querySelector('input[type="file"]');
+      const file = new File(["long-video"], "too-long.mp4", { type: "video/mp4" });
+
+      fireEvent.change(fileInput!, { target: { files: [file] } });
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          expect.stringContaining("excede o limite de 2h")
+        );
+      });
+
+      // O arquivo não deve ficar selecionado
+      expect(screen.queryByText(/too-long\.mp4/i)).not.toBeInTheDocument();
+
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+      vi.restoreAllMocks();
+    });
+
+    it("deve rejeitar arquivo se tamanho for maior que 2 GB", async () => {
+      const { container } = render(<ImportVideoTabs userCredits={50} />);
+      const fileInput = container.querySelector('input[type="file"]');
+
+      const hugeFile = new File(["dummy"], "huge-file.mp4", { type: "video/mp4" });
+      Object.defineProperty(hugeFile, "size", {
+        value: 3 * 1024 * 1024 * 1024, // 3 GB
+      });
+
+      fireEvent.change(fileInput!, { target: { files: [hugeFile] } });
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          expect.stringContaining("2 GB")
+        );
+      });
+
+      expect(screen.queryByText(/huge-file\.mp4/i)).not.toBeInTheDocument();
+    });
+  });
   describe("5. Modo de Corte Manual", () => {
     it("deve alternar entre Auto IA e Corte Manual e renderizar campos iniciais", () => {
       render(<ImportVideoTabs userCredits={10} />);
@@ -482,6 +556,4 @@ describe("ImportVideoTabs (Task 6)", () => {
       });
     });
   });
-
-});
 });

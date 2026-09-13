@@ -80,6 +80,7 @@ describe("AddCreditsFromStripeWebhookUseCase", () => {
 
     const user = await userRepo.findById("user-1");
     expect(user?.credits).toBe(650);
+    expect(user?.plan).toBe("STUDIO");
   });
 
   it("deve lançar NotFoundError se stripeCustomerId não for encontrado", async () => {

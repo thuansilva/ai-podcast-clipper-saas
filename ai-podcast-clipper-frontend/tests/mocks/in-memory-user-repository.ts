@@ -42,6 +42,7 @@ export class InMemoryUserRepository implements IUserRepository {
       stripeCustomerId: data.stripeCustomerId ?? null,
       credits: data.credits ?? 10,
       reservedCredits: data.reservedCredits ?? 0,
+      plan: data.plan ?? "STARTER",
     };
     this.users.set(user.id, user);
     return user;
@@ -60,6 +61,7 @@ export class InMemoryUserRepository implements IUserRepository {
       ...(data.stripeCustomerId !== undefined && {
         stripeCustomerId: data.stripeCustomerId,
       }),
+      ...(data.plan !== undefined && { plan: data.plan }),
     };
     this.users.set(userId, updated);
     return updated;

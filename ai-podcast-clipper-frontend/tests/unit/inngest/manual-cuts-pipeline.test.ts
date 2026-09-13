@@ -70,6 +70,10 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
       sourceType: "UPLOAD",
       status: "queued",
       displayName: "podcast.mp4",
+      user: {
+        id: "user-456",
+        plan: "STARTER",
+      },
     });
 
     mockHoldCreditsExecute.mockResolvedValue({
@@ -254,5 +258,46 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
 
     expect(parsedBody.mode).toBe("manual");
     expect(parsedBody.manual_cuts).toEqual([]);
+  });
+
+  it("deve abortar e marcar como failed quando a duração exceder o limite do plano STARTER (> 2h)", async () => {
+    const mockStep = createMockStep();
+
+    mockUploadedFileFindUniqueOrThrow.mockResolvedValue({
+      id: "file-long",
+      userId: "user-456",
+      s3Key: "uploads/file-long/video.mp4",
+      durationSeconds: 7500, // > 7200s (2h)
+      sourceType: "UPLOAD",
+      status: "queued",
+      displayName: "long_podcast.mp4",
+      user: {
+        id: "user-456",
+        plan: "STARTER",
+      },
+    });
+
+    const result = await processVideoHandler({
+      event: {
+        data: {
+          uploadedFileId: "file-long",
+          userId: "user-456",
+          mode: "auto",
+        },
+      },
+      step: mockStep,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("excede o limite de 2h");
+    expect(mockHoldCreditsExecute).not.toHaveBeenCalled();
+    expect(mockUploadedFileUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "file-long" },
+        data: expect.objectContaining({
+          status: "failed",
+        }),
+      })
+    );
   });
 });

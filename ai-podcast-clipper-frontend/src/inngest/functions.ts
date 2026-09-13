@@ -8,6 +8,7 @@ import {
 } from "~/infrastructure/factories/use-case-factories";
 import { Prisma } from "@prisma/client";
 import { calculateManualCutsCredits } from "~/domain/rules/calculate-credits";
+import { validateVideoDuration } from "~/domain/rules/video-limits";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 
 export interface ProcessVideoEventData {
@@ -152,6 +153,7 @@ export async function processVideoHandler({
       async () => {
         const uploadedFile = await db.uploadedFile.findUniqueOrThrow({
           where: { id: uploadedFileId },
+          include: { user: true },
         });
 
         let currentS3Key = uploadedFile.s3Key;
@@ -174,6 +176,14 @@ export async function processVideoHandler({
               displayName: downloadResult.title || uploadedFile.displayName,
             },
           });
+        }
+
+        const durationValidation = validateVideoDuration(
+          durationSeconds,
+          uploadedFile.user?.plan
+        );
+        if (!durationValidation.valid) {
+          throw new Error(durationValidation.error);
         }
 
         const isManual =

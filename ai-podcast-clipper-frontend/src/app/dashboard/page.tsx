@@ -14,6 +14,7 @@ export default async function DashboardPage() {
     where: { id: userId },
     select: {
       credits: true,
+      plan: true,
       uploadedFiles: {
         where: {
           uploaded: true,
@@ -53,6 +54,7 @@ export default async function DashboardPage() {
       uploadedFiles={formattedFiles}
       clips={userData.clips}
       userCredits={userData.credits}
+      userPlan={userData.plan ?? "STARTER"}
     />
   );
 }
