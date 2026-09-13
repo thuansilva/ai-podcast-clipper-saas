@@ -18,19 +18,20 @@ export default function () {
   const rand = Math.random();
 
   if (rand < 0.7) {
-    // 70% Tráfego de APIs e endpoints de consulta
-    const res = http.get(`${baseUrl}/api/auth/csrf`, {
+    // 70% Tráfego de páginas públicas (Login)
+    const res = http.get(`${baseUrl}/login`, {
       headers: getCommonHeaders(),
     });
 
     check(res, {
-      "GET status is valid (200/404)": (r) => r.status === 200 || r.status === 404,
+      "GET status is 200": (r) => r.status === 200,
       "response time < 250ms": (r) => r.timings.duration < 250,
     });
   } else {
     // 30% Webhooks de créditos
+    const customerIndex = ((__VU - 1) % 10) + 1;
     const payload = generateCheckoutSessionPayload({
-      customerId: `cus_main_${__VU}`,
+      customerId: `cus_main_${customerIndex}`,
       priceId: "price_medium_pack",
     });
     const signature = generateStripeSignature(payload, webhookSecret);
