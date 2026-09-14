@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { formatClerkError } from "~/lib/clerk-errors";
+import { signInSchema } from "~/domain/rules/auth-schemas";
 
 export function CustomSignInForm() {
   const { isLoaded, signIn, setActive } = useSignIn();
@@ -22,8 +23,17 @@ export function CustomSignInForm() {
     e.preventDefault();
     if (!isLoaded || !signIn) return;
 
-    setIsLoading(true);
     setErrorMessage(null);
+
+    const validation = signInSchema.safeParse({ email, password });
+    if (!validation.success) {
+      setErrorMessage(
+        validation.error.errors[0]?.message ?? "Dados de entrada inválidos.",
+      );
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       const result = await signIn.create({
@@ -38,6 +48,7 @@ export function CustomSignInForm() {
         setErrorMessage("Autenticação não concluída. Verifique suas informações.");
       }
     } catch (err) {
+      console.error("[Clerk SignIn Error]:", err);
       setErrorMessage(formatClerkError(err));
     } finally {
       setIsLoading(false);
@@ -56,6 +67,7 @@ export function CustomSignInForm() {
         redirectUrlComplete: "/dashboard",
       });
     } catch (err) {
+      console.error("[Clerk Google SignIn Error]:", err);
       setErrorMessage(formatClerkError(err));
       setIsGoogleLoading(false);
     }

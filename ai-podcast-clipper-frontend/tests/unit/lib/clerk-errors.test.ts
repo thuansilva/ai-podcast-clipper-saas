@@ -30,11 +30,21 @@ describe("formatClerkError", () => {
     expect(formatClerkError(error)).toBe("Código de verificação incorreto ou expirado.");
   });
 
-  it("deve traduzir senhas fracas ou curtas", () => {
+  it("deve traduzir senhas fracas ou curtas com tamanho dinamico", () => {
     const errorShort = {
       errors: [{ code: "form_password_length_too_short", message: "Password is too short." }],
     };
-    expect(formatClerkError(errorShort)).toBe("A senha deve conter no mínimo 8 caracteres.");
+    expect(formatClerkError(errorShort)).toBe("A senha deve conter no mínimo 15 caracteres.");
+
+    const errorShortDynamic = {
+      errors: [
+        {
+          code: "form_password_length_too_short",
+          message: "Passwords must be 15 characters or more.",
+        },
+      ],
+    };
+    expect(formatClerkError(errorShortDynamic)).toBe("A senha deve conter no mínimo 15 caracteres.");
 
     const errorPwned = {
       errors: [{ code: "form_password_pwned", message: "Password is too common." }],

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, AlertCircle, Eye, EyeOff, ArrowLeft, Mail } from "lucide-react";
 import { formatClerkError } from "~/lib/clerk-errors";
+import { signUpSchema, verifyCodeSchema } from "~/domain/rules/auth-schemas";
 
 export function CustomSignUpForm() {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -25,8 +26,17 @@ export function CustomSignUpForm() {
     e.preventDefault();
     if (!isLoaded || !signUp) return;
 
-    setIsLoading(true);
     setErrorMessage(null);
+
+    const validation = signUpSchema.safeParse({ email, password });
+    if (!validation.success) {
+      setErrorMessage(
+        validation.error.errors[0]?.message ?? "Dados de cadastro inválidos.",
+      );
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       await signUp.create({
@@ -37,6 +47,7 @@ export function CustomSignUpForm() {
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       setStep("verifying");
     } catch (err) {
+      console.error("[Clerk SignUp Error]:", err);
       setErrorMessage(formatClerkError(err));
     } finally {
       setIsLoading(false);
@@ -47,8 +58,17 @@ export function CustomSignUpForm() {
     e.preventDefault();
     if (!isLoaded || !signUp) return;
 
-    setIsLoading(true);
     setErrorMessage(null);
+
+    const validation = verifyCodeSchema.safeParse({ code });
+    if (!validation.success) {
+      setErrorMessage(
+        validation.error.errors[0]?.message ?? "Código de verificação inválido.",
+      );
+      return;
+    }
+
+    setIsLoading(true);
 
     try {
       const completeSignUp = await signUp.attemptEmailAddressVerification({
@@ -62,6 +82,7 @@ export function CustomSignUpForm() {
         setErrorMessage("Não foi possível concluir o cadastro. Verifique o código digitado.");
       }
     } catch (err) {
+      console.error("[Clerk Verify Error]:", err);
       setErrorMessage(formatClerkError(err));
     } finally {
       setIsLoading(false);
@@ -78,6 +99,7 @@ export function CustomSignUpForm() {
       setResendSuccess(true);
       setTimeout(() => setResendSuccess(false), 4000);
     } catch (err) {
+      console.error("[Clerk Resend Error]:", err);
       setErrorMessage(formatClerkError(err));
     }
   };
@@ -94,6 +116,7 @@ export function CustomSignUpForm() {
         redirectUrlComplete: "/dashboard",
       });
     } catch (err) {
+      console.error("[Clerk Google SignUp Error]:", err);
       setErrorMessage(formatClerkError(err));
       setIsGoogleLoading(false);
     }
@@ -278,10 +301,10 @@ export function CustomSignUpForm() {
               type={showPassword ? "text" : "password"}
               required
               autoComplete="new-password"
-              minLength={8}
+              minLength={15}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Mínimo de 8 caracteres"
+              placeholder="Digite sua senha"
               disabled={isLoading}
               className="w-full rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 pr-10 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:outline-none disabled:opacity-50"
             />

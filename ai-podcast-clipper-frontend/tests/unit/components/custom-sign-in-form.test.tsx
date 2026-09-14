@@ -62,13 +62,13 @@ describe("CustomSignInForm", () => {
     render(<CustomSignInForm />);
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });
-    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
     fireEvent.click(screen.getByRole("button", { name: /entrar no studio/i }));
 
     await waitFor(() => {
       expect(mockSignInCreate).toHaveBeenCalledWith({
         identifier: "user@example.com",
-        password: "password123",
+        password: "superSecretPassword123",
       });
       expect(mockSetActive).toHaveBeenCalledWith({ session: "sess_123" });
       expect(mockPush).toHaveBeenCalledWith("/dashboard");
@@ -97,7 +97,7 @@ describe("CustomSignInForm", () => {
     render(<CustomSignInForm />);
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });
-    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "wrongpass" } });
+    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "wrongpassword12345" } });
     fireEvent.click(screen.getByRole("button", { name: /entrar no studio/i }));
 
     await waitFor(() => {
@@ -113,11 +113,26 @@ describe("CustomSignInForm", () => {
     render(<CustomSignInForm />);
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "user@example.com" } });
-    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
     fireEvent.click(screen.getByRole("button", { name: /entrar no studio/i }));
 
     await waitFor(() => {
       expect(screen.getByText(/autenticação não concluída/i)).toBeInTheDocument();
     });
   });
+
+  it("deve validar com Zod antes de enviar e não chamar Clerk caso os dados sejam inválidos", async () => {
+    render(<CustomSignInForm />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "email-invalido" } });
+    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "curta" } });
+    const form = screen.getByRole("button", { name: /entrar no studio/i }).closest("form")!;
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(screen.getByText(/formato de email inválido/i)).toBeInTheDocument();
+    });
+    expect(mockSignInCreate).not.toHaveBeenCalled();
+  });
 });
+
