@@ -2,6 +2,7 @@ import { env } from "~/env";
 import { inngest } from "./client";
 import { db } from "~/server/db";
 import {
+  makeAddCreditsFromStripeWebhookUseCase,
   makeConsumeCreditsUseCase,
   makeHoldCreditsUseCase,
   makeRefundCreditsUseCase,
@@ -444,3 +445,31 @@ export const processVideo = inngest.createFunction(
     });
   },
 );
+
+export interface StripeCheckoutCompletedEventData {
+  customerId: string;
+  priceId: string;
+}
+
+export const processStripeWebhook = inngest.createFunction(
+  {
+    id: "process-stripe-webhook",
+    triggers: [{ event: "stripe/checkout.completed" }],
+    retries: 3,
+    concurrency: {
+      limit: 10,
+    },
+  },
+  async ({ event }) => {
+    const data = event.data as StripeCheckoutCompletedEventData;
+    const useCase = makeAddCreditsFromStripeWebhookUseCase();
+    await useCase.execute({
+      stripeCustomerId: data.customerId,
+      priceId: data.priceId,
+      smallPackPriceId: env.STRIPE_SMALL_CREDIT_PACK,
+      mediumPackPriceId: env.STRIPE_MEDIUM_CREDIT_PACK,
+      largePackPriceId: env.STRIPE_LARGE_CREDIT_PACK,
+    });
+  },
+);
+

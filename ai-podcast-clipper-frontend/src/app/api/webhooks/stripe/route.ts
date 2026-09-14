@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { env } from "~/env";
-import { makeAddCreditsFromStripeWebhookUseCase } from "~/infrastructure/factories/use-case-factories";
-import { DomainError } from "~/domain/errors/domain-error";
+import { dispatchStripeCheckoutEvent } from "~/infrastructure/queue/stripe-queue";
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-04-30.basil",
@@ -48,21 +47,10 @@ export async function POST(req: Request) {
         const priceId = lineItems.data[0]?.price?.id ?? undefined;
 
         if (priceId && customerId) {
-          try {
-            const useCase = makeAddCreditsFromStripeWebhookUseCase();
-            await useCase.execute({
-              stripeCustomerId: customerId,
-              priceId,
-              smallPackPriceId: env.STRIPE_SMALL_CREDIT_PACK,
-              mediumPackPriceId: env.STRIPE_MEDIUM_CREDIT_PACK,
-              largePackPriceId: env.STRIPE_LARGE_CREDIT_PACK,
-            });
-          } catch (err) {
-            if (err instanceof DomainError) {
-              return new NextResponse(err.message, { status: 404 });
-            }
-            throw err;
-          }
+          dispatchStripeCheckoutEvent({
+            customerId,
+            priceId,
+          });
         }
       }
     }
@@ -73,3 +61,4 @@ export async function POST(req: Request) {
     return new NextResponse("Webhook error", { status: 500 });
   }
 }
+
