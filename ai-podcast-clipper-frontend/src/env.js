@@ -24,6 +24,12 @@ export const env = createEnv({
     STRIPE_SMALL_CREDIT_PACK: z.string(),
     STRIPE_MEDIUM_CREDIT_PACK: z.string(),
     STRIPE_LARGE_CREDIT_PACK: z.string(),
+    STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID: z
+      .string()
+      .default("price_creator_monthly"),
+    STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID: z
+      .string()
+      .default("price_pro_studio_monthly"),
     BASE_URL: z.string(),
     STRIPE_WEBHOOK_SECRET: z.string(),
   },
@@ -66,6 +72,14 @@ export const env = createEnv({
     STRIPE_SMALL_CREDIT_PACK: process.env.STRIPE_SMALL_CREDIT_PACK,
     STRIPE_MEDIUM_CREDIT_PACK: process.env.STRIPE_MEDIUM_CREDIT_PACK,
     STRIPE_LARGE_CREDIT_PACK: process.env.STRIPE_LARGE_CREDIT_PACK,
+    STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID:
+      process.env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID ??
+      process.env.STRIPE_CREATOR_SUBSCRIPTION_PRICE ??
+      "price_creator_monthly",
+    STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID:
+      process.env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID ??
+      process.env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE ??
+      "price_pro_studio_monthly",
     BASE_URL: process.env.BASE_URL,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   },

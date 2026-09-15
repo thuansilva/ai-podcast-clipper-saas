@@ -175,6 +175,7 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
     expect(mockConsumeCreditsExecute).toHaveBeenCalledWith({
       userId: "user-456",
       amount: 3,
+      heldAmount: 3,
       fileId: "file-123",
     });
 

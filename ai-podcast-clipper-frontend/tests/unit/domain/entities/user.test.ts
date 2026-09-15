@@ -60,6 +60,28 @@ describe("User Rich Domain Entity", () => {
         reservedCredits: -2,
       })
     ).toThrow(DomainError);
+
+    expect(() =>
+      User.restore({
+        id: "u1",
+        email: "u1@test.com",
+        credits: 10,
+        subscriptionCredits: -5,
+        oneTimeCredits: 15,
+        reservedCredits: 0,
+      })
+    ).toThrow(DomainError);
+
+    expect(() =>
+      User.restore({
+        id: "u1",
+        email: "u1@test.com",
+        credits: 10,
+        subscriptionCredits: 5,
+        oneTimeCredits: -5,
+        reservedCredits: 0,
+      })
+    ).toThrow(DomainError);
   });
 
   describe("Regras de Créditos", () => {
@@ -132,9 +154,55 @@ describe("User Rich Domain Entity", () => {
         credits: 30,
         reservedCredits: 20,
       });
-      user.refundCredits(15);
+      const result = user.refundCredits(15);
 
+      expect(result).toEqual({ refundedSubscription: 0, refundedOneTime: 15 });
       expect(user.credits).toBe(45);
+      expect(user.reservedCredits).toBe(5);
+    });
+
+    it("deve estornar créditos respeitando o breakdown informado (evitando lavagem de créditos)", () => {
+      const user = User.restore({
+        id: "user-1",
+        email: "user@test.com",
+        subscriptionCredits: 50,
+        oneTimeCredits: 20,
+        credits: 70,
+        reservedCredits: 30,
+        plan: "CREATOR",
+      });
+
+      // Estorna 25 créditos com breakdown: 20 da assinatura e 5 avulsos
+      const result = user.refundCredits(25, {
+        subscriptionCredits: 20,
+        oneTimeCredits: 5,
+      });
+
+      expect(result).toEqual({ refundedSubscription: 20, refundedOneTime: 5 });
+      expect(user.subscriptionCredits).toBe(70);
+      expect(user.oneTimeCredits).toBe(25);
+      expect(user.credits).toBe(95);
+      expect(user.reservedCredits).toBe(5);
+    });
+
+    it("deve estornar créditos calculando headroom da cota quando breakdown não for fornecido", () => {
+      const user = User.restore({
+        id: "user-1",
+        email: "user@test.com",
+        subscriptionCredits: 140, // cota CREATOR é 150, então headroom = 10
+        oneTimeCredits: 20,
+        credits: 160,
+        reservedCredits: 25,
+        plan: "CREATOR",
+      });
+
+      // Estorna 20 créditos sem breakdown: 10 vão para subscription (headroom) e 10 para oneTime
+      const result = user.refundCredits(20);
+
+      expect(result).toEqual({ refundedSubscription: 10, refundedOneTime: 10 });
+      expect(user.subscriptionCredits).toBe(150);
+      expect(user.oneTimeCredits).toBe(30);
+      expect(user.credits).toBe(180);
       expect(user.reservedCredits).toBe(5);
     });
 
@@ -148,6 +216,94 @@ describe("User Rich Domain Entity", () => {
       user.addCredits(50);
 
       expect(user.credits).toBe(60);
+    });
+
+    it("deve inicializar com créditos segregados corretamente", () => {
+      const user = User.create({
+        id: "user_1",
+        email: "user@test.com",
+        name: "User Test",
+        subscriptionCredits: 150,
+        oneTimeCredits: 50,
+      });
+
+      expect(user.subscriptionCredits).toBe(150);
+      expect(user.oneTimeCredits).toBe(50);
+      expect(user.credits).toBe(200); // Saldo total derivado
+    });
+
+    it("deve consumir primeiro da assinatura e depois de avulsos", () => {
+      const user = User.restore({
+        id: "user_1",
+        email: "user@test.com",
+        name: "User Test",
+        credits: 170,
+        subscriptionCredits: 150,
+        oneTimeCredits: 20,
+        reservedCredits: 0,
+        plan: "CREATOR",
+      });
+
+      // Consome 160 créditos (deve tirar 150 da assinatura e 10 do avulso)
+      const { debitedSubscription, debitedOneTime } = user.deductCreditsPrioritized(160);
+
+      expect(debitedSubscription).toBe(150);
+      expect(debitedOneTime).toBe(10);
+      expect(user.subscriptionCredits).toBe(0);
+      expect(user.oneTimeCredits).toBe(10);
+      expect(user.credits).toBe(10);
+    });
+
+    it("deve consumir apenas da assinatura quando o saldo for suficiente", () => {
+      const user = User.restore({
+        id: "user_1",
+        email: "user@test.com",
+        name: "User Test",
+        credits: 170,
+        subscriptionCredits: 150,
+        oneTimeCredits: 20,
+        reservedCredits: 0,
+        plan: "CREATOR",
+      });
+
+      const { debitedSubscription, debitedOneTime } = user.deductCreditsPrioritized(50);
+
+      expect(debitedSubscription).toBe(50);
+      expect(debitedOneTime).toBe(0);
+      expect(user.subscriptionCredits).toBe(100);
+      expect(user.oneTimeCredits).toBe(20);
+      expect(user.credits).toBe(120);
+    });
+
+    it("deve lançar InsufficientCreditsError ao tentar deduzir mais créditos que o total disponível", () => {
+      const user = User.restore({
+        id: "user_1",
+        email: "user@test.com",
+        name: "User Test",
+        credits: 170,
+        subscriptionCredits: 150,
+        oneTimeCredits: 20,
+        reservedCredits: 0,
+        plan: "CREATOR",
+      });
+
+      expect(() => user.deductCreditsPrioritized(200)).toThrow(InsufficientCreditsError);
+    });
+
+    it("deve lançar DomainError ao tentar deduzir valor menor ou igual a zero", () => {
+      const user = User.restore({
+        id: "user_1",
+        email: "user@test.com",
+        name: "User Test",
+        credits: 170,
+        subscriptionCredits: 150,
+        oneTimeCredits: 20,
+        reservedCredits: 0,
+        plan: "CREATOR",
+      });
+
+      expect(() => user.deductCreditsPrioritized(0)).toThrow(DomainError);
+      expect(() => user.deductCreditsPrioritized(-10)).toThrow(DomainError);
     });
   });
 
@@ -207,6 +363,8 @@ describe("User Rich Domain Entity", () => {
         id: "user-1",
         email: "test@test.com",
         credits: 40,
+        subscriptionCredits: 0,
+        oneTimeCredits: 40,
         reservedCredits: 10,
         plan: "STUDIO",
         name: "Nome",

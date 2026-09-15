@@ -1,13 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { inngest } from "~/inngest/client";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
-import { db } from "~/server/db";
 import {
   makeDeleteClipUseCase,
   makeGetClipPlayUrlUseCase,
   makeUpdateClipUseCase,
+  makeTriggerVideoProcessingUseCase,
 } from "~/infrastructure/factories/use-case-factories";
 import { DomainError } from "~/domain/errors/domain-error";
 import type { SubtitlePreset } from "~/domain/entities/clip";
@@ -19,40 +18,17 @@ export async function processVideo(
   mode?: ProcessingMode,
   manualCuts?: ManualCutDTO[],
 ) {
-  const uploadedVideo = await db.uploadedFile.findUniqueOrThrow({
-    where: {
-      id: uploadedFileId,
-    },
-    select: {
-      uploaded: true,
-      id: true,
-      userId: true,
-    },
+  const useCase = makeTriggerVideoProcessingUseCase();
+  const result = await useCase.execute({
+    uploadedFileId,
+    preset,
+    mode,
+    manualCuts,
   });
 
-  if (uploadedVideo.uploaded) return;
-
-  await inngest.send({
-    name: "process-video-events",
-    data: {
-      uploadedFileId: uploadedVideo.id,
-      userId: uploadedVideo.userId,
-      preset,
-      mode,
-      manualCuts,
-    },
-  });
-
-  await db.uploadedFile.update({
-    where: {
-      id: uploadedFileId,
-    },
-    data: {
-      uploaded: true,
-    },
-  });
-
-  revalidatePath("/dashboard");
+  if (result.triggered) {
+    revalidatePath("/dashboard");
+  }
 }
 
 export async function getClipPlayUrl(

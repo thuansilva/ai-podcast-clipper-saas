@@ -2,6 +2,7 @@ import { PrismaUserRepository } from "../database/repositories/prisma-user.repos
 import { PrismaUploadedFileRepository } from "../database/repositories/prisma-uploaded-file.repository";
 import { PrismaClipRepository } from "../database/repositories/prisma-clip.repository";
 import { PrismaCreditTransactionRepository } from "../database/repositories/prisma-credit-transaction.repository";
+import { PrismaSubscriptionRepository } from "../database/repositories/prisma-subscription.repository";
 import { PrismaUnitOfWork } from "../database/repositories/prisma-unit-of-work";
 import { S3StorageGateway } from "../storage/s3-storage.gateway";
 import { StripePaymentGateway } from "../payments/stripe-payment.gateway";
@@ -11,6 +12,9 @@ import { HoldCreditsUseCase } from "~/application/use-cases/credits/hold-credits
 import { ConsumeCreditsUseCase } from "~/application/use-cases/credits/consume-credits.use-case";
 import { RefundCreditsUseCase } from "~/application/use-cases/credits/refund-credits.use-case";
 import { AddCreditsFromStripeWebhookUseCase } from "~/application/use-cases/credits/add-credits-from-stripe.use-case";
+import { ProcessSubscriptionRenewalUseCase } from "~/application/use-cases/credits/process-subscription-renewal.use-case";
+import { ExpireSubscriptionUseCase } from "~/application/use-cases/credits/expire-subscription.use-case";
+import { ProcessSubscriptionCheckoutUseCase } from "~/application/use-cases/credits/process-subscription-checkout.use-case";
 
 import { GenerateUploadUrlUseCase } from "~/application/use-cases/videos/generate-upload-url.use-case";
 import { ImportYouTubeVideoUseCase } from "~/application/use-cases/videos/import-youtube-video.use-case";
@@ -19,6 +23,10 @@ import { GetClipPlayUrlUseCase } from "~/application/use-cases/clips/get-clip-pl
 import { UpdateClipUseCase } from "~/application/use-cases/clips/update-clip.use-case";
 import { DeleteClipUseCase } from "~/application/use-cases/clips/delete-clip.use-case";
 import { SyncUserUseCase } from "~/application/use-cases/users/sync-user.use-case";
+import { GetUserBillingDataUseCase } from "~/application/use-cases/users/get-user-billing-data.use-case";
+import { TriggerVideoProcessingUseCase } from "~/application/use-cases/videos/trigger-video-processing.use-case";
+import type { IUserRepository } from "~/domain/ports/user-repository";
+import type { ISubscriptionRepository } from "~/domain/ports/subscription-repository";
 
 // --- Fábricas de Créditos ---
 export function makeHoldCreditsUseCase(): HoldCreditsUseCase {
@@ -50,6 +58,32 @@ export function makeRefundCreditsUseCase(): RefundCreditsUseCase {
 export function makeAddCreditsFromStripeWebhookUseCase(): AddCreditsFromStripeWebhookUseCase {
   return new AddCreditsFromStripeWebhookUseCase(
     new PrismaUserRepository(),
+    new PrismaCreditTransactionRepository(),
+    new PrismaUnitOfWork()
+  );
+}
+
+export function makeProcessSubscriptionRenewalUseCase(): ProcessSubscriptionRenewalUseCase {
+  return new ProcessSubscriptionRenewalUseCase(
+    new PrismaUserRepository(),
+    new PrismaCreditTransactionRepository(),
+    new PrismaUnitOfWork(),
+    new PrismaSubscriptionRepository()
+  );
+}
+
+export function makeExpireSubscriptionUseCase(): ExpireSubscriptionUseCase {
+  return new ExpireSubscriptionUseCase(
+    new PrismaUserRepository(),
+    new PrismaUnitOfWork(),
+    new PrismaSubscriptionRepository()
+  );
+}
+
+export function makeProcessSubscriptionCheckoutUseCase(): ProcessSubscriptionCheckoutUseCase {
+  return new ProcessSubscriptionCheckoutUseCase(
+    new PrismaUserRepository(),
+    new PrismaSubscriptionRepository(),
     new PrismaCreditTransactionRepository(),
     new PrismaUnitOfWork()
   );
@@ -99,5 +133,27 @@ export function makeSyncUserUseCase(): SyncUserUseCase {
   return new SyncUserUseCase(
     new PrismaUserRepository(),
     new StripePaymentGateway()
+  );
+}
+
+export function makeUserRepository(): IUserRepository {
+  return new PrismaUserRepository();
+}
+
+export function makeSubscriptionRepository(): ISubscriptionRepository {
+  return new PrismaSubscriptionRepository();
+}
+
+export function makeGetUserBillingDataUseCase(): GetUserBillingDataUseCase {
+  return new GetUserBillingDataUseCase(
+    new PrismaUserRepository(),
+    new PrismaSubscriptionRepository()
+  );
+}
+
+export function makeTriggerVideoProcessingUseCase(): TriggerVideoProcessingUseCase {
+  return new TriggerVideoProcessingUseCase(
+    new PrismaUploadedFileRepository(),
+    new InngestQueueGateway()
   );
 }

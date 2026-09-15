@@ -36,6 +36,8 @@ describe("Video Limits Domain Rules", () => {
       expect(getMaxDurationForPlan("STUDIO")).toBe(10800);
       expect(getMaxDurationForPlan("studio")).toBe(10800);
       expect(getMaxDurationForPlan("Studio")).toBe(10800);
+      expect(getMaxDurationForPlan("PRO_STUDIO")).toBe(10800);
+      expect(getMaxDurationForPlan("pro_studio")).toBe(10800);
     });
   });
 

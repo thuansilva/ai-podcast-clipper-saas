@@ -37,13 +37,19 @@ export class InMemoryUserRepository implements IUserRepository {
   }
 
   async create(data: CreateUserData): Promise<UserEntity> {
+    const subCredits = data.subscriptionCredits ?? 0;
+    const otCredits = data.oneTimeCredits ?? 10;
+    const totalCredits = data.credits ?? (subCredits + otCredits);
+
     const user: UserEntity = {
       id: data.id,
       email: data.email,
       name: data.name ?? null,
       image: data.image ?? null,
       stripeCustomerId: data.stripeCustomerId ?? null,
-      credits: data.credits ?? 10,
+      credits: totalCredits,
+      subscriptionCredits: subCredits,
+      oneTimeCredits: otCredits,
       reservedCredits: data.reservedCredits ?? 0,
       plan: data.plan ?? "STARTER",
     };
@@ -65,6 +71,16 @@ export class InMemoryUserRepository implements IUserRepository {
         stripeCustomerId: data.stripeCustomerId,
       }),
       ...(data.plan !== undefined && { plan: data.plan }),
+      ...(data.credits !== undefined && { credits: data.credits }),
+      ...(data.subscriptionCredits !== undefined && {
+        subscriptionCredits: data.subscriptionCredits,
+      }),
+      ...(data.oneTimeCredits !== undefined && {
+        oneTimeCredits: data.oneTimeCredits,
+      }),
+      ...(data.reservedCredits !== undefined && {
+        reservedCredits: data.reservedCredits,
+      }),
     };
     this.users.set(userId, updated);
     return updated;
@@ -87,6 +103,26 @@ export class InMemoryUserRepository implements IUserRepository {
     }
 
     if (
+      data.subscriptionCreditsDecrement !== undefined &&
+      (user.subscriptionCredits ?? 0) < data.subscriptionCreditsDecrement
+    ) {
+      throw new InsufficientCreditsError(
+        data.subscriptionCreditsDecrement,
+        user.subscriptionCredits ?? 0
+      );
+    }
+
+    if (
+      data.oneTimeCreditsDecrement !== undefined &&
+      (user.oneTimeCredits ?? 0) < data.oneTimeCreditsDecrement
+    ) {
+      throw new InsufficientCreditsError(
+        data.oneTimeCreditsDecrement,
+        user.oneTimeCredits ?? 0
+      );
+    }
+
+    if (
       data.reservedCreditsDecrement !== undefined &&
       user.reservedCredits < data.reservedCreditsDecrement
     ) {
@@ -95,12 +131,32 @@ export class InMemoryUserRepository implements IUserRepository {
       );
     }
 
+    const newSubCredits =
+      data.subscriptionCreditsSet !== undefined
+        ? data.subscriptionCreditsSet
+        : (user.subscriptionCredits ?? 0) -
+          (data.subscriptionCreditsDecrement ?? 0) +
+          (data.subscriptionCreditsIncrement ?? 0);
+
+    const newOtCredits =
+      data.oneTimeCreditsSet !== undefined
+        ? data.oneTimeCreditsSet
+        : (user.oneTimeCredits ?? 0) -
+          (data.oneTimeCreditsDecrement ?? 0) +
+          (data.oneTimeCreditsIncrement ?? 0);
+
     const updated: UserEntity = {
       ...user,
       credits:
-        user.credits -
-        (data.creditsDecrement ?? 0) +
-        (data.creditsIncrement ?? 0),
+        data.creditsSet !== undefined
+          ? data.creditsSet
+          : data.subscriptionCreditsSet !== undefined || data.oneTimeCreditsSet !== undefined
+            ? newSubCredits + newOtCredits
+            : user.credits -
+              (data.creditsDecrement ?? 0) +
+              (data.creditsIncrement ?? 0),
+      subscriptionCredits: newSubCredits,
+      oneTimeCredits: newOtCredits,
       reservedCredits:
         user.reservedCredits +
         (data.reservedCreditsIncrement ?? 0) -

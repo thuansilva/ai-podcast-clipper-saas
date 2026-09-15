@@ -1,6 +1,11 @@
 import { DomainError } from "../errors/domain-error";
 
-export type CreditTransactionType = "PURCHASE" | "HOLD" | "CONSUME" | "REFUND";
+export type CreditTransactionType =
+  | "PURCHASE"
+  | "HOLD"
+  | "CONSUME"
+  | "REFUND"
+  | "SUBSCRIPTION_RENEWAL";
 
 export interface CreditTransactionEntity {
   id: string;
@@ -95,6 +100,10 @@ export class CreditTransaction {
 
   public isPurchase(): boolean {
     return this.type === "PURCHASE";
+  }
+
+  public isSubscriptionRenewal(): boolean {
+    return this.type === "SUBSCRIPTION_RENEWAL";
   }
 
   public toJSON(): CreditTransactionEntity {

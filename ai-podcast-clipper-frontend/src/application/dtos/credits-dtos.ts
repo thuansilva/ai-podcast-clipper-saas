@@ -13,6 +13,7 @@ export interface HoldCreditsOutput {
 export interface ConsumeCreditsInput {
   userId: string;
   amount: number;
+  heldAmount?: number;
   fileId: string;
 }
 

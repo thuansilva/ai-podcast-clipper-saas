@@ -21,6 +21,7 @@ describe("SyncUserUseCase", () => {
 
     mockPaymentGateway = {
       createCheckoutSession: vi.fn(),
+      createBillingPortalSession: vi.fn(),
       createCustomer: vi.fn(),
     };
 

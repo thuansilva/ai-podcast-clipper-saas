@@ -28,11 +28,14 @@ export class HoldCreditsUseCase {
     }
 
     const user = User.restore(userRecord);
-    user.holdCredits(requiredCredits);
+    const { debitedSubscription, debitedOneTime } =
+      user.holdCredits(requiredCredits);
 
     return await this.unitOfWork.execute(async () => {
       await this.userRepository.updateCredits(input.userId, {
         creditsDecrement: requiredCredits,
+        subscriptionCreditsDecrement: debitedSubscription,
+        oneTimeCreditsDecrement: debitedOneTime,
         reservedCreditsIncrement: requiredCredits,
       });
 
@@ -40,7 +43,7 @@ export class HoldCreditsUseCase {
         userId: input.userId,
         amount: requiredCredits,
         type: "HOLD",
-        description: `Hold de ${requiredCredits} créditos para processamento do arquivo ${input.fileId}`,
+        description: `Hold de ${requiredCredits} créditos para processamento do arquivo ${input.fileId} [sub:${debitedSubscription},ot:${debitedOneTime}]`,
       });
 
       await this.uploadedFileRepository.update(input.fileId, {

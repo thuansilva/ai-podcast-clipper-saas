@@ -42,3 +42,16 @@ export interface ProcessVideoEventData {
   mode?: ProcessingMode;
   manualCuts?: ManualCutDTO[];
 }
+
+export interface TriggerVideoProcessingInput {
+  uploadedFileId: string;
+  userId?: string;
+  preset?: string;
+  mode?: ProcessingMode;
+  manualCuts?: ManualCutDTO[];
+}
+
+export interface TriggerVideoProcessingOutput {
+  success: boolean;
+  triggered: boolean;
+}

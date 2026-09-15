@@ -20,12 +20,40 @@ export class RefundCreditsUseCase {
       throw new NotFoundError("Usuário", input.userId);
     }
 
+    const transactions =
+      await this.creditTransactionRepository.findByUserId(input.userId);
+    const holdTx = transactions.find(
+      (tx) => tx.type === "HOLD" && tx.description.includes(input.fileId)
+    );
+
+    let breakdown:
+      | { subscriptionCredits?: number; oneTimeCredits?: number }
+      | undefined;
+    if (holdTx) {
+      const match = /\[sub:(\d+),ot:(\d+)\]/.exec(holdTx.description);
+      if (match?.[1] !== undefined && match?.[2] !== undefined) {
+        breakdown = {
+          subscriptionCredits: parseInt(match[1], 10),
+          oneTimeCredits: parseInt(match[2], 10),
+        };
+      }
+    }
+
     const user = User.restore(userRecord);
-    user.refundCredits(input.amount);
+    const { refundedSubscription, refundedOneTime } = user.refundCredits(
+      input.amount,
+      breakdown
+    );
 
     await this.unitOfWork.execute(async () => {
       await this.userRepository.updateCredits(input.userId, {
         creditsIncrement: input.amount,
+        ...(refundedSubscription > 0 && {
+          subscriptionCreditsIncrement: refundedSubscription,
+        }),
+        ...(refundedOneTime > 0 && {
+          oneTimeCreditsIncrement: refundedOneTime,
+        }),
         reservedCreditsDecrement: input.amount,
       });
 

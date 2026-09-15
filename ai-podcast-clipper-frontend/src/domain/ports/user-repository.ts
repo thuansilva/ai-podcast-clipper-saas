@@ -7,6 +7,8 @@ export interface CreateUserData {
   image?: string | null;
   stripeCustomerId?: string | null;
   credits?: number;
+  subscriptionCredits?: number;
+  oneTimeCredits?: number;
   reservedCredits?: number;
   plan?: string;
 }
@@ -17,13 +19,24 @@ export interface UpdateUserData {
   image?: string | null;
   stripeCustomerId?: string | null;
   plan?: string;
+  credits?: number;
+  subscriptionCredits?: number;
+  oneTimeCredits?: number;
+  reservedCredits?: number;
 }
 
 export interface CreditsUpdateInput {
   creditsDecrement?: number;
   creditsIncrement?: number;
+  creditsSet?: number;
   reservedCreditsIncrement?: number;
   reservedCreditsDecrement?: number;
+  subscriptionCreditsDecrement?: number;
+  subscriptionCreditsIncrement?: number;
+  subscriptionCreditsSet?: number;
+  oneTimeCreditsDecrement?: number;
+  oneTimeCreditsIncrement?: number;
+  oneTimeCreditsSet?: number;
 }
 
 export interface IUserRepository {

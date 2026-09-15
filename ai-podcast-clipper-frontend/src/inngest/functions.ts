@@ -6,7 +6,11 @@ import {
   makeConsumeCreditsUseCase,
   makeHoldCreditsUseCase,
   makeRefundCreditsUseCase,
+  makeProcessSubscriptionRenewalUseCase,
+  makeExpireSubscriptionUseCase,
+  makeProcessSubscriptionCheckoutUseCase,
 } from "~/infrastructure/factories/use-case-factories";
+import { PrismaSubscriptionRepository } from "~/infrastructure/database/repositories/prisma-subscription.repository";
 import { Prisma } from "@prisma/client";
 import { calculateManualCutsCredits } from "~/domain/rules/calculate-credits";
 import { validateVideoDuration } from "~/domain/rules/video-limits";
@@ -305,6 +309,7 @@ export async function processVideoHandler({
       await consumeCreditsUseCase.execute({
         userId: resolvedUserId!,
         amount: heldCredits,
+        heldAmount: heldCredits,
         fileId: uploadedFileId,
       });
 
@@ -472,4 +477,86 @@ export const processStripeWebhook = inngest.createFunction(
     });
   },
 );
+
+export interface StripeSubscriptionEventData {
+  eventType?: string;
+  customerId: string;
+  subscriptionId?: string;
+  priceId?: string;
+  status?: string;
+  cancelAtPeriodEnd?: boolean;
+  currentPeriodStart?: string | number | Date;
+  currentPeriodEnd?: string | number | Date;
+  billingReason?: string;
+}
+
+export const processSubscriptionEvent = inngest.createFunction(
+  {
+    id: "process-subscription-event",
+    triggers: [
+      { event: "stripe/subscription.event" },
+      { event: "stripe/invoice.payment_succeeded" },
+      { event: "stripe/customer.subscription.updated" },
+      { event: "stripe/customer.subscription.deleted" },
+    ],
+    retries: 3,
+    concurrency: {
+      limit: 10,
+    },
+  },
+  async ({ event }) => {
+    const data = event.data as StripeSubscriptionEventData;
+    const eventType = data.eventType ?? event.name.replace("stripe/", "");
+
+    if (eventType === "checkout.session.completed") {
+      if (data.subscriptionId && data.priceId) {
+        const checkoutUseCase = makeProcessSubscriptionCheckoutUseCase();
+        await checkoutUseCase.execute({
+          stripeCustomerId: data.customerId,
+          stripeSubscriptionId: data.subscriptionId,
+          stripePriceId: data.priceId,
+          creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
+          proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
+          currentPeriodStart: data.currentPeriodStart
+            ? new Date(data.currentPeriodStart)
+            : undefined,
+          currentPeriodEnd: data.currentPeriodEnd
+            ? new Date(data.currentPeriodEnd)
+            : undefined,
+        });
+      }
+    } else if (eventType === "invoice.payment_succeeded") {
+      if (data.billingReason !== "subscription_create") {
+        const renewalUseCase = makeProcessSubscriptionRenewalUseCase();
+        await renewalUseCase.execute({
+          stripeCustomerId: data.customerId,
+          stripeSubscriptionId: data.subscriptionId,
+          currentPeriodStart: data.currentPeriodStart
+            ? new Date(data.currentPeriodStart)
+            : undefined,
+          currentPeriodEnd: data.currentPeriodEnd
+            ? new Date(data.currentPeriodEnd)
+            : undefined,
+        });
+      }
+    } else if (eventType === "customer.subscription.deleted") {
+      const expireUseCase = makeExpireSubscriptionUseCase();
+      await expireUseCase.execute({
+        stripeCustomerId: data.customerId,
+        stripeSubscriptionId: data.subscriptionId,
+      });
+    } else if (eventType === "customer.subscription.updated") {
+      if (data.subscriptionId) {
+        const subRepo = new PrismaSubscriptionRepository();
+        await subRepo.update(data.subscriptionId, {
+          ...(data.status && { status: data.status }),
+          ...(data.cancelAtPeriodEnd !== undefined && {
+            cancelAtPeriodEnd: data.cancelAtPeriodEnd,
+          }),
+        });
+      }
+    }
+  },
+);
+
 

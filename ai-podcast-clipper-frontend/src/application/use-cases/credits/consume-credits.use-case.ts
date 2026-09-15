@@ -19,20 +19,93 @@ export class ConsumeCreditsUseCase {
     }
 
     const user = User.restore(userRecord);
-    user.consumeCredits(input.amount);
 
-    await this.unitOfWork.execute(async () => {
-      await this.userRepository.updateCredits(input.userId, {
-        reservedCreditsDecrement: input.amount,
-      });
+    const hasUnusedHeld =
+      input.heldAmount !== undefined && input.heldAmount > input.amount;
+    const requestedUnused = hasUnusedHeld
+      ? input.heldAmount! - input.amount
+      : 0;
 
-      await this.creditTransactionRepository.create({
-        userId: input.userId,
-        amount: input.amount,
-        type: "CONSUME",
-        description: `Consumo efetivo de ${input.amount} créditos para o arquivo ${input.fileId}`,
+    if (user.reservedCredits >= input.amount) {
+      user.consumeCredits(input.amount);
+
+      let refundedSubscription = 0;
+      let refundedOneTime = 0;
+      const actualUnused = Math.min(requestedUnused, user.reservedCredits);
+
+      if (actualUnused > 0) {
+        let breakdown:
+          | { subscriptionCredits?: number; oneTimeCredits?: number }
+          | undefined;
+
+        const transactions =
+          await this.creditTransactionRepository.findByUserId(input.userId);
+        const holdTx = transactions.find(
+          (tx) => tx.type === "HOLD" && tx.description.includes(input.fileId)
+        );
+        if (holdTx) {
+          const match = /\[sub:(\d+),ot:(\d+)\]/.exec(holdTx.description);
+          if (match?.[1] !== undefined && match?.[2] !== undefined) {
+            breakdown = {
+              subscriptionCredits: parseInt(match[1], 10),
+              oneTimeCredits: parseInt(match[2], 10),
+            };
+          }
+        }
+
+        const refundResult = user.refundCredits(actualUnused, breakdown);
+        refundedSubscription = refundResult.refundedSubscription;
+        refundedOneTime = refundResult.refundedOneTime;
+      }
+
+      const totalReservedDecrement = input.amount + actualUnused;
+
+      await this.unitOfWork.execute(async () => {
+        await this.userRepository.updateCredits(input.userId, {
+          reservedCreditsDecrement: totalReservedDecrement,
+          ...(actualUnused > 0 && { creditsIncrement: actualUnused }),
+          ...(refundedSubscription > 0 && {
+            subscriptionCreditsIncrement: refundedSubscription,
+          }),
+          ...(refundedOneTime > 0 && {
+            oneTimeCreditsIncrement: refundedOneTime,
+          }),
+        });
+
+        await this.creditTransactionRepository.create({
+          userId: input.userId,
+          amount: input.amount,
+          type: "CONSUME",
+          description: `Consumo efetivo de ${input.amount} créditos para o arquivo ${input.fileId}`,
+        });
       });
-    });
+    } else {
+      const fromReserved = user.reservedCredits;
+      const remainingAmount = input.amount - fromReserved;
+
+      if (fromReserved > 0) {
+        user.consumeCredits(fromReserved);
+      }
+
+      const { debitedSubscription, debitedOneTime } =
+        user.deductCreditsPrioritized(remainingAmount);
+
+      await this.unitOfWork.execute(async () => {
+        await this.userRepository.updateCredits(input.userId, {
+          ...(fromReserved > 0 && { reservedCreditsDecrement: fromReserved }),
+          creditsDecrement: remainingAmount,
+          subscriptionCreditsDecrement: debitedSubscription,
+          oneTimeCreditsDecrement: debitedOneTime,
+        });
+
+        await this.creditTransactionRepository.create({
+          userId: input.userId,
+          amount: input.amount,
+          type: "CONSUME",
+          description: `Consumo efetivo de ${input.amount} créditos para o arquivo ${input.fileId}`,
+        });
+      });
+    }
 
     return { success: true };
   }

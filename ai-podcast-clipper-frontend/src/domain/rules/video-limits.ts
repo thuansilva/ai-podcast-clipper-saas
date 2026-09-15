@@ -16,7 +16,7 @@ export const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2 GB
 export function getMaxDurationForPlan(plan?: string | null): number {
   if (!plan) return NORMAL_MAX_DURATION_SECONDS;
   const normalized = plan.trim().toUpperCase();
-  if (normalized === "STUDIO") {
+  if (normalized === "STUDIO" || normalized === "PRO_STUDIO") {
     return STUDIO_MAX_DURATION_SECONDS;
   }
   return NORMAL_MAX_DURATION_SECONDS;

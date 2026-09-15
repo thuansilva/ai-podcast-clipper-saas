@@ -59,6 +59,82 @@ describe("RefundCreditsUseCase", () => {
     expect(updatedFile?.errorMessage).toBe("Erro no container GPU");
   });
 
+  it("deve estornar créditos incrementando oneTimeCredits e mantendo a invariante credits = subscriptionCredits + oneTimeCredits", async () => {
+    await userRepo.create({
+      id: "user-2",
+      email: "segregated@example.com",
+      subscriptionCredits: 50,
+      oneTimeCredits: 10,
+      credits: 60,
+      reservedCredits: 10,
+    });
+
+    const file = await fileRepo.create({
+      userId: "user-2",
+      s3Key: "test/failed-2.mp4",
+      sourceType: "UPLOAD",
+      status: "processing",
+    });
+
+    const result = await useCase.execute({
+      userId: "user-2",
+      amount: 10,
+      fileId: file.id,
+      reason: "Timeout na GPU",
+    });
+
+    expect(result.success).toBe(true);
+
+    const user = await userRepo.findById("user-2");
+    expect(user?.subscriptionCredits).toBe(50);
+    expect(user?.oneTimeCredits).toBe(20);
+    expect(user?.credits).toBe(70);
+    expect(user?.reservedCredits).toBe(0);
+  });
+
+  it("deve estornar créditos respeitando o breakdown da transação de HOLD (evitando lavagem de créditos)", async () => {
+    await userRepo.create({
+      id: "user-laundering",
+      email: "laundering@example.com",
+      subscriptionCredits: 142,
+      oneTimeCredits: 8,
+      credits: 150,
+      reservedCredits: 10,
+      plan: "CREATOR",
+    });
+
+    const file = await fileRepo.create({
+      userId: "user-laundering",
+      s3Key: "test/file-laundering.mp4",
+      sourceType: "UPLOAD",
+      status: "processing",
+    });
+
+    // Registra transação HOLD com breakdown [sub:8,ot:2]
+    await txRepo.create({
+      userId: "user-laundering",
+      amount: 10,
+      type: "HOLD",
+      description: `Hold de 10 créditos para processamento do arquivo ${file.id} [sub:8,ot:2]`,
+    });
+
+    const result = await useCase.execute({
+      userId: "user-laundering",
+      amount: 10,
+      fileId: file.id,
+      reason: "Falha de processamento GPU",
+    });
+
+    expect(result.success).toBe(true);
+
+    const user = await userRepo.findById("user-laundering");
+    // Restaura 8 para subscriptionCredits (142 + 8 = 150) e 2 para oneTimeCredits (8 + 2 = 10)
+    expect(user?.subscriptionCredits).toBe(150);
+    expect(user?.oneTimeCredits).toBe(10);
+    expect(user?.credits).toBe(160);
+    expect(user?.reservedCredits).toBe(0);
+  });
+
   it("deve lançar NotFoundError se o usuário não existir", async () => {
     await expect(
       useCase.execute({

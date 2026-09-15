@@ -20,6 +20,8 @@ export class PrismaUserRepository implements IUserRepository {
         name: true,
         email: true,
         credits: true,
+        subscriptionCredits: true,
+        oneTimeCredits: true,
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
@@ -34,6 +36,8 @@ export class PrismaUserRepository implements IUserRepository {
       name: user.name,
       email: user.email,
       credits: user.credits,
+      subscriptionCredits: user.subscriptionCredits,
+      oneTimeCredits: user.oneTimeCredits,
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
@@ -49,6 +53,8 @@ export class PrismaUserRepository implements IUserRepository {
         name: true,
         email: true,
         credits: true,
+        subscriptionCredits: true,
+        oneTimeCredits: true,
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
@@ -63,6 +69,8 @@ export class PrismaUserRepository implements IUserRepository {
       name: user.name,
       email: user.email,
       credits: user.credits,
+      subscriptionCredits: user.subscriptionCredits,
+      oneTimeCredits: user.oneTimeCredits,
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
@@ -80,6 +88,8 @@ export class PrismaUserRepository implements IUserRepository {
         name: true,
         email: true,
         credits: true,
+        subscriptionCredits: true,
+        oneTimeCredits: true,
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
@@ -94,6 +104,8 @@ export class PrismaUserRepository implements IUserRepository {
       name: user.name,
       email: user.email,
       credits: user.credits,
+      subscriptionCredits: user.subscriptionCredits,
+      oneTimeCredits: user.oneTimeCredits,
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
@@ -102,6 +114,10 @@ export class PrismaUserRepository implements IUserRepository {
   }
 
   async create(data: CreateUserData): Promise<UserEntity> {
+    const subCredits = data.subscriptionCredits ?? 0;
+    const otCredits = data.oneTimeCredits ?? 10;
+    const totalCredits = data.credits ?? (subCredits + otCredits);
+
     const user = await db.user.create({
       data: {
         id: data.id,
@@ -109,7 +125,9 @@ export class PrismaUserRepository implements IUserRepository {
         name: data.name ?? null,
         image: data.image ?? null,
         stripeCustomerId: data.stripeCustomerId ?? null,
-        credits: data.credits ?? 10,
+        credits: totalCredits,
+        subscriptionCredits: subCredits,
+        oneTimeCredits: otCredits,
         reservedCredits: data.reservedCredits ?? 0,
         plan: data.plan ?? "STARTER",
       },
@@ -118,6 +136,8 @@ export class PrismaUserRepository implements IUserRepository {
         name: true,
         email: true,
         credits: true,
+        subscriptionCredits: true,
+        oneTimeCredits: true,
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
@@ -130,6 +150,8 @@ export class PrismaUserRepository implements IUserRepository {
       name: user.name,
       email: user.email,
       credits: user.credits,
+      subscriptionCredits: user.subscriptionCredits,
+      oneTimeCredits: user.oneTimeCredits,
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
@@ -148,12 +170,24 @@ export class PrismaUserRepository implements IUserRepository {
           stripeCustomerId: data.stripeCustomerId,
         }),
         ...(data.plan !== undefined && { plan: data.plan }),
+        ...(data.credits !== undefined && { credits: data.credits }),
+        ...(data.subscriptionCredits !== undefined && {
+          subscriptionCredits: data.subscriptionCredits,
+        }),
+        ...(data.oneTimeCredits !== undefined && {
+          oneTimeCredits: data.oneTimeCredits,
+        }),
+        ...(data.reservedCredits !== undefined && {
+          reservedCredits: data.reservedCredits,
+        }),
       },
       select: {
         id: true,
         name: true,
         email: true,
         credits: true,
+        subscriptionCredits: true,
+        oneTimeCredits: true,
         reservedCredits: true,
         stripeCustomerId: true,
         image: true,
@@ -166,6 +200,8 @@ export class PrismaUserRepository implements IUserRepository {
       name: user.name,
       email: user.email,
       credits: user.credits,
+      subscriptionCredits: user.subscriptionCredits,
+      oneTimeCredits: user.oneTimeCredits,
       reservedCredits: user.reservedCredits,
       stripeCustomerId: user.stripeCustomerId,
       image: user.image,
@@ -185,23 +221,56 @@ export class PrismaUserRepository implements IUserRepository {
     if (data.reservedCreditsDecrement !== undefined) {
       whereConditions.reservedCredits = { gte: data.reservedCreditsDecrement };
     }
+    if (data.subscriptionCreditsDecrement !== undefined) {
+      whereConditions.subscriptionCredits = {
+        gte: data.subscriptionCreditsDecrement,
+      };
+    }
+    if (data.oneTimeCreditsDecrement !== undefined) {
+      whereConditions.oneTimeCredits = {
+        gte: data.oneTimeCreditsDecrement,
+      };
+    }
+
+    const updateData: Prisma.UserUpdateInput = {
+      ...(data.creditsDecrement !== undefined && {
+        credits: { decrement: data.creditsDecrement },
+      }),
+      ...(data.creditsIncrement !== undefined && {
+        credits: { increment: data.creditsIncrement },
+      }),
+      ...(data.creditsSet !== undefined && {
+        credits: data.creditsSet,
+      }),
+      ...(data.reservedCreditsIncrement !== undefined && {
+        reservedCredits: { increment: data.reservedCreditsIncrement },
+      }),
+      ...(data.reservedCreditsDecrement !== undefined && {
+        reservedCredits: { decrement: data.reservedCreditsDecrement },
+      }),
+      ...(data.subscriptionCreditsDecrement !== undefined && {
+        subscriptionCredits: { decrement: data.subscriptionCreditsDecrement },
+      }),
+      ...(data.subscriptionCreditsIncrement !== undefined && {
+        subscriptionCredits: { increment: data.subscriptionCreditsIncrement },
+      }),
+      ...(data.subscriptionCreditsSet !== undefined && {
+        subscriptionCredits: data.subscriptionCreditsSet,
+      }),
+      ...(data.oneTimeCreditsDecrement !== undefined && {
+        oneTimeCredits: { decrement: data.oneTimeCreditsDecrement },
+      }),
+      ...(data.oneTimeCreditsIncrement !== undefined && {
+        oneTimeCredits: { increment: data.oneTimeCreditsIncrement },
+      }),
+      ...(data.oneTimeCreditsSet !== undefined && {
+        oneTimeCredits: data.oneTimeCreditsSet,
+      }),
+    };
 
     const updateResult = await db.user.updateMany({
       where: whereConditions,
-      data: {
-        ...(data.creditsDecrement !== undefined && {
-          credits: { decrement: data.creditsDecrement },
-        }),
-        ...(data.creditsIncrement !== undefined && {
-          credits: { increment: data.creditsIncrement },
-        }),
-        ...(data.reservedCreditsIncrement !== undefined && {
-          reservedCredits: { increment: data.reservedCreditsIncrement },
-        }),
-        ...(data.reservedCreditsDecrement !== undefined && {
-          reservedCredits: { decrement: data.reservedCreditsDecrement },
-        }),
-      },
+      data: updateData,
     });
 
     if (updateResult.count === 0) {
@@ -216,6 +285,24 @@ export class PrismaUserRepository implements IUserRepository {
         throw new InsufficientCreditsError(
           data.creditsDecrement,
           current.credits
+        );
+      }
+      if (
+        data.subscriptionCreditsDecrement !== undefined &&
+        (current.subscriptionCredits ?? 0) < data.subscriptionCreditsDecrement
+      ) {
+        throw new InsufficientCreditsError(
+          data.subscriptionCreditsDecrement,
+          current.subscriptionCredits ?? 0
+        );
+      }
+      if (
+        data.oneTimeCreditsDecrement !== undefined &&
+        (current.oneTimeCredits ?? 0) < data.oneTimeCreditsDecrement
+      ) {
+        throw new InsufficientCreditsError(
+          data.oneTimeCreditsDecrement,
+          current.oneTimeCredits ?? 0
         );
       }
       if (

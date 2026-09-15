@@ -175,5 +175,78 @@ describe("HoldCreditsUseCase", () => {
     expect(user?.credits).toBe(0);
     expect(user?.reservedCredits).toBe(10);
   });
+
+  it("deve reservar créditos segregados debitando prioritariamente da assinatura", async () => {
+    await userRepo.create({
+      id: "user-segregated",
+      email: "segregated@example.com",
+      subscriptionCredits: 150,
+      oneTimeCredits: 50,
+      credits: 200,
+      reservedCredits: 0,
+    });
+
+    const file = await fileRepo.create({
+      userId: "user-segregated",
+      s3Key: "test/file-seg.mp4",
+      sourceType: "UPLOAD",
+      durationSeconds: 120,
+    });
+
+    const result = await useCase.execute({
+      userId: "user-segregated",
+      amount: 160,
+      durationSeconds: 120,
+      fileId: file.id,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.heldCredits).toBe(160);
+
+    const user = await userRepo.findById("user-segregated");
+    expect(user?.subscriptionCredits).toBe(0);
+    expect(user?.oneTimeCredits).toBe(40);
+    expect(user?.credits).toBe(40);
+    expect(user?.reservedCredits).toBe(160);
+
+    const txs = await txRepo.findByUserId("user-segregated");
+    expect(txs).toHaveLength(1);
+    expect(txs[0]?.type).toBe("HOLD");
+    expect(txs[0]?.amount).toBe(160);
+  });
+
+  it("deve reservar créditos apenas da assinatura quando houver saldo suficiente", async () => {
+    await userRepo.create({
+      id: "user-sub-only",
+      email: "subonly@example.com",
+      subscriptionCredits: 150,
+      oneTimeCredits: 50,
+      credits: 200,
+      reservedCredits: 0,
+    });
+
+    const file = await fileRepo.create({
+      userId: "user-sub-only",
+      s3Key: "test/file-sub.mp4",
+      sourceType: "UPLOAD",
+      durationSeconds: 120,
+    });
+
+    const result = await useCase.execute({
+      userId: "user-sub-only",
+      amount: 50,
+      durationSeconds: 120,
+      fileId: file.id,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.heldCredits).toBe(50);
+
+    const user = await userRepo.findById("user-sub-only");
+    expect(user?.subscriptionCredits).toBe(100);
+    expect(user?.oneTimeCredits).toBe(50);
+    expect(user?.credits).toBe(150);
+    expect(user?.reservedCredits).toBe(50);
+  });
 });
 

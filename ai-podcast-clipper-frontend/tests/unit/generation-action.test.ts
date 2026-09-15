@@ -210,7 +210,7 @@ describe("Generation Server Actions", () => {
 
   describe("processVideo", () => {
     it("não deve disparar evento se o arquivo já estiver marcado como uploaded", async () => {
-      vi.mocked(db.uploadedFile.findUniqueOrThrow).mockResolvedValueOnce({
+      vi.mocked(db.uploadedFile.findUnique).mockResolvedValueOnce({
         id: "file-already-uploaded",
         uploaded: true,
         userId: "user-123",
@@ -224,7 +224,7 @@ describe("Generation Server Actions", () => {
     });
 
     it("deve disparar evento no Inngest, atualizar status para uploaded e revalidar /dashboard", async () => {
-      vi.mocked(db.uploadedFile.findUniqueOrThrow).mockResolvedValueOnce({
+      vi.mocked(db.uploadedFile.findUnique).mockResolvedValueOnce({
         id: "file-new",
         uploaded: false,
         userId: "user-123",
@@ -255,7 +255,7 @@ describe("Generation Server Actions", () => {
     });
 
     it("deve repassar mode e manualCuts para o Inngest quando fornecidos", async () => {
-      vi.mocked(db.uploadedFile.findUniqueOrThrow).mockResolvedValueOnce({
+      vi.mocked(db.uploadedFile.findUnique).mockResolvedValueOnce({
         id: "file-manual",
         uploaded: false,
         userId: "user-123",
