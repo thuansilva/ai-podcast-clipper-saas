@@ -24,6 +24,11 @@ export interface CreateCreditTransactionInput {
   description: string;
 }
 
+/**
+ * Entidade de Domínio / Registro de Auditoria: CreditTransaction
+ * Representa um lançamento imutável no livro-razão (ledger) de créditos.
+ * Garante as invariantes de valor estritamente positivo e descrição obrigatória.
+ */
 export class CreditTransaction {
   public readonly id: string;
   public readonly userId: string;
@@ -32,10 +37,7 @@ export class CreditTransaction {
   public readonly description: string;
   public readonly createdAt: Date;
 
-  /**
-   * Construtor privado: instanciação permitida apenas via factory methods
-   */
-  private constructor(
+  constructor(
     id: string,
     userId: string,
     amount: number,
@@ -58,9 +60,6 @@ export class CreditTransaction {
     this.createdAt = createdAt;
   }
 
-  /**
-   * Factory para criar uma nova transação no domínio
-   */
   public static create(input: CreateCreditTransactionInput): CreditTransaction {
     return new CreditTransaction(
       input.id ?? "",
@@ -72,9 +71,6 @@ export class CreditTransaction {
     );
   }
 
-  /**
-   * Factory para reconstituir uma transação persistida do banco de dados
-   */
   public static restore(data: CreditTransactionEntity): CreditTransaction {
     return new CreditTransaction(
       data.id,
@@ -84,26 +80,6 @@ export class CreditTransaction {
       data.description,
       data.createdAt
     );
-  }
-
-  public isHold(): boolean {
-    return this.type === "HOLD";
-  }
-
-  public isConsume(): boolean {
-    return this.type === "CONSUME";
-  }
-
-  public isRefund(): boolean {
-    return this.type === "REFUND";
-  }
-
-  public isPurchase(): boolean {
-    return this.type === "PURCHASE";
-  }
-
-  public isSubscriptionRenewal(): boolean {
-    return this.type === "SUBSCRIPTION_RENEWAL";
   }
 
   public toJSON(): CreditTransactionEntity {

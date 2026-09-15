@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, AlertCircle, Eye, EyeOff, ArrowLeft, Mail } from "lucide-react";
 import { formatClerkError } from "~/lib/clerk-errors";
-import { signUpSchema, verifyCodeSchema } from "~/domain/rules/auth-schemas";
+import { signUpSchema, verifyCodeSchema } from "./auth-schemas";
 
 export function CustomSignUpForm() {
   const { isLoaded, signUp, setActive } = useSignUp();

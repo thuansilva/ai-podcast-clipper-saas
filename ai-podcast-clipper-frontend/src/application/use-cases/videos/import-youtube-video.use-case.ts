@@ -1,8 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import {
-  extractYouTubeVideoId,
-  isValidYouTubeUrl,
-} from "~/domain/rules/youtube-parser";
+import { YouTubeUrl } from "~/domain/value-objects/youtube-url.vo";
 import { InvalidYouTubeUrlError } from "~/domain/errors/invalid-youtube-url-error";
 import type { IUploadedFileRepository } from "~/domain/ports/uploaded-file-repository";
 import type { IQueueGateway } from "~/domain/ports/queue-gateway";
@@ -20,11 +17,12 @@ export class ImportYouTubeVideoUseCase {
   async execute(
     input: ImportYouTubeVideoInput
   ): Promise<ImportYouTubeVideoOutput> {
-    if (!input.url || !isValidYouTubeUrl(input.url)) {
+    const youtubeUrl = YouTubeUrl.tryCreate(input.url);
+    if (!youtubeUrl) {
       throw new InvalidYouTubeUrlError(input.url);
     }
 
-    const videoId = extractYouTubeVideoId(input.url) ?? "unknown";
+    const videoId = youtubeUrl.videoId;
     const uuid = uuidv4();
     const s3Key = `youtube/${uuid}/original.mp4`;
     const displayName = `YouTube Video (${videoId})`;

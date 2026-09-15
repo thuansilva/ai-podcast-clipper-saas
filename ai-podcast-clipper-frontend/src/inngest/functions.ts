@@ -12,8 +12,8 @@ import {
 } from "~/infrastructure/factories/use-case-factories";
 import { PrismaSubscriptionRepository } from "~/infrastructure/database/repositories/prisma-subscription.repository";
 import { Prisma } from "@prisma/client";
-import { calculateManualCutsCredits } from "~/domain/rules/calculate-credits";
-import { validateVideoDuration } from "~/domain/rules/video-limits";
+import { calculateManualCutsCredits } from "~/domain/services/credit-pricing.service";
+import { validateVideoDuration } from "~/domain/services/plan-policy.service";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 
 export interface ProcessVideoEventData {

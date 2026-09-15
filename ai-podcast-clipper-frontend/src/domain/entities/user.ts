@@ -1,10 +1,10 @@
 import { InsufficientCreditsError } from "../errors/insufficient-credits-error";
 import { DomainError } from "../errors/domain-error";
 import {
-  NORMAL_MAX_DURATION_SECONDS,
-  STUDIO_MAX_DURATION_SECONDS,
-} from "../rules/video-limits";
-import { calculateVideoCredits } from "../rules/calculate-credits";
+  PlanPolicyService,
+  type VideoDurationValidationResult,
+} from "../services/plan-policy.service";
+import { calculateVideoCredits } from "../services/credit-pricing.service";
 
 export interface UserEntity {
   id: string;
@@ -145,6 +145,29 @@ export class User {
     );
   }
 
+  /**
+   * Factory para instanciar usuário transiente em memória (ex: orçamentos e validações no frontend)
+   */
+  public static createTransient(input: {
+    credits?: number;
+    plan?: string;
+  }): User {
+    const credits = Math.max(0, input.credits ?? 0);
+    const normalizedPlan = (input.plan?.trim().toUpperCase() as UserPlan) || "STARTER";
+    return new User(
+      "transient-user",
+      "transient@preview.local",
+      credits,
+      0,
+      0,
+      normalizedPlan,
+      null,
+      null,
+      null,
+      credits
+    );
+  }
+
   // Getters
   get credits(): number {
     return this._credits;
@@ -176,6 +199,13 @@ export class User {
 
   get stripeCustomerId(): string | null | undefined {
     return this._stripeCustomerId;
+  }
+
+  /**
+   * Verifica se o usuário possui saldo total suficiente para cobrir um custo
+   */
+  public hasSufficientCredits(amount: number): boolean {
+    return this._credits >= amount;
   }
 
   /**
@@ -317,13 +347,15 @@ export class User {
    * Regra de teto máximo de duração por plano
    */
   public maxVideoDurationAllowed(): number {
-    return this._plan === "STUDIO" || this._plan === "PRO_STUDIO"
-      ? STUDIO_MAX_DURATION_SECONDS
-      : NORMAL_MAX_DURATION_SECONDS;
+    return PlanPolicyService.getMaxDurationForPlan(this._plan);
   }
 
   public canProcessDuration(durationSeconds: number): boolean {
     return durationSeconds <= this.maxVideoDurationAllowed();
+  }
+
+  public validateVideoDuration(durationSeconds: number): VideoDurationValidationResult {
+    return PlanPolicyService.validateVideoDuration(durationSeconds, this._plan);
   }
 
   public calculateCostForDuration(durationSeconds: number): number {

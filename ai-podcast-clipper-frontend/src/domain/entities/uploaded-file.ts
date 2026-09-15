@@ -1,5 +1,5 @@
 import { DomainError } from "../errors/domain-error";
-import { calculateVideoCredits } from "../rules/calculate-credits";
+import { calculateVideoCredits } from "../services/credit-pricing.service";
 
 export type SourceType = "UPLOAD" | "YOUTUBE";
 

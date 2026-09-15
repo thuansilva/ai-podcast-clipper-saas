@@ -1,14 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
+  PlanPolicyService,
   NORMAL_MAX_DURATION_SECONDS,
   STUDIO_MAX_DURATION_SECONDS,
   MAX_FILE_SIZE_BYTES,
   getMaxDurationForPlan,
   validateVideoDuration,
   validateFileSize,
-} from "~/domain/rules/video-limits";
+} from "~/domain/services/plan-policy.service";
 
-describe("Video Limits Domain Rules", () => {
+describe("PlanPolicyService (Domain Service)", () => {
   describe("Constantes", () => {
     it("deve definir 2 horas (7200s) para o plano normal/starter", () => {
       expect(NORMAL_MAX_DURATION_SECONDS).toBe(7200);
@@ -30,6 +31,7 @@ describe("Video Limits Domain Rules", () => {
       expect(getMaxDurationForPlan(undefined)).toBe(7200);
       expect(getMaxDurationForPlan(null)).toBe(7200);
       expect(getMaxDurationForPlan("qualquer_outro")).toBe(7200);
+      expect(PlanPolicyService.getMaxDurationForPlan("STARTER")).toBe(7200);
     });
 
     it("deve retornar 10800s (3h) para plano STUDIO (case insensitive)", () => {
@@ -38,6 +40,7 @@ describe("Video Limits Domain Rules", () => {
       expect(getMaxDurationForPlan("Studio")).toBe(10800);
       expect(getMaxDurationForPlan("PRO_STUDIO")).toBe(10800);
       expect(getMaxDurationForPlan("pro_studio")).toBe(10800);
+      expect(PlanPolicyService.getMaxDurationForPlan("PRO_STUDIO")).toBe(10800);
     });
   });
 

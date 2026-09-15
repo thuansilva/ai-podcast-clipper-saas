@@ -3,7 +3,7 @@ import {
   signInSchema,
   signUpSchema,
   verifyCodeSchema,
-} from "~/domain/rules/auth-schemas";
+} from "~/components/auth/auth-schemas";
 
 describe("Auth Validation Schemas (Zod)", () => {
   describe("signInSchema", () => {

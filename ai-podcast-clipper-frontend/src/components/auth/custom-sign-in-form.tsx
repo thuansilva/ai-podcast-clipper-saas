@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { formatClerkError } from "~/lib/clerk-errors";
-import { signInSchema } from "~/domain/rules/auth-schemas";
+import { signInSchema } from "./auth-schemas";
 
 export function CustomSignInForm() {
   const { isLoaded, signIn, setActive } = useSignIn();

@@ -373,4 +373,45 @@ describe("User Rich Domain Entity", () => {
       });
     });
   });
+
+  describe("Cálculos de Duração e Orçamento no Domínio", () => {
+    it("User.createTransient deve criar entidade transiente para uso no frontend", () => {
+      const transient = User.createTransient({ credits: 25, plan: "PRO_STUDIO" });
+      expect(transient.credits).toBe(25);
+      expect(transient.plan).toBe("PRO_STUDIO");
+      expect(transient.maxVideoDurationAllowed()).toBe(10800);
+      expect(transient.hasSufficientCredits(20)).toBe(true);
+      expect(transient.hasSufficientCredits(30)).toBe(false);
+    });
+
+    it("calculateCostForDuration deve calcular créditos baseado na duração do vídeo", () => {
+      const user = User.createTransient({ credits: 10, plan: "STARTER" });
+      expect(user.calculateCostForDuration(30)).toBe(1);
+      expect(user.calculateCostForDuration(60)).toBe(1);
+      expect(user.calculateCostForDuration(61)).toBe(2);
+      expect(user.calculateCostForDuration(3600)).toBe(60);
+      expect(user.calculateCostForDuration(0)).toBe(1);
+    });
+
+    it("validateVideoDuration e canProcessDuration devem validar limites de plano", () => {
+      const starterUser = User.createTransient({ credits: 10, plan: "STARTER" });
+      expect(starterUser.canProcessDuration(7200)).toBe(true);
+      expect(starterUser.canProcessDuration(7201)).toBe(false);
+
+      const starterValid = starterUser.validateVideoDuration(7200);
+      expect(starterValid.valid).toBe(true);
+
+      const starterInvalid = starterUser.validateVideoDuration(7201);
+      expect(starterInvalid.valid).toBe(false);
+      expect(starterInvalid.error).toContain("excede o limite de 2h");
+
+      const studioUser = User.createTransient({ credits: 10, plan: "STUDIO" });
+      expect(studioUser.canProcessDuration(10800)).toBe(true);
+      expect(studioUser.canProcessDuration(10801)).toBe(false);
+
+      const studioInvalid = studioUser.validateVideoDuration(10801);
+      expect(studioInvalid.valid).toBe(false);
+      expect(studioInvalid.error).toContain("excede o limite máximo permitido de 3h");
+    });
+  });
 });

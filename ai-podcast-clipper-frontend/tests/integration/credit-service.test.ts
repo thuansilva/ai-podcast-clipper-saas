@@ -3,9 +3,32 @@
  */
 import { describe, it, expect, afterAll } from "vitest";
 import { db } from "~/server/db";
-import { CreditService, holdCredits, consumeCredits, refundCredits } from "~/server/services/credit-service";
+import {
+  makeHoldCreditsUseCase,
+  makeConsumeCreditsUseCase,
+  makeRefundCreditsUseCase,
+} from "~/infrastructure/factories/use-case-factories";
 
-describe("CreditService Integration Tests", () => {
+const holdCredits = async (userId: string, durationSeconds: number, fileId: string) => {
+  const res = await makeHoldCreditsUseCase().execute({ userId, durationSeconds, fileId });
+  return { success: res.success, held: res.heldCredits };
+};
+
+const consumeCredits = async (userId: string, amount: number, fileId: string) => {
+  await makeConsumeCreditsUseCase().execute({ userId, amount, fileId });
+};
+
+const refundCredits = async (userId: string, amount: number, fileId: string, reason: string) => {
+  await makeRefundCreditsUseCase().execute({ userId, amount, fileId, reason });
+};
+
+const CreditService = {
+  holdCredits,
+  consumeCredits,
+  refundCredits,
+};
+
+describe("Credit Use Cases Integration Tests", () => {
   const createdUserIds: string[] = [];
 
   async function createTestUser(credits = 10, reservedCredits = 0) {

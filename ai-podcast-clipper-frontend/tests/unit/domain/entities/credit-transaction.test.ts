@@ -68,41 +68,6 @@ describe("CreditTransaction Domain Entity", () => {
     }).toThrow(DomainError);
   });
 
-  it("deve identificar corretamente os tipos de transação", () => {
-    const hold = CreditTransaction.create({
-      userId: "u1",
-      amount: 10,
-      type: "HOLD",
-      description: "hold",
-    });
-    expect(hold.isHold()).toBe(true);
-    expect(hold.isConsume()).toBe(false);
-
-    const consume = CreditTransaction.create({
-      userId: "u1",
-      amount: 10,
-      type: "CONSUME",
-      description: "consume",
-    });
-    expect(consume.isConsume()).toBe(true);
-
-    const refund = CreditTransaction.create({
-      userId: "u1",
-      amount: 10,
-      type: "REFUND",
-      description: "refund",
-    });
-    expect(refund.isRefund()).toBe(true);
-
-    const purchase = CreditTransaction.create({
-      userId: "u1",
-      amount: 10,
-      type: "PURCHASE",
-      description: "purchase",
-    });
-    expect(purchase.isPurchase()).toBe(true);
-  });
-
   it("deve serializar corretamente via toJSON()", () => {
     const tx = CreditTransaction.restore(baseTxData);
     const json = tx.toJSON();

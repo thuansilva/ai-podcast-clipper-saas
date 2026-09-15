@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import Dropzone, { type DropzoneState } from "shadcn-dropzone";
 import type { FileRejection } from "react-dropzone";
 import { toast } from "sonner";
@@ -17,23 +17,22 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { calculateVideoCredits } from "~/lib/credits";
-import { extractYouTubeVideoId, isValidYouTubeUrl } from "~/lib/youtube";
 import { generateUploadUrl } from "~/actions/s3";
 import { processVideo } from "~/actions/generation";
 import { importYouTubeVideo } from "~/actions/youtube";
+import { User } from "~/domain/entities/user";
 import {
   parseTimestampToSeconds,
   formatSecondsToTimestamp,
   addSecondsToTimestamp,
-  validateManualCut,
-} from "~/domain/rules/timestamp-parser";
-import { calculateManualCutsCredits } from "~/domain/rules/calculate-credits";
+} from "~/domain/value-objects/timestamp.vo";
+import { validateManualCut } from "~/domain/value-objects/video-cut.vo";
+import { extractYouTubeVideoId, isValidYouTubeUrl } from "~/domain/value-objects/youtube-url.vo";
+import { calculateManualCutsCredits } from "~/domain/services/credit-pricing.service";
 import {
-  validateVideoDuration,
   validateFileSize,
   MAX_FILE_SIZE_BYTES,
-} from "~/domain/rules/video-limits";
+} from "~/domain/services/plan-policy.service";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 
 export type SubtitlePreset = "HORMOZI" | "MINIMAL" | "NEON";
@@ -117,6 +116,12 @@ export function ImportVideoTabs({
   const [youtubeUrl, setYoutubeUrl] = useState<string>("");
   const [importing, setImporting] = useState<boolean>(false);
 
+  // Reconstituição da Entidade de Domínio User para governar regras e orçamentos no cliente
+  const user = useMemo(
+    () => User.createTransient({ credits: userCredits, plan: userPlan }),
+    [userCredits, userPlan]
+  );
+
   const parsedManualCuts: ManualCutDTO[] = manualCuts.map((c) => ({
     title: c.title,
     startTime: parseTimestampToSeconds(c.start) ?? 0,
@@ -124,14 +129,17 @@ export function ImportVideoTabs({
   }));
   const manualCreditsCost = calculateManualCutsCredits(parsedManualCuts);
 
-  const uploadCreditsCost = mode === "auto" ? (durationSeconds ? calculateVideoCredits(durationSeconds) : 1) : manualCreditsCost;
-  const isUploadInsufficientCredits = file !== null && userCredits < uploadCreditsCost;
+  const uploadCreditsCost =
+    mode === "auto"
+      ? (durationSeconds ? user.calculateCostForDuration(durationSeconds) : 1)
+      : manualCreditsCost;
+  const isUploadInsufficientCredits = file !== null && !user.hasSufficientCredits(uploadCreditsCost);
 
   const trimmedYouTubeUrl = youtubeUrl.trim();
   const isYouTubeValid = isValidYouTubeUrl(trimmedYouTubeUrl);
 
   const youtubeCreditsCost = mode === "auto" ? 1 : manualCreditsCost;
-  const isYouTubeInsufficientCredits = userCredits < youtubeCreditsCost;
+  const isYouTubeInsufficientCredits = !user.hasSufficientCredits(youtubeCreditsCost);
 
   const currentMaxDuration = activeTab === "upload" ? (durationSeconds ?? undefined) : undefined;
 
@@ -187,7 +195,7 @@ export function ImportVideoTabs({
             URL.revokeObjectURL(objectUrl);
           }
           const dur = Math.round(video.duration);
-          const durationValidation = validateVideoDuration(dur, userPlan);
+          const durationValidation = user.validateVideoDuration(dur);
           if (!durationValidation.valid) {
             toast.error(durationValidation.error ?? "Duração excede o limite permitido.");
             setFile(null);
@@ -215,7 +223,7 @@ export function ImportVideoTabs({
     if (!file || isUploadInsufficientCredits) return;
 
     if (durationSeconds) {
-      const durationValidation = validateVideoDuration(durationSeconds, userPlan);
+      const durationValidation = user.validateVideoDuration(durationSeconds);
       if (!durationValidation.valid) {
         toast.error(durationValidation.error ?? "Duração excede o limite permitido.");
         return;

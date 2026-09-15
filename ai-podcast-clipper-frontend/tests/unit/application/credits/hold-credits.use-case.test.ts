@@ -248,5 +248,30 @@ describe("HoldCreditsUseCase", () => {
     expect(user?.credits).toBe(150);
     expect(user?.reservedCredits).toBe(50);
   });
+
+  it("deve lançar erro e impedir o hold se a duração do vídeo ultrapassar o limite do plano do usuário", async () => {
+    await userRepo.create({
+      id: "user-starter-limit",
+      email: "starter@test.com",
+      credits: 200,
+      plan: "STARTER",
+      reservedCredits: 0,
+    });
+
+    const file = await fileRepo.create({
+      userId: "user-starter-limit",
+      s3Key: "test/oversized.mp4",
+      sourceType: "UPLOAD",
+      durationSeconds: 7201,
+    });
+
+    await expect(
+      useCase.execute({
+        userId: "user-starter-limit",
+        durationSeconds: 7201,
+        fileId: file.id,
+      })
+    ).rejects.toThrow(/excede o limite de 2h/i);
+  });
 });
 

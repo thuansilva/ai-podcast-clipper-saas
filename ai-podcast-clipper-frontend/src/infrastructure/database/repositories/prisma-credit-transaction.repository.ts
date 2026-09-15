@@ -1,7 +1,8 @@
 import { db } from "~/server/db";
-import type {
-  CreditTransactionEntity,
-  CreditTransactionType,
+import {
+  CreditTransaction,
+  type CreditTransactionEntity,
+  type CreditTransactionType,
 } from "~/domain/entities/credit-transaction";
 import type {
   CreateCreditTransactionInput,
@@ -14,23 +15,26 @@ export class PrismaCreditTransactionRepository
   async create(
     input: CreateCreditTransactionInput
   ): Promise<CreditTransactionEntity> {
+    // Validação de invariantes via Entidade de Domínio
+    const domainTx = CreditTransaction.create(input);
+
     const tx = await db.creditTransaction.create({
       data: {
-        userId: input.userId,
-        amount: input.amount,
-        type: input.type,
-        description: input.description,
+        userId: domainTx.userId,
+        amount: domainTx.amount,
+        type: domainTx.type,
+        description: domainTx.description,
       },
     });
 
-    return {
+    return CreditTransaction.restore({
       id: tx.id,
       userId: tx.userId,
       amount: tx.amount,
       type: tx.type as CreditTransactionType,
       description: tx.description,
       createdAt: tx.createdAt,
-    };
+    }).toJSON();
   }
 
   async findByUserId(userId: string): Promise<CreditTransactionEntity[]> {
@@ -39,13 +43,15 @@ export class PrismaCreditTransactionRepository
       orderBy: { createdAt: "desc" },
     });
 
-    return txs.map((tx) => ({
-      id: tx.id,
-      userId: tx.userId,
-      amount: tx.amount,
-      type: tx.type as CreditTransactionType,
-      description: tx.description,
-      createdAt: tx.createdAt,
-    }));
+    return txs.map((tx) =>
+      CreditTransaction.restore({
+        id: tx.id,
+        userId: tx.userId,
+        amount: tx.amount,
+        type: tx.type as CreditTransactionType,
+        description: tx.description,
+        createdAt: tx.createdAt,
+      }).toJSON()
+    );
   }
 }

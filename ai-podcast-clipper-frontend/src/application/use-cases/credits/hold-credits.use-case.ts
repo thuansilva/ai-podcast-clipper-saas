@@ -1,6 +1,6 @@
-import { calculateVideoCredits } from "~/domain/rules/calculate-credits";
 import { User } from "~/domain/entities/user";
 import { NotFoundError } from "~/domain/errors/not-found-error";
+import { DomainError } from "~/domain/errors/domain-error";
 import type { IUserRepository } from "~/domain/ports/user-repository";
 import type { IUploadedFileRepository } from "~/domain/ports/uploaded-file-repository";
 import type { ICreditTransactionRepository } from "~/domain/ports/credit-transaction-repository";
@@ -19,15 +19,27 @@ export class HoldCreditsUseCase {
   ) {}
 
   async execute(input: HoldCreditsInput): Promise<HoldCreditsOutput> {
-    const requiredCredits =
-      input.amount ?? calculateVideoCredits(input.durationSeconds);
-
     const userRecord = await this.userRepository.findById(input.userId);
     if (!userRecord) {
       throw new NotFoundError("Usuário", input.userId);
     }
 
     const user = User.restore(userRecord);
+
+    // Validação da política de duração do plano através da entidade User
+    if (input.durationSeconds > 0) {
+      const durationValidation = user.validateVideoDuration(input.durationSeconds);
+      if (!durationValidation.valid) {
+        throw new DomainError(
+          durationValidation.error ?? "A duração do vídeo excede o limite do plano."
+        );
+      }
+    }
+
+    // Cálculo do custo de créditos delegado à entidade User
+    const requiredCredits =
+      input.amount ?? user.calculateCostForDuration(input.durationSeconds);
+
     const { debitedSubscription, debitedOneTime } =
       user.holdCredits(requiredCredits);
 
