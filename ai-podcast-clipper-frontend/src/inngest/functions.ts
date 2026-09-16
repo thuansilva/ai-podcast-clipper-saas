@@ -238,6 +238,10 @@ export async function processVideoHandler({
 
     // Step 3: call-modal-gpu
     const modalResult = await step.run("call-modal-gpu", async () => {
+      const video = await db.uploadedFile.findUniqueOrThrow({
+        where: { id: uploadedFileId },
+      });
+
       const response = await fetch(env.PROCESS_VIDEO_ENDPOINT, {
         method: "POST",
         headers: {
@@ -245,8 +249,13 @@ export async function processVideoHandler({
           Authorization: `Bearer ${env.PROCESS_VIDEO_ENDPOINT_AUTH}`,
         },
         body: JSON.stringify({
-          s3_key: reservation.s3Key,
-          preset: preset ?? "HORMOZI",
+          s3_key: video.s3Key,
+          preset: video.subtitlePreset ?? preset ?? "NONE",
+          genre: video.genre ?? "auto",
+          target_duration: video.targetDuration ?? "auto",
+          layout_mode: video.layout ?? "auto",
+          aspect_ratio: video.aspectRatio ?? "9:16",
+          auto_zoom: video.autoZoom ?? true,
           mode: event.data.mode ?? "auto",
           manual_cuts: event.data.manualCuts?.map((c) => ({
             title: c.title,

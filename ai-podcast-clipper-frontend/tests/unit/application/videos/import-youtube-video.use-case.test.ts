@@ -70,4 +70,35 @@ describe("ImportYouTubeVideoUseCase", () => {
       manualCuts,
     });
   });
+
+  it("deve persistir genre, targetDuration, aspectRatio, layout, autoZoom e preset no repositório", async () => {
+    const result = await useCase.execute({
+      userId: "user-1",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      preset: "NONE",
+      genre: "humor",
+      targetDuration: "less_than_30s",
+      aspectRatio: "9:16",
+      layout: "face_focus",
+      autoZoom: false,
+      sliceStartTime: 10,
+      sliceEndTime: 120,
+    });
+
+    expect(result.success).toBe(true);
+
+    const file = await fileRepo.findById(result.uploadedFileId);
+    expect(file).toBeDefined();
+    expect(file?.subtitlePreset).toBe("NONE");
+    expect(file?.genre).toBe("humor");
+    expect(file?.targetDuration).toBe("less_than_30s");
+    expect(file?.aspectRatio).toBe("9:16");
+    expect(file?.layout).toBe("face_focus");
+    expect(file?.autoZoom).toBe(false);
+    expect(file?.sliceStartTime).toBe(10);
+    expect(file?.sliceEndTime).toBe(120);
+
+    expect(queueGateway.sentEvents).toHaveLength(1);
+    expect(queueGateway.sentEvents[0]?.preset).toBe("NONE");
+  });
 });

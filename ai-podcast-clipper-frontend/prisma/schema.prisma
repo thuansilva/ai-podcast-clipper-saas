@@ -2,114 +2,135 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-    provider = "postgresql"
-    // NOTE: When using mysql or sqlserver, uncomment the @db.Text annotations in model Account below
-    // Further reading:
-    // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
-    // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  // NOTE: When using mysql or sqlserver, uncomment the @db.Text annotations in model Account below
+  // Further reading:
+  // https://next-auth.js.org/adapters/prisma#create-the-prisma-schema
+  // https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#string
+  url      = env("DATABASE_URL")
 }
 
 model User {
-    id                  String              @id
-    name                String?
-    email               String              @unique
-    emailVerified       DateTime?
-    password            String?
-    credits             Int                 @default(10)
-    subscriptionCredits Int                 @default(0)
-    oneTimeCredits      Int                 @default(10)
-    reservedCredits     Int                 @default(0)
-    stripeCustomerId    String?             @unique
-    image               String?
-    plan                String              @default("STARTER")
-    subscription        Subscription?
-    creditTransactions  CreditTransaction[]
+  id                  String              @id
+  name                String?
+  email               String              @unique
+  emailVerified       DateTime?
+  password            String?
+  credits             Int                 @default(10)
+  subscriptionCredits Int                 @default(0)
+  oneTimeCredits      Int                 @default(10)
+  reservedCredits     Int                 @default(0)
+  stripeCustomerId    String?             @unique
+  image               String?
+  plan                String              @default("STARTER")
+  subscription        Subscription?
+  creditTransactions  CreditTransaction[]
 
-    uploadedFiles UploadedFile[]
-    clips         Clip[]
+  uploadedFiles UploadedFile[]
+  clips         Clip[]
 }
 
 model Subscription {
-    id                   String   @id @default(cuid())
-    userId               String   @unique
-    stripeSubscriptionId String   @unique
-    stripePriceId        String
-    status               String   // "active", "canceled", "past_due", "incomplete"
-    currentPeriodStart   DateTime
-    currentPeriodEnd     DateTime
-    cancelAtPeriodEnd    Boolean  @default(false)
-    plan                 String   // "CREATOR", "PRO_STUDIO"
-    monthlyCredits       Int      // 150 ou 500
-    createdAt            DateTime @default(now())
-    updatedAt            DateTime @updatedAt
+  id                   String   @id @default(cuid())
+  userId               String   @unique
+  stripeSubscriptionId String   @unique
+  stripePriceId        String
+  status               String // "active", "canceled", "past_due", "incomplete"
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean  @default(false)
+  plan                 String // "CREATOR", "PRO_STUDIO"
+  monthlyCredits       Int // 150 ou 500
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model CreditTransaction {
-    id          String   @id @default(cuid())
-    userId      String
-    amount      Int
-    type        String   // "PURCHASE", "HOLD", "CONSUME", "REFUND"
-    description String
-    createdAt   DateTime @default(now())
+  id          String   @id @default(cuid())
+  userId      String
+  amount      Int
+  type        String // "PURCHASE", "HOLD", "CONSUME", "REFUND"
+  description String
+  createdAt   DateTime @default(now())
 
-    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-    @@index([userId])
+  @@index([userId])
 }
 
 model UploadedFile {
-    id              String    @id @default(cuid())
-    s3Key           String
-    displayName     String?
-    sourceType      String    @default("UPLOAD")
-    youtubeUrl      String?
-    durationSeconds Int       @default(0)
-    sliceStartTime  Int       @default(0)
-    sliceEndTime    Int       @default(0)
-    creditsCost     Int       @default(0)
-    uploaded        Boolean   @default(false)
-    status          String    @default("queued") // processing, processed, no credits, failed
-    errorMessage    String?
-    createdAt       DateTime  @default(now())
-    updatedAt       DateTime  @updatedAt
+  id              String   @id @default(cuid())
+  s3Key           String
+  displayName     String?
+  sourceType      String   @default("UPLOAD")
+  youtubeUrl      String?
+  durationSeconds Int      @default(0)
+  sliceStartTime  Int      @default(0)
+  sliceEndTime    Int      @default(0)
+  creditsCost     Int      @default(0)
+  uploaded        Boolean  @default(false)
+  status          String   @default("queued") // processing, processed, no credits, failed
+  errorMessage    String?
+  genre           String?
+  targetDuration  String?
+  aspectRatio     String?
+  layout          String?
+  autoZoom        Boolean?
+  subtitlePreset  String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-    clips Clip[]
+  clips Clip[]
 
-    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-    userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
 
-    @@index([s3Key])
+  @@index([s3Key])
 }
 
 model Clip {
-    id              String   @id @default(cuid())
-    s3Key           String
-    title           String   @default("Clip")
-    hook            String?
-    viralityScore   Float?
-    reason          String?
-    startTime       Float    @default(0)
-    endTime         Float    @default(0)
-    durationSeconds Float    @default(0)
-    subtitlePreset  String   @default("HORMOZI")
-    layoutMode      String   @default("SMART_CROP")
-    transcriptWords Json?
+  id              String  @id @default(cuid())
+  s3Key           String
+  title           String  @default("Clip")
+  hook            String?
+  viralityScore   Float?
+  reason          String?
+  startTime       Float   @default(0)
+  endTime         Float   @default(0)
+  durationSeconds Float   @default(0)
+  subtitlePreset  String  @default("HORMOZI")
+  layoutMode      String  @default("SMART_CROP")
+  transcriptWords Json?
 
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-    uploadedFile   UploadedFile? @relation(fields: [uploadedFileId], references: [id], onDelete: Cascade)
-    uploadedFileId String?
+  uploadedFile   UploadedFile? @relation(fields: [uploadedFileId], references: [id], onDelete: Cascade)
+  uploadedFileId String?
 
-    user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-    userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
 
-    @@index([s3Key])
+  @@index([s3Key])
+}
+
+model ProcessingOption {
+  id        String  @id @default(cuid())
+  type      String // "GENRE", "DURATION", "ASPECT_RATIO", "LAYOUT"
+  value     String
+  label     String
+  order     Int     @default(0)
+  isActive  Boolean @default(true)
+  isDefault Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type, isActive, order])
 }

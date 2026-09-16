@@ -28,6 +28,11 @@ export interface ImportYouTubeVideoInput {
   manualCuts?: ManualCutDTO[];
   sliceStartTime?: number;
   sliceEndTime?: number;
+  genre?: string;
+  targetDuration?: string;
+  aspectRatio?: string;
+  layout?: string;
+  autoZoom?: boolean;
 }
 
 export interface ImportYouTubeVideoOutput {

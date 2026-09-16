@@ -37,6 +37,12 @@ export class ImportYouTubeVideoUseCase {
       status: "queued",
       sliceStartTime: input.sliceStartTime ?? 0,
       sliceEndTime: input.sliceEndTime ?? 0,
+      genre: input.genre,
+      targetDuration: input.targetDuration,
+      aspectRatio: input.aspectRatio,
+      layout: input.layout,
+      autoZoom: input.autoZoom,
+      subtitlePreset: input.preset,
     });
 
     await this.queueGateway.sendProcessVideoEvent({

@@ -14,6 +14,14 @@ export interface CreateUploadedFileInput {
   creditsCost?: number;
   uploaded?: boolean;
   status?: UploadedFileStatus;
+  sliceStartTime?: number;
+  sliceEndTime?: number;
+  genre?: string | null;
+  targetDuration?: string | null;
+  aspectRatio?: string | null;
+  layout?: string | null;
+  autoZoom?: boolean | null;
+  subtitlePreset?: string | null;
 }
 
 export interface UpdateUploadedFileInput {

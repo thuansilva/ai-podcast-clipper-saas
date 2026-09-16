@@ -3,13 +3,28 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Loader2, ScissorsIcon, YoutubeIcon, UploadCloudIcon } from "lucide-react";
+import { Select } from "~/components/ui/select";
+import { Switch } from "~/components/ui/switch";
+import {
+  Loader2,
+  ScissorsIcon,
+  YoutubeIcon,
+  UploadCloudIcon,
+  SlidersHorizontalIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 import { importYouTubeVideo } from "~/actions/youtube";
 import { Slider } from "~/components/ui/slider";
+import type { ProcessingOption } from "~/application/services/processing-options.service";
 
 interface VideoMetadata {
   title: string;
@@ -17,25 +32,70 @@ interface VideoMetadata {
   thumbnailUrl?: string;
 }
 
-export function CreateProjectClient({ userCredits }: { userCredits: number }) {
+interface CreateProjectClientProps {
+  userCredits: number;
+  options?: Record<string, ProcessingOption[]>;
+}
+
+function getDefaultOptionValue(options?: ProcessingOption[]): string {
+  if (!options || options.length === 0) return "";
+  const defaultOption = options.find((opt) => opt.isDefault);
+  return defaultOption ? defaultOption.value : (options[0]?.value ?? "");
+}
+
+export function CreateProjectClient({
+  userCredits,
+  options = {},
+}: CreateProjectClientProps) {
   const [url, setUrl] = useState("");
   const [metadata, setMetadata] = useState<VideoMetadata | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
-  
-  const [range, setRange] = useState([0, 5]);
+
+  const [range, setRange] = useState<[number, number]>([0, 5]);
   const [preset, setPreset] = useState("HORMOZI");
+  const [genre, setGenre] = useState(() =>
+    getDefaultOptionValue(options.GENRE),
+  );
+  const [targetDuration, setTargetDuration] = useState(() =>
+    getDefaultOptionValue(options.DURATION),
+  );
+  const [aspectRatio, setAspectRatio] = useState(() =>
+    getDefaultOptionValue(options.ASPECT_RATIO),
+  );
+  const [layout, setLayout] = useState(() =>
+    getDefaultOptionValue(options.LAYOUT),
+  );
+  const [autoZoom, setAutoZoom] = useState(true);
+
   const [processing, setProcessing] = useState(false);
 
   const router = useRouter();
+
+  useEffect(() => {
+    if (options.GENRE?.length && !genre) {
+      setGenre(getDefaultOptionValue(options.GENRE));
+    }
+    if (options.DURATION?.length && !targetDuration) {
+      setTargetDuration(getDefaultOptionValue(options.DURATION));
+    }
+    if (options.ASPECT_RATIO?.length && !aspectRatio) {
+      setAspectRatio(getDefaultOptionValue(options.ASPECT_RATIO));
+    }
+    if (options.LAYOUT?.length && !layout) {
+      setLayout(getDefaultOptionValue(options.LAYOUT));
+    }
+  }, [options, genre, targetDuration, aspectRatio, layout]);
 
   const handleFetchMeta = async (targetUrl: string) => {
     if (!targetUrl) return;
     setLoadingMeta(true);
     try {
-      const res = await fetch(`/api/youtube/info?url=${encodeURIComponent(targetUrl)}`);
+      const res = await fetch(
+        `/api/youtube/info?url=${encodeURIComponent(targetUrl)}`,
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to fetch metadata");
-      
+
       setMetadata(data);
       const defaultDuration = Math.min(5 * 60, data.durationSeconds);
       setRange([0, Math.floor(defaultDuration / 60)]);
@@ -48,7 +108,10 @@ export function CreateProjectClient({ userCredits }: { userCredits: number }) {
 
   // Auto-fetch quando a URL parece ser do YouTube
   useEffect(() => {
-    if (url && (url.includes("youtube.com/watch") || url.includes("youtu.be/"))) {
+    if (
+      url &&
+      (url.includes("youtube.com/watch") || url.includes("youtu.be/"))
+    ) {
       // Debounce simples para evitar múltiplas chamadas se o usuário estiver digitando
       const timer = setTimeout(() => {
         handleFetchMeta(url);
@@ -57,15 +120,17 @@ export function CreateProjectClient({ userCredits }: { userCredits: number }) {
     }
   }, [url]);
 
-  const startMin = range[0];
-  const endMin = range[1];
+  const startMin = range[0] ?? 0;
+  const endMin = range[1] ?? 5;
   const cost = Math.max(1, endMin - startMin);
 
   const handleSubmit = async () => {
     if (!url || !metadata) return;
-    
+
     if (cost > userCredits) {
-      toast.error(`Você precisa de ${cost} créditos, mas tem apenas ${userCredits}.`);
+      toast.error(
+        `Você precisa de ${cost} créditos, mas tem apenas ${userCredits}.`,
+      );
       return;
     }
 
@@ -76,7 +141,12 @@ export function CreateProjectClient({ userCredits }: { userCredits: number }) {
         preset,
         sliceStartTime: startMin * 60,
         sliceEndTime: endMin * 60,
-        mode: "auto"
+        mode: "auto",
+        genre: genre || undefined,
+        targetDuration: targetDuration || undefined,
+        aspectRatio: aspectRatio || undefined,
+        layout: layout || undefined,
+        autoZoom,
       });
 
       if (!result.success) {
@@ -93,152 +163,390 @@ export function CreateProjectClient({ userCredits }: { userCredits: number }) {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--marfim)]">Criar Novo Projeto</h1>
-        <p className="text-sm text-[var(--fumaca)]">Cole a URL, defina o tempo de corte e deixe a Inteligência Artificial fazer o resto.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-[var(--marfim)]">
+          Criar Novo Projeto
+        </h1>
+        <p className="text-sm text-[var(--fumaca)]">
+          Cole a URL, defina o tempo de corte e deixe a Inteligência Artificial
+          fazer o resto.
+        </p>
       </div>
 
       {!metadata ? (
         <div className="space-y-6">
-          <Card className="bg-[var(--superficie)] border-[var(--linha)]">
+          <Card className="border-[var(--linha)] bg-[var(--superficie)]">
             <CardHeader>
-              <CardTitle className="text-lg text-[var(--marfim)]">Importar do YouTube</CardTitle>
-              <CardDescription className="text-[var(--fumaca)]">Copie e cole o link do vídeo para começarmos</CardDescription>
+              <CardTitle className="text-lg text-[var(--marfim)]">
+                Importar do YouTube
+              </CardTitle>
+              <CardDescription className="text-[var(--fumaca)]">
+                Copie e cole o link do vídeo para começarmos
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="relative">
-                <YoutubeIcon className="absolute left-3 top-2.5 h-5 w-5 text-[var(--linha-2)]" />
+                <YoutubeIcon className="absolute top-2.5 left-3 h-5 w-5 text-[var(--linha-2)]" />
                 <Input
                   placeholder="https://youtube.com/watch?v=..."
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  className="pl-10 pr-10 bg-[var(--tinta)] border-[var(--linha)] text-[var(--marfim)]"
+                  className="border-[var(--linha)] bg-[var(--tinta)] pr-10 pl-10 text-[var(--marfim)]"
                 />
                 {loadingMeta && (
-                  <div className="absolute right-3 top-2.5">
-                    <Loader2 className="h-5 w-5 text-[var(--ouro)] animate-spin" />
+                  <div className="absolute top-2.5 right-3">
+                    <Loader2 className="h-5 w-5 animate-spin text-[var(--ouro)]" />
                   </div>
                 )}
               </div>
             </CardContent>
           </Card>
-          
+
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <span className="w-full border-t border-[var(--linha)]" />
             </div>
             <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-[var(--tinta)] px-2 text-[var(--fumaca)]">Ou</span>
+              <span className="bg-[var(--tinta)] px-2 text-[var(--fumaca)]">
+                Ou
+              </span>
             </div>
           </div>
-          
-          <Card className="bg-[var(--superficie)] border-[var(--linha)] border-dashed opacity-70 hover:opacity-100 transition-opacity cursor-pointer">
+
+          <Card className="cursor-pointer border-dashed border-[var(--linha)] bg-[var(--superficie)] opacity-70 transition-opacity hover:opacity-100">
             <CardContent className="flex flex-col items-center justify-center p-8 text-center">
-              <div className="rounded-full bg-[var(--superficie-2)] p-3 mb-4">
+              <div className="mb-4 rounded-full bg-[var(--superficie-2)] p-3">
                 <UploadCloudIcon className="h-6 w-6 text-[var(--marfim)]" />
               </div>
-              <p className="text-sm font-medium text-[var(--marfim)]">Fazer upload de arquivo local</p>
-              <p className="text-xs text-[var(--fumaca)] mt-1">MP4, MOV ou WebM (Em breve)</p>
+              <p className="text-sm font-medium text-[var(--marfim)]">
+                Fazer upload de arquivo local
+              </p>
+              <p className="mt-1 text-xs text-[var(--fumaca)]">
+                MP4, MOV ou WebM (Em breve)
+              </p>
             </CardContent>
           </Card>
         </div>
       ) : (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+        <div className="animate-in fade-in slide-in-from-bottom-4 space-y-8 duration-500">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-12">
             <div className="md:col-span-4">
-              <div className="rounded-xl overflow-hidden border border-[var(--linha)] bg-[var(--superficie)] shadow-lg">
-                <img src={metadata.thumbnailUrl} alt="Thumbnail" className="w-full aspect-video object-cover" />
+              <div className="overflow-hidden rounded-xl border border-[var(--linha)] bg-[var(--superficie)] shadow-lg">
+                <img
+                  src={metadata.thumbnailUrl}
+                  alt="Thumbnail"
+                  className="aspect-video w-full object-cover"
+                />
                 <div className="p-4">
-                  <p className="font-semibold text-sm text-[var(--marfim)] line-clamp-2">{metadata.title}</p>
-                  <p className="text-xs text-[var(--fumaca)] mt-1">{Math.floor(metadata.durationSeconds / 60)} minutos totais</p>
+                  <p className="line-clamp-2 text-sm font-semibold text-[var(--marfim)]">
+                    {metadata.title}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--fumaca)]">
+                    {Math.floor(metadata.durationSeconds / 60)} minutos totais
+                  </p>
                 </div>
               </div>
             </div>
-            
-            <div className="md:col-span-8 space-y-6">
-              <Card className="bg-[var(--superficie)] border-[var(--linha)]">
+
+            <div className="space-y-6 md:col-span-8">
+              <Card className="border-[var(--linha)] bg-[var(--superficie)]">
                 <CardHeader className="pb-4">
-                  <CardTitle className="text-lg text-[var(--marfim)] flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-lg text-[var(--marfim)]">
                     <ScissorsIcon className="h-4 w-4 text-[var(--ouro)]" />
                     Fatiador Inteligente
                   </CardTitle>
-                  <CardDescription className="text-[var(--fumaca)]">Deslize para selecionar o trecho que nossa IA deve analisar</CardDescription>
+                  <CardDescription className="text-[var(--fumaca)]">
+                    Deslize para selecionar o trecho que nossa IA deve analisar
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-8">
-                  
-                  <div className="pt-4 pb-2 px-2">
+                  <div className="px-2 pt-4 pb-2">
                     <Slider
                       value={range}
                       min={0}
                       max={Math.floor(metadata.durationSeconds / 60)}
                       step={1}
                       onValueChange={(val) => {
-                        // Impedir que os thumbs cruzem e mantenham min 1 minuto se possível
-                        if (val[1] > val[0]) {
-                          setRange(val);
-                        } else if (val[1] === val[0]) {
-                           // Força distância mínima de 1 minuto se não estiver no limite
-                           if (val[1] < Math.floor(metadata.durationSeconds / 60)) {
-                             setRange([val[0], val[1] + 1]);
-                           } else {
-                             setRange([val[0] - 1, val[1]]);
-                           }
+                        const v0 = val[0] ?? 0;
+                        const v1 = val[1] ?? v0 + 1;
+                        const maxMinutes = Math.floor(
+                          metadata.durationSeconds / 60,
+                        );
+                        if (v1 > v0) {
+                          setRange([v0, v1]);
+                        } else if (v1 === v0) {
+                          if (v1 < maxMinutes) {
+                            setRange([v0, v1 + 1]);
+                          } else {
+                            setRange([Math.max(0, v0 - 1), v1]);
+                          }
                         }
                       }}
                     />
-                    <div className="flex justify-between mt-4 text-xs font-medium text-[var(--fumaca)]">
+                    <div className="mt-4 flex justify-between text-xs font-medium text-[var(--fumaca)]">
                       <span>{startMin} min</span>
                       <span>{endMin} min</span>
                     </div>
                   </div>
 
-                  <div className="p-4 rounded-xl bg-[var(--ouro)]/10 border border-[var(--ouro)]/30 flex justify-between items-center">
+                  <div className="flex items-center justify-between rounded-xl border border-[var(--ouro)]/30 bg-[var(--ouro)]/10 p-4">
                     <div>
-                      <p className="text-sm font-medium text-[var(--ouro)]">Custo do Processamento</p>
-                      <p className="text-xs text-[var(--ouro)]/70">Você será cobrado apenas pelo trecho fatiado.</p>
+                      <p className="text-sm font-medium text-[var(--ouro)]">
+                        Custo do Processamento
+                      </p>
+                      <p className="text-xs text-[var(--ouro)]/70">
+                        Você será cobrado apenas pelo trecho fatiado.
+                      </p>
                     </div>
-                    <div className="text-2xl font-bold font-mono text-[var(--ouro)]">
-                      {cost} <span className="text-sm font-normal">Créditos</span>
+                    <div className="font-mono text-2xl font-bold text-[var(--ouro)]">
+                      {cost}{" "}
+                      <span className="text-sm font-normal">Créditos</span>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-[var(--marfim)]">Estilo da Legenda</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div 
-                    onClick={() => setPreset("HORMOZI")}
-                    className={`cursor-pointer rounded-xl border p-4 transition-all ${preset === "HORMOZI" ? "bg-[var(--superficie-2)] border-[var(--ouro)] shadow-[0_0_15px_rgba(232,186,82,0.1)]" : "bg-[var(--superficie)] border-[var(--linha)] hover:border-[var(--linha-2)]"}`}
-                  >
-                    <p className="font-bold text-lg text-center text-yellow-400 drop-shadow-md italic uppercase">Viral Bold</p>
-                    <p className="text-xs text-center text-[var(--fumaca)] mt-2">Cores chamativas e emojis</p>
+              {/* Opções de Processamento Dinâmicas */}
+              <Card className="border-[var(--linha)] bg-[var(--superficie)]">
+                <CardHeader className="pb-4">
+                  <CardTitle className="flex items-center gap-2 text-lg text-[var(--marfim)]">
+                    <SlidersHorizontalIcon className="h-4 w-4 text-[var(--ouro)]" />
+                    Configurações do Corte
+                  </CardTitle>
+                  <CardDescription className="text-[var(--fumaca)]">
+                    Personalize o formato, duração e estilo dos seus cortes
+                    gerados por IA
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {/* Gênero */}
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="select-genre"
+                        className="text-sm font-medium text-[var(--marfim)]"
+                      >
+                        Gênero do Conteúdo
+                      </Label>
+                      <Select
+                        id="select-genre"
+                        aria-label="Gênero do Conteúdo"
+                        value={genre}
+                        onChange={(e) => setGenre(e.target.value)}
+                      >
+                        {options.GENRE && options.GENRE.length > 0 ? (
+                          options.GENRE.map((opt) => (
+                            <option
+                              key={opt.id || opt.value}
+                              value={opt.value}
+                              className="bg-[var(--superficie)] text-[var(--marfim)]"
+                            >
+                              {opt.label}
+                            </option>
+                          ))
+                        ) : (
+                          <option
+                            value=""
+                            className="bg-[var(--superficie)] text-[var(--marfim)]"
+                          >
+                            Padrão
+                          </option>
+                        )}
+                      </Select>
+                    </div>
+
+                    {/* Duração */}
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="select-duration"
+                        className="text-sm font-medium text-[var(--marfim)]"
+                      >
+                        Duração do Corte
+                      </Label>
+                      <Select
+                        id="select-duration"
+                        aria-label="Duração do Corte"
+                        value={targetDuration}
+                        onChange={(e) => setTargetDuration(e.target.value)}
+                      >
+                        {options.DURATION && options.DURATION.length > 0 ? (
+                          options.DURATION.map((opt) => (
+                            <option
+                              key={opt.id || opt.value}
+                              value={opt.value}
+                              className="bg-[var(--superficie)] text-[var(--marfim)]"
+                            >
+                              {opt.label}
+                            </option>
+                          ))
+                        ) : (
+                          <option
+                            value=""
+                            className="bg-[var(--superficie)] text-[var(--marfim)]"
+                          >
+                            Padrão
+                          </option>
+                        )}
+                      </Select>
+                    </div>
+
+                    {/* Proporção */}
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="select-aspect-ratio"
+                        className="text-sm font-medium text-[var(--marfim)]"
+                      >
+                        Proporção (Aspect Ratio)
+                      </Label>
+                      <Select
+                        id="select-aspect-ratio"
+                        aria-label="Proporção"
+                        value={aspectRatio}
+                        onChange={(e) => setAspectRatio(e.target.value)}
+                      >
+                        {options.ASPECT_RATIO &&
+                        options.ASPECT_RATIO.length > 0 ? (
+                          options.ASPECT_RATIO.map((opt) => (
+                            <option
+                              key={opt.id || opt.value}
+                              value={opt.value}
+                              className="bg-[var(--superficie)] text-[var(--marfim)]"
+                            >
+                              {opt.label}
+                            </option>
+                          ))
+                        ) : (
+                          <option
+                            value=""
+                            className="bg-[var(--superficie)] text-[var(--marfim)]"
+                          >
+                            Padrão
+                          </option>
+                        )}
+                      </Select>
+                    </div>
+
+                    {/* Layout */}
+                    <div className="space-y-2">
+                      <Label
+                        htmlFor="select-layout"
+                        className="text-sm font-medium text-[var(--marfim)]"
+                      >
+                        Layout do Vídeo
+                      </Label>
+                      <Select
+                        id="select-layout"
+                        aria-label="Layout"
+                        value={layout}
+                        onChange={(e) => setLayout(e.target.value)}
+                      >
+                        {options.LAYOUT && options.LAYOUT.length > 0 ? (
+                          options.LAYOUT.map((opt) => (
+                            <option
+                              key={opt.id || opt.value}
+                              value={opt.value}
+                              className="bg-[var(--superficie)] text-[var(--marfim)]"
+                            >
+                              {opt.label}
+                            </option>
+                          ))
+                        ) : (
+                          <option
+                            value=""
+                            className="bg-[var(--superficie)] text-[var(--marfim)]"
+                          >
+                            Padrão
+                          </option>
+                        )}
+                      </Select>
+                    </div>
                   </div>
-                  <div 
-                    onClick={() => setPreset("CLEAN")}
-                    className={`cursor-pointer rounded-xl border p-4 transition-all ${preset === "CLEAN" ? "bg-[var(--superficie-2)] border-[var(--ouro)] shadow-[0_0_15px_rgba(232,186,82,0.1)]" : "bg-[var(--superficie)] border-[var(--linha)] hover:border-[var(--linha-2)]"}`}
+
+                  {/* Auto Zoom */}
+                  <div className="flex items-center justify-between border-t border-[var(--linha)] pt-3">
+                    <div className="space-y-0.5">
+                      <Label
+                        htmlFor="switch-auto-zoom"
+                        className="text-sm font-medium text-[var(--marfim)]"
+                      >
+                        Auto Zoom
+                      </Label>
+                      <p className="text-xs text-[var(--fumaca)]">
+                        Enquadramento automático com zoom dinâmico na pessoa que
+                        está falando
+                      </p>
+                    </div>
+                    <Switch
+                      id="switch-auto-zoom"
+                      aria-label="Auto Zoom"
+                      checked={autoZoom}
+                      onCheckedChange={setAutoZoom}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Estilo da Legenda */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-[var(--marfim)]">
+                  Estilo da Legenda
+                </h3>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <div
+                    onClick={() => setPreset("HORMOZI")}
+                    className={`cursor-pointer rounded-xl border p-4 transition-all ${preset === "HORMOZI" ? "border-[var(--ouro)] bg-[var(--superficie-2)] shadow-[0_0_15px_rgba(232,186,82,0.1)]" : "border-[var(--linha)] bg-[var(--superficie)] hover:border-[var(--linha-2)]"}`}
                   >
-                    <p className="font-semibold text-lg text-center text-white font-sans tracking-wide">Clean Corp</p>
-                    <p className="text-xs text-center text-[var(--fumaca)] mt-2">Minimalista e elegante</p>
+                    <p className="text-center text-lg font-bold text-yellow-400 uppercase italic drop-shadow-md">
+                      Viral Bold
+                    </p>
+                    <p className="mt-2 text-center text-xs text-[var(--fumaca)]">
+                      Cores chamativas e emojis
+                    </p>
+                  </div>
+                  <div
+                    onClick={() => setPreset("CLEAN")}
+                    className={`cursor-pointer rounded-xl border p-4 transition-all ${preset === "CLEAN" ? "border-[var(--ouro)] bg-[var(--superficie-2)] shadow-[0_0_15px_rgba(232,186,82,0.1)]" : "border-[var(--linha)] bg-[var(--superficie)] hover:border-[var(--linha-2)]"}`}
+                  >
+                    <p className="text-center font-sans text-lg font-semibold tracking-wide text-white">
+                      Clean Corp
+                    </p>
+                    <p className="mt-2 text-center text-xs text-[var(--fumaca)]">
+                      Minimalista e elegante
+                    </p>
+                  </div>
+                  <div
+                    onClick={() => setPreset("NONE")}
+                    className={`cursor-pointer rounded-xl border p-4 transition-all ${preset === "NONE" ? "border-[var(--ouro)] bg-[var(--superficie-2)] shadow-[0_0_15px_rgba(232,186,82,0.1)]" : "border-[var(--linha)] bg-[var(--superficie)] hover:border-[var(--linha-2)]"}`}
+                  >
+                    <p className="text-center font-sans text-lg font-semibold tracking-wide text-[var(--marfim)]">
+                      Sem Legenda
+                    </p>
+                    <p className="mt-2 text-center text-xs text-[var(--fumaca)]">
+                      Apenas áudio e vídeo original
+                    </p>
                   </div>
                 </div>
               </div>
 
-              <div className="pt-4 flex gap-4">
-                <Button 
-                  variant="outline" 
+              <div className="flex gap-4 pt-4">
+                <Button
+                  variant="outline"
                   onClick={() => setMetadata(null)}
-                  className="flex-1 bg-transparent border-[var(--linha-2)] text-[var(--marfim-2)] hover:text-[var(--marfim)] hover:bg-[var(--superficie)]"
+                  className="flex-1 border-[var(--linha-2)] bg-transparent text-[var(--marfim-2)] hover:bg-[var(--superficie)] hover:text-[var(--marfim)]"
                 >
                   Voltar
                 </Button>
-                <Button 
-                  onClick={handleSubmit} 
+                <Button
+                  onClick={handleSubmit}
                   disabled={processing || cost > userCredits}
-                  className="flex-2 w-full bg-[var(--ouro)] text-[var(--tinta)] hover:bg-[var(--ouro)]/90"
+                  className="w-full flex-2 bg-[var(--ouro)] text-[var(--tinta)] hover:bg-[var(--ouro)]/90"
                 >
-                  {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ScissorsIcon className="mr-2 h-4 w-4" />}
+                  {processing ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <ScissorsIcon className="mr-2 h-4 w-4" />
+                  )}
                   Confirmar e Processar
                 </Button>
               </div>

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { CreateProjectClient } from "~/components/dashboard/create-project-client";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
+import { getProcessingOptions } from "~/application/services/processing-options.service";
 import { db } from "~/server/db";
 
 export default async function CreateProjectPage() {
@@ -15,5 +16,9 @@ export default async function CreateProjectPage() {
     select: { credits: true },
   });
 
-  return <CreateProjectClient userCredits={userData.credits} />;
+  const options = await getProcessingOptions();
+
+  return (
+    <CreateProjectClient userCredits={userData.credits} options={options} />
+  );
 }

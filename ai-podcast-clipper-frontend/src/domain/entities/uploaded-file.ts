@@ -22,6 +22,14 @@ export interface UploadedFileEntity {
   uploaded: boolean;
   status: UploadedFileStatus;
   errorMessage?: string | null;
+  sliceStartTime?: number;
+  sliceEndTime?: number;
+  genre?: string | null;
+  targetDuration?: string | null;
+  aspectRatio?: string | null;
+  layout?: string | null;
+  autoZoom?: boolean | null;
+  subtitlePreset?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

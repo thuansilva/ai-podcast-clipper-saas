@@ -163,6 +163,11 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
     expect(parsedBody).toEqual({
       s3_key: "uploads/file-123/video.mp4",
       preset: "HORMOZI",
+      genre: "auto",
+      target_duration: "auto",
+      layout_mode: "auto",
+      aspect_ratio: "9:16",
+      auto_zoom: true,
       mode: "manual",
       manual_cuts: [
         { title: "Momento 1", start: 10, end: 40 },
@@ -300,5 +305,62 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
         }),
       })
     );
+  });
+
+  it("deve enviar parâmetros customizados de dynamic options para o Modal GPU incluindo preset NONE", async () => {
+    const mockStep = createMockStep();
+
+    mockUploadedFileFindUniqueOrThrow.mockResolvedValue({
+      id: "file-custom-opts",
+      userId: "user-456",
+      s3Key: "uploads/file-custom-opts/video.mp4",
+      durationSeconds: 120,
+      sourceType: "UPLOAD",
+      status: "queued",
+      displayName: "custom_podcast.mp4",
+      subtitlePreset: "NONE",
+      genre: "humor",
+      targetDuration: "less_than_30s",
+      layout: "split",
+      aspectRatio: "1:1",
+      autoZoom: false,
+      user: {
+        id: "user-456",
+        plan: "STARTER",
+      },
+    });
+
+    mockHoldCreditsExecute.mockResolvedValue({
+      success: true,
+      heldCredits: 2,
+    });
+
+    const result = await processVideoHandler({
+      event: {
+        data: {
+          uploadedFileId: "file-custom-opts",
+          userId: "user-456",
+        },
+      },
+      step: mockStep,
+    });
+
+    expect(result.success).toBe(true);
+
+    const fetchSpy = vi.mocked(globalThis.fetch);
+    const [, requestInit] = fetchSpy.mock.calls[0]!;
+    const parsedBody = JSON.parse(requestInit?.body as string);
+
+    expect(parsedBody).toEqual({
+      s3_key: "uploads/file-custom-opts/video.mp4",
+      preset: "NONE",
+      genre: "humor",
+      target_duration: "less_than_30s",
+      layout_mode: "split",
+      aspect_ratio: "1:1",
+      auto_zoom: false,
+      mode: "auto",
+      manual_cuts: undefined,
+    });
   });
 });

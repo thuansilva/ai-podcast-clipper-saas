@@ -32,6 +32,28 @@ vi.mock("~/inngest/client", () => ({
 
 vi.mock("next/cache", () => ({
   revalidatePath: vi.fn(),
+  unstable_cache: vi.fn((cb: any) => cb),
+}));
+
+vi.mock("~/application/services/processing-options.service", () => ({
+  getProcessingOptions: vi.fn().mockResolvedValue({
+    GENRE: [
+      { value: "humor", label: "Humor" },
+      { value: "podcast", label: "Podcast" },
+    ],
+    DURATION: [
+      { value: "30-60", label: "30-60s" },
+      { value: "60-90", label: "60-90s" },
+    ],
+    ASPECT_RATIO: [
+      { value: "9:16", label: "9:16" },
+      { value: "16:9", label: "16:9" },
+    ],
+    LAYOUT: [
+      { value: "auto", label: "Auto" },
+      { value: "split", label: "Split" },
+    ],
+  }),
 }));
 
 describe("importYouTubeVideo Server Action", () => {
@@ -186,5 +208,101 @@ describe("importYouTubeVideo Server Action", () => {
     });
 
     expect(revalidatePath).toHaveBeenCalledWith("/dashboard");
+  });
+
+  it("deve retornar erro se o genre fornecido for inválido", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    const result = await importYouTubeVideo({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      genre: "invalid_genre",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Invalid genre",
+    });
+    expect(db.uploadedFile.create).not.toHaveBeenCalled();
+  });
+
+  it("deve retornar erro se o targetDuration fornecido for inválido", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    const result = await importYouTubeVideo({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      targetDuration: "invalid_duration",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Invalid duration",
+    });
+    expect(db.uploadedFile.create).not.toHaveBeenCalled();
+  });
+
+  it("deve retornar erro se o aspectRatio fornecido for inválido", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    const result = await importYouTubeVideo({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      aspectRatio: "4:3",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Invalid aspect ratio",
+    });
+    expect(db.uploadedFile.create).not.toHaveBeenCalled();
+  });
+
+  it("deve retornar erro se o layout fornecido for inválido", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    const result = await importYouTubeVideo({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      layout: "invalid_layout",
+    });
+
+    expect(result).toEqual({
+      success: false,
+      error: "Invalid layout",
+    });
+    expect(db.uploadedFile.create).not.toHaveBeenCalled();
+  });
+
+  it("deve passar opções válidas e autoZoom para o useCase com sucesso", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    vi.mocked(db.uploadedFile.create).mockResolvedValueOnce({
+      id: "uploaded-file-custom",
+      userId: "user-123",
+      s3Key: "youtube/123/original.mp4",
+      displayName: "YouTube Video (dQw4w9WgXcQ)",
+      sourceType: "YOUTUBE",
+      youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      durationSeconds: 0,
+      creditsCost: 0,
+      uploaded: true,
+      status: "queued",
+      errorMessage: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    } as any);
+
+    vi.mocked(inngest.send).mockResolvedValueOnce({} as any);
+
+    const result = await importYouTubeVideo({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      genre: "humor",
+      targetDuration: "30-60",
+      aspectRatio: "9:16",
+      layout: "split",
+      autoZoom: true,
+    });
+
+    expect(result).toEqual({
+      success: true,
+      uploadedFileId: "uploaded-file-custom",
+    });
   });
 });
