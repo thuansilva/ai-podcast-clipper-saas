@@ -15,7 +15,7 @@ describe("HomePage", () => {
     expect(screen.getByText(/See the Intelligent Reframe in Action/i)).toBeInTheDocument();
     expect(screen.getByText(/One Click. Formatted for Every Major Feed/i)).toBeInTheDocument();
     expect(screen.getByText(/Manual Video Editing vs. Podcast Clipper/i)).toBeInTheDocument();
-    expect(screen.getByText(/No Monthly Subscriptions/i)).toBeInTheDocument();
+    
     expect(screen.getByText(/Frequently Asked Questions/i)).toBeInTheDocument();
   });
 

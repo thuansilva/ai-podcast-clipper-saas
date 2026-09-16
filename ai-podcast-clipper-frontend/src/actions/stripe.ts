@@ -11,16 +11,15 @@ import {
 import { NotFoundError } from "~/domain/errors/not-found-error";
 import { DomainError } from "~/domain/errors/domain-error";
 
-export type OneTimePackId = "small" | "medium" | "large";
-export type SubscriptionPlanId = "creator" | "pro_studio";
-export type PriceId = OneTimePackId | SubscriptionPlanId;
+export type SubscriptionPlanId = "starter" | "pro";
+export type BillingCycle = "monthly" | "annual";
+export type PriceId = `${SubscriptionPlanId}_${BillingCycle}`;
 
 const PRICE_IDS: Record<PriceId, string> = {
-  small: env.STRIPE_SMALL_CREDIT_PACK,
-  medium: env.STRIPE_MEDIUM_CREDIT_PACK,
-  large: env.STRIPE_LARGE_CREDIT_PACK,
-  creator: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
-  pro_studio: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
+  starter_monthly: env.STRIPE_STARTER_MONTHLY_PRICE_ID,
+  starter_annual: env.STRIPE_STARTER_ANNUAL_PRICE_ID,
+  pro_monthly: env.STRIPE_PRO_MONTHLY_PRICE_ID,
+  pro_annual: env.STRIPE_PRO_ANNUAL_PRICE_ID,
 };
 
 export interface CreateCheckoutSessionOptions {
@@ -57,11 +56,8 @@ export async function createCheckoutSession(
     mode = explicitMode;
   }
 
-  const resolvedMode: "payment" | "subscription" =
-    mode ??
-    (priceIdKey === "creator" || priceIdKey === "pro_studio"
-      ? "subscription"
-      : "payment");
+  // All plans are subscriptions now
+  const resolvedMode: "payment" | "subscription" = mode ?? "subscription";
 
   const resolvedPriceId =
     priceIdKey in PRICE_IDS
@@ -112,7 +108,7 @@ export const createPortalSession = createCustomerPortalSession;
 export interface UserBillingData {
   credits: number;
   subscriptionCredits: number;
-  oneTimeCredits: number;
+  oneTimeCredits: number; // Keeping this field as older users might still have one-time credits they bought
   plan?: string;
   subscription?: {
     id?: string;

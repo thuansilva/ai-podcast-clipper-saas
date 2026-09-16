@@ -2,10 +2,6 @@ import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
 export const env = createEnv({
-  /**
-   * Specify your server-side environment variables schema here. This way you can ensure the app
-   * isn't built with invalid env vars.
-   */
   server: {
     CLERK_SECRET_KEY: z.string().min(1),
     CLERK_WEBHOOK_SECRET: z.string().optional(),
@@ -21,24 +17,17 @@ export const env = createEnv({
     PROCESS_VIDEO_ENDPOINT_AUTH: z.string(),
     YOUTUBE_DOWNLOAD_ENDPOINT: z.string().optional(),
     STRIPE_SECRET_KEY: z.string(),
-    STRIPE_SMALL_CREDIT_PACK: z.string(),
-    STRIPE_MEDIUM_CREDIT_PACK: z.string(),
-    STRIPE_LARGE_CREDIT_PACK: z.string(),
-    STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID: z
-      .string()
-      .default("price_creator_monthly"),
-    STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID: z
-      .string()
-      .default("price_pro_studio_monthly"),
+    
+    // New Pricing Plans
+    STRIPE_STARTER_MONTHLY_PRICE_ID: z.string().default("price_starter_monthly"),
+    STRIPE_STARTER_ANNUAL_PRICE_ID: z.string().default("price_starter_annual"),
+    STRIPE_PRO_MONTHLY_PRICE_ID: z.string().default("price_pro_monthly"),
+    STRIPE_PRO_ANNUAL_PRICE_ID: z.string().default("price_pro_annual"),
+    
     BASE_URL: z.string(),
     STRIPE_WEBHOOK_SECRET: z.string(),
   },
 
-  /**
-   * Specify your client-side environment variables schema here. This way you can ensure the app
-   * isn't built with invalid env vars. To expose them to the client, prefix them with
-   * `NEXT_PUBLIC_`.
-   */
   client: {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().min(1),
     NEXT_PUBLIC_CLERK_SIGN_IN_URL: z.string().default("/login"),
@@ -46,15 +35,10 @@ export const env = createEnv({
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: z.string(),
   },
 
-  /**
-   * You can't destruct `process.env` as a regular object in the Next.js edge runtimes (e.g.
-   * middlewares) or client-side so we need to destruct manually.
-   */
   runtimeEnv: {
     CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY,
     CLERK_WEBHOOK_SECRET: process.env.CLERK_WEBHOOK_SECRET,
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
-      process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
     NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,
     NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL,
     DATABASE_URL: process.env.DATABASE_URL,
@@ -66,31 +50,18 @@ export const env = createEnv({
     PROCESS_VIDEO_ENDPOINT: process.env.PROCESS_VIDEO_ENDPOINT,
     PROCESS_VIDEO_ENDPOINT_AUTH: process.env.PROCESS_VIDEO_ENDPOINT_AUTH,
     YOUTUBE_DOWNLOAD_ENDPOINT: process.env.YOUTUBE_DOWNLOAD_ENDPOINT,
-    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY:
-      process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
-    STRIPE_SMALL_CREDIT_PACK: process.env.STRIPE_SMALL_CREDIT_PACK,
-    STRIPE_MEDIUM_CREDIT_PACK: process.env.STRIPE_MEDIUM_CREDIT_PACK,
-    STRIPE_LARGE_CREDIT_PACK: process.env.STRIPE_LARGE_CREDIT_PACK,
-    STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID:
-      process.env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID ??
-      process.env.STRIPE_CREATOR_SUBSCRIPTION_PRICE ??
-      "price_creator_monthly",
-    STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID:
-      process.env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID ??
-      process.env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE ??
-      "price_pro_studio_monthly",
+    
+    // New Pricing Plans mapping
+    STRIPE_STARTER_MONTHLY_PRICE_ID: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID,
+    STRIPE_STARTER_ANNUAL_PRICE_ID: process.env.STRIPE_STARTER_ANNUAL_PRICE_ID,
+    STRIPE_PRO_MONTHLY_PRICE_ID: process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
+    STRIPE_PRO_ANNUAL_PRICE_ID: process.env.STRIPE_PRO_ANNUAL_PRICE_ID,
+    
     BASE_URL: process.env.BASE_URL,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   },
-  /**
-   * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
-   * useful for Docker builds.
-   */
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
-  /**
-   * Makes it so that empty strings are treated as undefined. `SOME_VAR: z.string()` and
-   * `SOME_VAR=''` will throw an error.
-   */
   emptyStringAsUndefined: true,
 });

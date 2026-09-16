@@ -22,12 +22,11 @@ describe("Landing Conversion Components", () => {
     expect(screen.getByText(/With Podcast Clipper Studio/i)).toBeInTheDocument();
   });
 
-  it("renders PricingSection with 3 packages and correct pricing", () => {
+  it("renders PricingSection with 3 plans and correct pricing", () => {
     render(<PricingSection isAuthenticated={false} />);
-    expect(screen.getByText("$9.99")).toBeInTheDocument();
-    expect(screen.getByText("$24.99")).toBeInTheDocument();
-    expect(screen.getByText("$69.99")).toBeInTheDocument();
-    expect(screen.getAllByText(/Credits never expire/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText("$15")).toBeInTheDocument();
+    expect(screen.getByText("$29")).toBeInTheDocument();
+    expect(screen.getAllByText("Custom").length).toBeGreaterThanOrEqual(1);
   });
 
   it("renders FAQSection with answers to common creator questions", () => {

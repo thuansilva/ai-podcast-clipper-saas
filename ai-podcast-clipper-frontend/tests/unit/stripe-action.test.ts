@@ -43,11 +43,10 @@ vi.mock("~/infrastructure/factories/use-case-factories", () => ({
 
 vi.mock("~/env", () => ({
   env: {
-    STRIPE_SMALL_CREDIT_PACK: "price_small_test",
-    STRIPE_MEDIUM_CREDIT_PACK: "price_med_test",
-    STRIPE_LARGE_CREDIT_PACK: "price_large_test",
-    STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID: "price_creator_test",
-    STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID: "price_pro_test",
+    STRIPE_STARTER_MONTHLY_PRICE_ID: "price_starter_monthly_test",
+    STRIPE_STARTER_ANNUAL_PRICE_ID: "price_starter_annual_test",
+    STRIPE_PRO_MONTHLY_PRICE_ID: "price_pro_monthly_test",
+    STRIPE_PRO_ANNUAL_PRICE_ID: "price_pro_annual_test",
     BASE_URL: "https://test.saas.com",
   },
 }));
@@ -74,37 +73,37 @@ describe("Stripe Server Actions", () => {
       );
     });
 
-    it("deve criar sessão com mode 'payment' para pacote avulso small", async () => {
+    it("deve criar sessão com mode 'subscription' para starter annual", async () => {
       mockGetUserId.mockResolvedValueOnce("user-1");
       mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
       mockCreateCheckoutSession.mockResolvedValueOnce("https://stripe.com/pay/cs_123");
 
-      await expect(createCheckoutSession("small")).rejects.toThrow(
+      await expect(createCheckoutSession("starter_annual")).rejects.toThrow(
         "NEXT_REDIRECT:https://stripe.com/pay/cs_123"
       );
 
       expect(mockCreateCheckoutSession).toHaveBeenCalledWith({
         customerId: "cus_user_1",
-        priceId: "price_small_test",
-        mode: "payment",
+        priceId: "price_starter_annual_test",
+        mode: "subscription",
         successUrl: "https://test.saas.com/dashboard?success=true",
         cancelUrl: "https://test.saas.com/dashboard/billing?canceled=true",
       });
       expect(mockRedirect).toHaveBeenCalledWith("https://stripe.com/pay/cs_123");
     });
 
-    it("deve criar sessão com mode 'subscription' para plano creator", async () => {
+    it("deve criar sessão com mode 'subscription' para plano starter_monthly", async () => {
       mockGetUserId.mockResolvedValueOnce("user-1");
       mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
       mockCreateCheckoutSession.mockResolvedValueOnce("https://stripe.com/sub/cs_creator");
 
-      await expect(createCheckoutSession("creator")).rejects.toThrow(
+      await expect(createCheckoutSession("starter_monthly")).rejects.toThrow(
         "NEXT_REDIRECT:https://stripe.com/sub/cs_creator"
       );
 
       expect(mockCreateCheckoutSession).toHaveBeenCalledWith({
         customerId: "cus_user_1",
-        priceId: "price_creator_test",
+        priceId: "price_starter_monthly_test",
         mode: "subscription",
         successUrl: "https://test.saas.com/dashboard?success=true",
         cancelUrl: "https://test.saas.com/dashboard/billing?canceled=true",
@@ -112,18 +111,18 @@ describe("Stripe Server Actions", () => {
       expect(mockRedirect).toHaveBeenCalledWith("https://stripe.com/sub/cs_creator");
     });
 
-    it("deve criar sessão com mode 'subscription' para plano pro_studio", async () => {
+    it("deve criar sessão com mode 'subscription' para plano pro_annual", async () => {
       mockGetUserId.mockResolvedValueOnce("user-1");
       mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
       mockCreateCheckoutSession.mockResolvedValueOnce("https://stripe.com/sub/cs_pro");
 
-      await expect(createCheckoutSession("pro_studio")).rejects.toThrow(
+      await expect(createCheckoutSession("pro_annual")).rejects.toThrow(
         "NEXT_REDIRECT:https://stripe.com/sub/cs_pro"
       );
 
       expect(mockCreateCheckoutSession).toHaveBeenCalledWith({
         customerId: "cus_user_1",
-        priceId: "price_pro_test",
+        priceId: "price_pro_annual_test",
         mode: "subscription",
         successUrl: "https://test.saas.com/dashboard?success=true",
         cancelUrl: "https://test.saas.com/dashboard/billing?canceled=true",

@@ -41,79 +41,68 @@ interface PricingPlan {
 
 const monthlyPlans: PricingPlan[] = [
   {
-    title: "Creator",
-    price: "$19.99",
+    title: "Starter",
+    price: "$15.00",
     period: "/ mês",
-    description: "Ideal para criadores de podcast em crescimento",
+    description: "Ideal para criadores testando a plataforma",
     features: [
-      "150 créditos (~2h30) renovados todo mês",
+      "150 créditos renovados todo mês",
       "Rastreamento facial inteligente (LR-ASD)",
       "Legendas dinâmicas 1080p 60fps",
-      "Download de todos os clipes",
+      "Download sem marca d'água",
     ],
-    buttonText: "Assinar Creator",
-    priceId: "creator",
+    buttonText: "Assinar Starter Mensal",
+    priceId: "starter_monthly",
   },
   {
-    title: "Pro Studio",
-    price: "$49.99",
+    title: "Pro",
+    price: "$29.00",
     period: "/ mês",
-    strikethroughPrice: "$79.99",
-    description: "Máxima performance e prioridade para estúdios e agências",
+    description: "Para clippers e criadores frequentes",
     features: [
-      "500 créditos (~8h20) renovados todo mês",
-      "Fila prioritária GPU Ultra (máxima velocidade)",
-      "Apenas $0,10 por minuto de vídeo",
-      "Rastreamento facial inteligente (LR-ASD)",
-      "Legendas dinâmicas 1080p 60fps",
-      "Suporte prioritário 24/7",
+      "300 créditos renovados todo mês",
+      "Fila prioritária na GPU (Renderização Rápida)",
+      "Rastreamento facial inteligente",
+      "Suporte prioritário",
     ],
-    buttonText: "Assinar Pro Studio",
+    buttonText: "Assinar Pro Mensal",
     isPopular: true,
-    savePercentage: "Economize 38%",
-    priceId: "pro_studio",
+    priceId: "pro_monthly",
   },
 ];
 
-const oneTimePacks: PricingPlan[] = [
+const annualPlans: PricingPlan[] = [
   {
-    title: "Small Pack",
-    price: "$9.99",
-    description: "Perfeito para criadores eventuais de podcast",
+    title: "Starter",
+    price: "$9.50",
+    period: "/ mês",
+    strikethroughPrice: "$15.00",
+    description: "Cobrado $114 anualmente. Economize com o plano anual.",
     features: [
-      "50 créditos avulsos",
-      "Sem mensalidade / Nunca expiram",
-      "Download de todos os clipes",
+      "1.800 créditos (150/mês)",
+      "Rastreamento facial inteligente (LR-ASD)",
+      "Legendas dinâmicas 1080p 60fps",
+      "Download sem marca d'água",
     ],
-    buttonText: "Comprar 50 créditos",
-    priceId: "small",
+    buttonText: "Assinar Starter Anual",
+    priceId: "starter_annual",
   },
   {
-    title: "Medium Pack",
-    price: "$24.99",
-    description: "Melhor custo-benefício para podcasters regulares",
+    title: "Pro",
+    price: "$19.00",
+    period: "/ mês",
+    strikethroughPrice: "$29.00",
+    description: "Cobrado $228 anualmente. A escolha mais econômica.",
     features: [
-      "150 créditos avulsos",
-      "Sem mensalidade / Nunca expiram",
-      "Download de todos os clipes",
+      "3.600 créditos (300/mês)",
+      "Fila prioritária na GPU (Renderização Rápida)",
+      "Rastreamento facial inteligente",
+      "Suporte prioritário",
     ],
-    buttonText: "Comprar 150 créditos",
+    buttonText: "Assinar Pro Anual",
     isPopular: true,
-    savePercentage: "Economize 17%",
-    priceId: "medium",
-  },
-  {
-    title: "Large Pack",
-    price: "$69.99",
-    description: "Ideal para estúdios de podcast e agências",
-    features: [
-      "500 créditos avulsos",
-      "Sem mensalidade / Nunca expiram",
-      "Download de todos os clipes",
-    ],
-    buttonText: "Comprar 500 créditos",
     savePercentage: "Economize 30%",
-    priceId: "large",
+    priceId: "pro_annual",
   },
 ];
 
@@ -186,10 +175,7 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
       </CardContent>
 
       <CardFooter className="p-0">
-        <form
-          action={handleCheckout}
-          className="w-full"
-        >
+        <form action={handleCheckout} className="w-full">
           <Button
             type="submit"
             className={cn(
@@ -211,7 +197,6 @@ export interface BillingPageProps {
   user?: UserBillingData | null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function BillingPage(props?: any) {
   const initialUser = (props as BillingPageProps | undefined)?.user;
   const [user, setUser] = useState<UserBillingData | null>(initialUser ?? null);
@@ -227,13 +212,12 @@ export default function BillingPage(props?: any) {
         if (data) setUser(data);
       })
       .catch((err: unknown) => {
-        console.error("Erro ao carregar dados de faturamento do usuário:", err);
+        console.error("Erro ao carregar dados de faturamento:", err);
       });
   }, [initialUser]);
 
   const totalCredits = user?.credits ?? 0;
   const subscriptionCredits = user?.subscriptionCredits ?? 0;
-  const oneTimeCredits = user?.oneTimeCredits ?? 0;
   const activeSubscription =
     user?.subscription &&
     (user.subscription.status === "active" ||
@@ -243,7 +227,6 @@ export default function BillingPage(props?: any) {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col space-y-8 px-4 py-8">
-      {/* Top Header */}
       <div className="relative flex items-center justify-center">
         <Button
           className="absolute top-0 left-0 btn-linha !size-9 !p-0 !rounded-full"
@@ -259,15 +242,14 @@ export default function BillingPage(props?: any) {
             Faturamento & Créditos
           </h1>
           <p className="text-xs sm:text-sm text-[var(--fumaca)] max-w-xl mx-auto">
-            Economize até 38% com planos mensais recorrentes ou adquira recargas
-            avulsas que nunca expiram.
+            Escolha o plano ideal para a sua frequência de conteúdo. 
+            Cancele quando quiser.
           </p>
         </div>
       </div>
 
-      {/* Transparent Balance Header */}
       <div className="rounded-2xl border border-[var(--linha)] bg-[var(--superficie)]/60 p-6 backdrop-blur-xs shadow-sm">
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3 sm:divide-x sm:divide-[var(--linha)]">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 sm:divide-x sm:divide-[var(--linha)]">
           <div className="flex flex-col items-center text-center sm:items-start sm:text-left sm:pr-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-[var(--ouro)] uppercase tracking-wider font-mono">
               <Coins className="size-3.5" />
@@ -284,43 +266,22 @@ export default function BillingPage(props?: any) {
           <div className="flex flex-col items-center text-center sm:items-start sm:text-left sm:px-6">
             <div className="flex items-center gap-2 text-xs font-semibold text-[var(--patina)] uppercase tracking-wider font-mono">
               <Layers className="size-3.5" />
-              <span>Cota do Mês (Assinatura)</span>
+              <span>Cota de Assinatura</span>
             </div>
             <div className="mt-2 text-3xl font-bold text-[var(--marfim)]">
               {subscriptionCredits}
             </div>
             <p className="mt-1 text-xs text-[var(--fumaca)]">
-              Consumo prioritário nos cortes
+              Créditos vinculados ao seu plano
             </p>
           </div>
-
-          <div className="flex flex-col items-center text-center sm:items-start sm:text-left sm:pl-6">
-            <div className="flex items-center gap-2 text-xs font-semibold text-[var(--cobre)] uppercase tracking-wider font-mono">
-              <Zap className="size-3.5" />
-              <span>Créditos Avulsos</span>
-            </div>
-            <div className="mt-2 text-3xl font-bold text-[var(--marfim)]">
-              {oneTimeCredits}
-            </div>
-            <p className="mt-1 text-xs text-[var(--fumaca)]">
-              Permanentes • Nunca expiram
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-4 border-t border-[var(--linha)] pt-3 text-center sm:text-left">
-          <p className="text-[11px] text-[var(--fumaca)]">
-            💡 <strong className="text-[var(--marfim-2)]">Consumo Inteligente:</strong> seus créditos de assinatura mensal têm prioridade no processamento de vídeos, preservando suas recargas avulsas permanentes.
-          </p>
         </div>
       </div>
 
-      {/* Active Subscription Card (Condicional) */}
       {activeSubscription && (
         <ActiveSubscriptionCard subscription={activeSubscription} />
       )}
 
-      {/* Pricing Toggle Tabs */}
       <div className="flex justify-center pt-2">
         <PricingToggleTabs
           activeTab={activeTab}
@@ -328,40 +289,10 @@ export default function BillingPage(props?: any) {
         />
       </div>
 
-      {/* Pricing Cards Grid */}
-      <div
-        className={cn(
-          "grid grid-cols-1 gap-8",
-          activeTab === "monthly" ? "md:grid-cols-2 max-w-3xl mx-auto w-full" : "md:grid-cols-3",
-        )}
-      >
-        {(activeTab === "monthly" ? monthlyPlans : oneTimePacks).map((plan) => (
+      <div className="grid grid-cols-1 gap-8 md:grid-cols-2 max-w-3xl mx-auto w-full">
+        {(activeTab === "monthly" ? monthlyPlans : annualPlans).map((plan) => (
           <PricingCard key={plan.title} plan={plan} />
         ))}
-      </div>
-
-      {/* How Credits Work Explainer */}
-      <div className="rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] p-6 shadow-sm">
-        <h3 className="mb-4 text-base font-semibold text-[var(--marfim)]">
-          Como funcionam os créditos
-        </h3>
-        <ul className="list-disc space-y-2 pl-5 text-xs text-[var(--marfim-2)] leading-relaxed">
-          <li>
-            <strong>1 crédito = 1 minuto</strong> de vídeo processado pela inteligência artificial.
-          </li>
-          <li>
-            O algoritmo gera em média <strong>1 clipe viral a cada 5 minutos</strong> de gravação.
-          </li>
-          <li>
-            <strong>Consumo Prioritário:</strong> ao cortar um vídeo, debitamos primeiro a sua cota mensal renovada, mantendo seus créditos avulsos protegidos.
-          </li>
-          <li>
-            Créditos avulsos adquiridos <strong>nunca expiram</strong> e ficam disponíveis para sempre.
-          </li>
-          <li>
-            Assinantes contam com fila prioritária de GPU Ultra e gerenciamento autônomo pelo Stripe Portal a qualquer instante.
-          </li>
-        </ul>
       </div>
     </div>
   );

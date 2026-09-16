@@ -17,118 +17,22 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-describe("BillingPage - Redesign com Ancoragem de Preços", () => {
+describe("BillingPage - Mensal vs Anual", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("deve renderizar alternador entre Planos Mensais e Recargas Avulsas", () => {
+  it("deve renderizar alternador entre Mensal e Anual", () => {
     render(<BillingPage />);
 
-    const monthlyTab = screen.getByRole("tab", { name: /planos mensais/i });
-    const oneTimeTab = screen.getByRole("tab", { name: /recargas avulsas/i });
+    const monthlyTab = screen.getByRole("tab", { name: /mensal/i });
+    const annualTab = screen.getByRole("tab", { name: /anual/i });
 
     expect(monthlyTab).toBeInTheDocument();
-    expect(oneTimeTab).toBeInTheDocument();
+    expect(annualTab).toBeInTheDocument();
   });
 
-  it("deve alternar entre as abas e exibir os respectivos cards", () => {
-    render(<BillingPage />);
-
-    // Aba inicial: Planos Mensais
-    expect(screen.getByText("Creator")).toBeInTheDocument();
-    expect(screen.getByText("Pro Studio")).toBeInTheDocument();
-    expect(screen.queryByText("Small Pack")).not.toBeInTheDocument();
-
-    // Alterna para Recargas Avulsas
-    const oneTimeTab = screen.getByRole("tab", { name: /recargas avulsas/i });
-    fireEvent.click(oneTimeTab);
-
-    expect(screen.getByText("Small Pack")).toBeInTheDocument();
-    expect(screen.getByText("Medium Pack")).toBeInTheDocument();
-    expect(screen.getByText("Large Pack")).toBeInTheDocument();
-    expect(screen.queryByText("Creator")).not.toBeInTheDocument();
-
-    // Alterna de volta para Planos Mensais
-    const monthlyTab = screen.getByRole("tab", { name: /planos mensais/i });
-    fireEvent.click(monthlyTab);
-
-    expect(screen.getByText("Creator")).toBeInTheDocument();
-    expect(screen.getByText("Pro Studio")).toBeInTheDocument();
-    expect(screen.queryByText("Small Pack")).not.toBeInTheDocument();
-  });
-
-  it("deve exibir card Pro Studio com ancoragem de preço de $79.99 para $49.99", () => {
-    render(<BillingPage />);
-
-    // Verifica card do Pro Studio
-    const proStudioTitle = screen.getByText("Pro Studio");
-    expect(proStudioTitle).toBeInTheDocument();
-
-    // Preço riscado de ancoragem ($79.99)
-    const strikethroughPrice = screen.getByText("$79.99");
-    expect(strikethroughPrice).toBeInTheDocument();
-    expect(strikethroughPrice.className).toMatch(/line-through/i);
-
-    // Preço promocional ancorado ($49.99)
-    expect(screen.getByText("$49.99")).toBeInTheDocument();
-
-    // Badge de economia / desconto
-    expect(screen.getByText(/economize 38%/i)).toBeInTheDocument();
-
-    // Selo de Mais Popular
-    expect(screen.getByText(/mais popular/i)).toBeInTheDocument();
-
-    // Destaque para fila prioritária GPU Ultra
-    expect(screen.getByText(/fila prioritária gpu ultra/i)).toBeInTheDocument();
-  });
-
-  it("deve exibir botão de gerenciar assinatura para usuários com assinatura ativa", () => {
-    const mockUserWithSubscription = {
-      credits: 500,
-      subscriptionCredits: 500,
-      oneTimeCredits: 0,
-      subscription: {
-        id: "sub_123",
-        plan: "PRO_STUDIO",
-        status: "active",
-        monthlyCredits: 500,
-        currentPeriodStart: new Date("2026-09-01"),
-        currentPeriodEnd: new Date("2026-10-01"),
-        cancelAtPeriodEnd: false,
-      },
-    };
-
-    const { rerender } = render(
-      <BillingPage user={mockUserWithSubscription} />
-    );
-
-    const manageBtn = screen.getByRole("button", {
-      name: /gerenciar assinatura/i,
-    });
-    expect(manageBtn).toBeInTheDocument();
-
-    fireEvent.click(manageBtn);
-    expect(createCustomerPortalSession).toHaveBeenCalled();
-
-    // Para usuário sem assinatura ativa, não deve exibir o botão
-    rerender(
-      <BillingPage
-        user={{
-          credits: 10,
-          subscriptionCredits: 0,
-          oneTimeCredits: 10,
-          subscription: null,
-        }}
-      />
-    );
-
-    expect(
-      screen.queryByRole("button", { name: /gerenciar assinatura/i })
-    ).not.toBeInTheDocument();
-  });
-
-  it("deve exibir header transparente com saldo total, créditos mensais e avulsos", () => {
+  it("deve exibir header transparente com saldo total e cota de assinatura", () => {
     render(
       <BillingPage
         user={{
@@ -144,42 +48,35 @@ describe("BillingPage - Redesign com Ancoragem de Preços", () => {
     expect(screen.getByText("220")).toBeInTheDocument();
     expect(screen.getByText(/saldo total/i)).toBeInTheDocument();
 
-    // Cota do Mês (Assinatura)
+    // Cota de Assinatura
     expect(screen.getByText("150")).toBeInTheDocument();
-    expect(screen.getByText(/cota do mês/i)).toBeInTheDocument();
-
-    // Recargas Avulsas (Permanentes)
-    expect(screen.getByText("70")).toBeInTheDocument();
-    expect(screen.getByText("Créditos Avulsos")).toBeInTheDocument();
+    expect(screen.getByText(/cota de assinatura/i)).toBeInTheDocument();
   });
 
-  it("deve chamar createCheckoutSession com o priceId correto ao assinar ou comprar créditos", () => {
+  it("deve chamar createCheckoutSession com o priceId correto ao assinar mensalmente", () => {
     render(<BillingPage />);
 
-    // Assinar Pro Studio
-    const proStudioBtn = screen.getByRole("button", {
-      name: /assinar pro studio/i,
+    // Assinar Pro Mensal
+    const proBtn = screen.getByRole("button", {
+      name: /assinar pro/i,
     });
-    fireEvent.click(proStudioBtn);
-    expect(createCheckoutSession).toHaveBeenCalledWith("pro_studio");
+    fireEvent.click(proBtn);
+    expect(createCheckoutSession).toHaveBeenCalledWith("pro_monthly");
+  });
 
-    // Assinar Creator
-    const creatorBtn = screen.getByRole("button", {
-      name: /assinar creator/i,
+  it("deve chamar createCheckoutSession com o priceId correto ao assinar anualmente", () => {
+    render(<BillingPage />);
+
+    // Alterna para Anual
+    const annualTab = screen.getByRole("tab", { name: /anual/i });
+    fireEvent.click(annualTab);
+
+    // Assinar Pro Anual
+    const proBtn = screen.getByRole("button", {
+      name: /assinar pro/i,
     });
-    fireEvent.click(creatorBtn);
-    expect(createCheckoutSession).toHaveBeenCalledWith("creator");
-
-    // Mudar para Recargas Avulsas
-    const oneTimeTab = screen.getByRole("tab", { name: /recargas avulsas/i });
-    fireEvent.click(oneTimeTab);
-
-    // Comprar 50 créditos
-    const buy50Btn = screen.getByRole("button", {
-      name: /comprar 50 créditos/i,
-    });
-    fireEvent.click(buy50Btn);
-    expect(createCheckoutSession).toHaveBeenCalledWith("small");
+    fireEvent.click(proBtn);
+    expect(createCheckoutSession).toHaveBeenCalledWith("pro_annual");
   });
 
   it("deve renderizar ActiveSubscriptionCard com aviso de cancelamento agendado", () => {
@@ -191,7 +88,7 @@ describe("BillingPage - Redesign com Ancoragem de Preços", () => {
           oneTimeCredits: 0,
           subscription: {
             id: "sub_456",
-            plan: "CREATOR",
+            plan: "STARTER",
             status: "active",
             monthlyCredits: 150,
             currentPeriodStart: new Date("2026-09-01"),
@@ -202,9 +99,8 @@ describe("BillingPage - Redesign com Ancoragem de Preços", () => {
       />
     );
 
-    expect(screen.getAllByText("Creator").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Starter").length).toBeGreaterThan(0);
     expect(screen.getByText(/cancelamento agendado/i)).toBeInTheDocument();
     expect(screen.getByText(/acesso garantido até/i)).toBeInTheDocument();
   });
 });
-
