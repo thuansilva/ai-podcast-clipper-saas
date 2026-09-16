@@ -1,13 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
 import { Header } from "~/components/landing/header";
-import { HeroSection } from "~/components/landing/hero-section";
-import { ProductPreview } from "~/components/landing/product-preview";
-import { ShowcaseCarousel } from "~/components/landing/showcase-carousel";
-import { MultiPlatformSection } from "~/components/landing/multi-platform-section";
-import { ComparisonSection } from "~/components/landing/comparison-section";
+import { PricingSection } from "~/components/landing/pricing-section";
+import { PricingComparisonTable } from "~/components/landing/pricing-comparison-table";
+import { FAQSection } from "~/components/landing/faq-section";
 import { Footer } from "~/components/landing/footer";
 
-export default async function HomePage() {
+export default async function PricingPage() {
   const { userId } = await auth();
   const isAuthenticated = Boolean(userId);
 
@@ -39,7 +37,6 @@ export default async function HomePage() {
         <span className="prisma-raio prisma-raio--patina" />
       </div>
 
-      {/* Subtle Warm Amber Top Glow */}
       <div
         aria-hidden="true"
         className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 h-[500px] w-full max-w-6xl bg-[radial-gradient(ellipse_at_top,rgba(232,186,82,0.06),transparent_70%)] z-0"
@@ -48,11 +45,12 @@ export default async function HomePage() {
       <div className="relative z-10">
         <Header isAuthenticated={isAuthenticated} />
         <main>
-          <HeroSection isAuthenticated={isAuthenticated} />
-          <ProductPreview />
-          <ShowcaseCarousel />
-          <MultiPlatformSection />
-          <ComparisonSection />
+          {/* Header padding adjustment since we don't have a hero section here */}
+          <div className="pt-10">
+            <PricingSection isAuthenticated={isAuthenticated} />
+          </div>
+          <PricingComparisonTable />
+          <FAQSection />
         </main>
         <Footer />
       </div>

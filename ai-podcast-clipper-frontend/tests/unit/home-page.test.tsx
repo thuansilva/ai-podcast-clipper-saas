@@ -16,7 +16,7 @@ describe("HomePage", () => {
     expect(screen.getByText(/One Click. Formatted for Every Major Feed/i)).toBeInTheDocument();
     expect(screen.getByText(/Manual Video Editing vs. Podcast Clipper/i)).toBeInTheDocument();
     
-    expect(screen.getByText(/Frequently Asked Questions/i)).toBeInTheDocument();
+    expect(screen.getByText(/See the Magic Happen/i)).toBeInTheDocument();
   });
 
   it("passes isAuthenticated=true to sections when user is logged in", async () => {

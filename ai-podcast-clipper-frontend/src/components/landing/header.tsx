@@ -20,19 +20,19 @@ export function Header({ isAuthenticated }: { isAuthenticated: boolean }) {
 
         {/* Navigation Links */}
         <nav className="hidden items-center gap-6 text-sm text-[var(--fumaca)] md:flex">
-          <Link href="#demo" className="transition-colors hover:text-[var(--marfim)]">
+          <Link href="/#demo" className="transition-colors hover:text-[var(--marfim)]">
             Live Demo
           </Link>
-          <Link href="#platforms" className="transition-colors hover:text-[var(--marfim)]">
+          <Link href="/#showcase" className="transition-colors hover:text-[var(--marfim)]">
+            Showcase
+          </Link>
+          <Link href="/#platforms" className="transition-colors hover:text-[var(--marfim)]">
             Platforms
           </Link>
-          <Link href="#comparison" className="transition-colors hover:text-[var(--marfim)]">
-            Comparison
-          </Link>
-          <Link href="#pricing" className="transition-colors hover:text-[var(--marfim)]">
+          <Link href="/pricing" className="transition-colors hover:text-[var(--marfim)]">
             Pricing
           </Link>
-          <Link href="#faq" className="transition-colors hover:text-[var(--marfim)]">
+          <Link href="/pricing#faq" className="transition-colors hover:text-[var(--marfim)]">
             FAQ
           </Link>
         </nav>
