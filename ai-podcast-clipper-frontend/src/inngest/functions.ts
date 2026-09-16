@@ -183,8 +183,13 @@ export async function processVideoHandler({
           });
         }
 
+        const effectiveDuration =
+          uploadedFile.sliceEndTime && uploadedFile.sliceEndTime > uploadedFile.sliceStartTime
+            ? uploadedFile.sliceEndTime - uploadedFile.sliceStartTime
+            : durationSeconds;
+
         const durationValidation = validateVideoDuration(
-          durationSeconds,
+          effectiveDuration,
           uploadedFile.user?.plan
         );
         if (!durationValidation.valid) {
@@ -199,7 +204,7 @@ export async function processVideoHandler({
         const holdCreditsUseCase = makeHoldCreditsUseCase();
         const holdResult = await holdCreditsUseCase.execute({
           userId: uploadedFile.userId,
-          durationSeconds,
+          durationSeconds: effectiveDuration,
           fileId: uploadedFile.id,
           amount: isManual
             ? calculateManualCutsCredits(event.data.manualCuts!)

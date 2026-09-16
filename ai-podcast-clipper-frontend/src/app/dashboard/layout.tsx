@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import NavHeader from "~/components/nav-header";
+import { Sidebar } from "~/components/dashboard/sidebar";
+import { TopBar } from "~/components/dashboard/top-bar";
 import { Toaster } from "~/components/ui/sonner";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { makeSyncUserUseCase } from "~/infrastructure/factories/use-case-factories";
@@ -43,15 +44,25 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="relative flex min-h-screen flex-col bg-[var(--tinta)] text-[var(--marfim)] selection:bg-[var(--ouro)]/20 selection:text-[var(--ouro)]">
-      {/* Subtle Ambient Filament Glow */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 h-[450px] w-full max-w-5xl bg-[radial-gradient(ellipse_at_top,rgba(232,186,82,0.04),transparent_70%)] z-0"
-      />
-      <div className="relative z-10 flex flex-col flex-1">
-        <NavHeader credits={user.credits} email={user.email} />
-        <main className="container mx-auto flex-1 py-6">{children}</main>
+    <div className="flex h-screen overflow-hidden bg-[var(--tinta)] text-[var(--marfim)] selection:bg-[var(--ouro)]/20 selection:text-[var(--ouro)]">
+      {/* Sidebar */}
+      <Sidebar />
+      
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+        {/* Subtle Ambient Filament Glow */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 h-[450px] w-full max-w-5xl bg-[radial-gradient(ellipse_at_top,rgba(232,186,82,0.04),transparent_70%)] z-0"
+        />
+        
+        <TopBar credits={user.credits} email={user.email} />
+        
+        <main className="flex-1 overflow-y-auto z-10 relative">
+          <div className="container mx-auto p-6 max-w-6xl">
+            {children}
+          </div>
+        </main>
         <Toaster />
       </div>
     </div>

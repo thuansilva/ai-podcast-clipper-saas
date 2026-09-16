@@ -26,6 +26,8 @@ export interface ImportYouTubeVideoInput {
   preset?: string;
   mode?: ProcessingMode;
   manualCuts?: ManualCutDTO[];
+  sliceStartTime?: number;
+  sliceEndTime?: number;
 }
 
 export interface ImportYouTubeVideoOutput {

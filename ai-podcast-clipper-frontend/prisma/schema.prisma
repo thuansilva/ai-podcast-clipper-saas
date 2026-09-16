@@ -71,6 +71,8 @@ model UploadedFile {
     sourceType      String    @default("UPLOAD")
     youtubeUrl      String?
     durationSeconds Int       @default(0)
+    sliceStartTime  Int       @default(0)
+    sliceEndTime    Int       @default(0)
     creditsCost     Int       @default(0)
     uploaded        Boolean   @default(false)
     status          String    @default("queued") // processing, processed, no credits, failed

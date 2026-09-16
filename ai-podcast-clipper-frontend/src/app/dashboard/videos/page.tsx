@@ -3,7 +3,7 @@ import { RecentVideosClient } from "~/components/dashboard/recent-videos-client"
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
 
-export default async function DashboardPage() {
+export default async function VideosPage() {
   const userId = await makeAuthGateway().getUserId();
 
   if (!userId) {
@@ -15,7 +15,6 @@ export default async function DashboardPage() {
     select: {
       uploadedFiles: {
         orderBy: { createdAt: "desc" },
-        take: 12,
         select: {
           id: true,
           s3Key: true,
@@ -37,9 +36,12 @@ export default async function DashboardPage() {
     status: file.status,
     clipsCount: file._count.clips,
     createdAt: file.createdAt,
-    // Em produção, buscaríamos a thumbnail real salva. Por enquanto, a UI tem um fallback elegante.
     thumbnailUrl: undefined, 
   }));
 
-  return <RecentVideosClient uploadedFiles={formattedFiles} />;
+  return (
+    <div className="space-y-6">
+      <RecentVideosClient uploadedFiles={formattedFiles} />
+    </div>
+  );
 }

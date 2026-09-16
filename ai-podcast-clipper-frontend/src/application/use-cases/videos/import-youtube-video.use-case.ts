@@ -35,6 +35,8 @@ export class ImportYouTubeVideoUseCase {
       youtubeUrl: input.url,
       uploaded: true,
       status: "queued",
+      sliceStartTime: input.sliceStartTime ?? 0,
+      sliceEndTime: input.sliceEndTime ?? 0,
     });
 
     await this.queueGateway.sendProcessVideoEvent({

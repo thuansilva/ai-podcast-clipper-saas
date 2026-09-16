@@ -11,6 +11,8 @@ export interface ImportYouTubeVideoInput {
   preset?: string;
   mode?: ProcessingMode;
   manualCuts?: ManualCutDTO[];
+  sliceStartTime?: number;
+  sliceEndTime?: number;
 }
 
 export interface ImportYouTubeVideoResult {
@@ -28,6 +30,8 @@ export async function importYouTubeVideo({
   preset,
   mode,
   manualCuts,
+  sliceStartTime,
+  sliceEndTime,
 }: ImportYouTubeVideoInput): Promise<ImportYouTubeVideoResult> {
   const userId = await makeAuthGateway().getUserId();
   if (!userId) {
@@ -42,6 +46,8 @@ export async function importYouTubeVideo({
       preset,
       mode,
       manualCuts,
+      sliceStartTime,
+      sliceEndTime,
     });
 
     revalidatePath("/dashboard");
