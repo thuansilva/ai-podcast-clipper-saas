@@ -1,8 +1,6 @@
 import {
   CreditCard,
   LayoutDashboard,
-  PlusCircle,
-  Scissors,
   Video,
   type LucideIcon,
 } from "lucide-react";
@@ -56,12 +54,6 @@ export const sidebarItems: NavGroup[] = [
         url: "/dashboard",
         icon: LayoutDashboard,
       },
-      {
-        id: "create",
-        title: "Novo Projeto",
-        url: "/dashboard/create",
-        icon: PlusCircle,
-      },
     ],
   },
   {
@@ -73,12 +65,6 @@ export const sidebarItems: NavGroup[] = [
         title: "Meus Vídeos",
         url: "/dashboard/videos",
         icon: Video,
-      },
-      {
-        id: "clips",
-        title: "Meus Cortes",
-        url: "/dashboard/clips",
-        icon: Scissors,
       },
     ],
   },

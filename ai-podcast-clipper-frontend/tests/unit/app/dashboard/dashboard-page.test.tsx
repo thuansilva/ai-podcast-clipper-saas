@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import CreateProjectPage from "~/app/dashboard/create/page";
+import DashboardPage from "~/app/dashboard/page";
 import { redirect } from "next/navigation";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
+import { makeListUserVideosUseCase } from "~/infrastructure/factories/use-case-factories";
 import { getProcessingOptions } from "~/application/services/processing-options.service";
 import { db } from "~/server/db";
 
@@ -15,6 +16,10 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("~/infrastructure/factories/auth-factory", () => ({
   makeAuthGateway: vi.fn(),
+}));
+
+vi.mock("~/infrastructure/factories/use-case-factories", () => ({
+  makeListUserVideosUseCase: vi.fn(),
 }));
 
 vi.mock("~/application/services/processing-options.service", () => ({
@@ -37,7 +42,15 @@ vi.mock("~/components/dashboard/create-project-client", () => ({
   )),
 }));
 
-describe("CreateProjectPage", () => {
+vi.mock("~/components/dashboard/recent-videos-client", () => ({
+  RecentVideosClient: vi.fn(({ uploadedFiles }: any) => (
+    <div data-testid="recent-videos-client" data-count={uploadedFiles?.length}>
+      Videos count: {uploadedFiles?.length}
+    </div>
+  )),
+}));
+
+describe("DashboardPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -47,17 +60,17 @@ describe("CreateProjectPage", () => {
       getUserId: vi.fn().mockResolvedValue(null),
     } as any);
 
-    await expect(CreateProjectPage()).rejects.toThrow("NEXT_REDIRECT");
+    await expect(DashboardPage()).rejects.toThrow("NEXT_REDIRECT");
     expect(redirect).toHaveBeenCalledWith("/login");
   });
 
-  it("fetches credits and processing options, then renders CreateProjectClient", async () => {
+  it("fetches credits, processing options, and recent videos, then renders stacked layout", async () => {
     vi.mocked(makeAuthGateway).mockReturnValue({
       getUserId: vi.fn().mockResolvedValue("user-123"),
     } as any);
 
     vi.mocked(db.user.findUniqueOrThrow).mockResolvedValue({
-      credits: 25,
+      credits: 40,
     } as any);
 
     const mockOptions = {
@@ -75,15 +88,41 @@ describe("CreateProjectPage", () => {
     };
     vi.mocked(getProcessingOptions).mockResolvedValue(mockOptions as any);
 
-    const result = await CreateProjectPage();
+    const mockVideos = {
+      data: [
+        {
+          id: "video-1",
+          s3Key: "user-123/video-1.mp4",
+          filename: "Episode 1",
+          status: "completed",
+          clipsCount: 3,
+          createdAt: new Date(),
+        },
+      ],
+      totalCount: 1,
+      totalPages: 1,
+      currentPage: 1,
+    };
+
+    const mockExecute = vi.fn().mockResolvedValue(mockVideos);
+    vi.mocked(makeListUserVideosUseCase).mockReturnValue({
+      execute: mockExecute,
+    } as any);
+
+    const result = await DashboardPage();
 
     expect(db.user.findUniqueOrThrow).toHaveBeenCalledWith({
       where: { id: "user-123" },
       select: { credits: true },
     });
     expect(getProcessingOptions).toHaveBeenCalled();
+    expect(mockExecute).toHaveBeenCalledWith({
+      userId: "user-123",
+      limit: 5,
+    });
 
-    expect(result.props.userCredits).toBe(25);
-    expect(result.props.options).toEqual(mockOptions);
+    // Verify rendered output
+    expect(result).toBeDefined();
+    expect(result.props.className).toContain("space-y-8");
   });
 });

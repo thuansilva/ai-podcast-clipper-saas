@@ -34,19 +34,25 @@ interface VideoMetadata {
 interface CreateProjectClientProps {
   userCredits: number;
   options?: Record<string, ProcessingOption[]>;
+  children?: React.ReactNode;
+  initialUrl?: string;
+  isConfigRoute?: boolean;
 }
 
 function getDefaultOptionValue(options?: ProcessingOption[]): string {
   if (!options || options.length === 0) return "";
-  const defaultOption = options.find((opt) => opt.isDefault);
+  const defaultOption = options.find((o) => o.isDefault);
   return defaultOption ? defaultOption.value : (options[0]?.value || "");
 }
 
 export function CreateProjectClient({
   userCredits,
   options = {},
+  children,
+  initialUrl = "",
+  isConfigRoute = false,
 }: CreateProjectClientProps) {
-  const [url, setUrl] = useState("");
+  const [url, setUrl] = useState(initialUrl);
   const [metadata, setMetadata] = useState<VideoMetadata | null>(null);
   const [loadingMeta, setLoadingMeta] = useState(false);
 
@@ -81,6 +87,12 @@ export function CreateProjectClient({
 
   const handleFetchMeta = async (targetUrl: string) => {
     if (!targetUrl) return;
+
+    if (!isConfigRoute) {
+      router.push(`/dashboard/new?url=${encodeURIComponent(targetUrl)}`);
+      return;
+    }
+
     setLoadingMeta(true);
     try {
       const res = await fetch(
@@ -219,6 +231,7 @@ export function CreateProjectClient({
               </p>
             </CardContent>
           </Card>
+          {children}
         </div>
       ) : (
         <div className="animate-in fade-in slide-in-from-bottom-4 space-y-8 duration-500">

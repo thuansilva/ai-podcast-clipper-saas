@@ -4,6 +4,20 @@ import type {
   UploadedFileStatus,
 } from "../entities/uploaded-file";
 
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sort?: "asc" | "desc";
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+}
+
 export interface CreateUploadedFileInput {
   userId: string;
   s3Key: string;
@@ -36,7 +50,12 @@ export interface UpdateUploadedFileInput {
 export interface IUploadedFileRepository {
   findById(id: string): Promise<UploadedFileEntity | null>;
   findByUserId(userId: string): Promise<UploadedFileEntity[]>;
+  findPaginatedByUserId(
+    userId: string,
+    params: PaginationParams
+  ): Promise<PaginatedResult<UploadedFileEntity & { clipsCount: number }>>;
   create(input: CreateUploadedFileInput): Promise<UploadedFileEntity>;
   update(id: string, input: UpdateUploadedFileInput): Promise<UploadedFileEntity>;
   delete(id: string): Promise<void>;
 }
+

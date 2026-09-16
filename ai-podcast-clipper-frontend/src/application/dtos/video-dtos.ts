@@ -61,3 +61,29 @@ export interface TriggerVideoProcessingOutput {
   success: boolean;
   triggered: boolean;
 }
+
+export interface UploadedFileDTO {
+  id: string;
+  s3Key: string;
+  filename: string;
+  status: string;
+  clipsCount: number;
+  createdAt: Date;
+  thumbnailUrl?: string;
+}
+
+export interface ListUserVideosInput {
+  userId: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+  sort?: "asc" | "desc";
+}
+
+export interface ListUserVideosOutput {
+  data: UploadedFileDTO[];
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+}
+

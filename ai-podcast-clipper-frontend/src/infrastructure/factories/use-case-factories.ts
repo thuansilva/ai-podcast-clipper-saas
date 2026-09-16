@@ -18,6 +18,8 @@ import { ProcessSubscriptionCheckoutUseCase } from "~/application/use-cases/cred
 
 import { GenerateUploadUrlUseCase } from "~/application/use-cases/videos/generate-upload-url.use-case";
 import { ImportYouTubeVideoUseCase } from "~/application/use-cases/videos/import-youtube-video.use-case";
+import { ListUserVideosUseCase } from "~/application/use-cases/videos/list-user-videos.use-case";
+
 
 import { GetClipPlayUrlUseCase } from "~/application/use-cases/clips/get-clip-play-url.use-case";
 import { UpdateClipUseCase } from "~/application/use-cases/clips/update-clip.use-case";
@@ -103,6 +105,11 @@ export function makeImportYouTubeVideoUseCase(): ImportYouTubeVideoUseCase {
     new InngestQueueGateway()
   );
 }
+
+export function makeListUserVideosUseCase(): ListUserVideosUseCase {
+  return new ListUserVideosUseCase(new PrismaUploadedFileRepository());
+}
+
 
 // --- Fábricas de Clipes ---
 export function makeGetClipPlayUrlUseCase(): GetClipPlayUrlUseCase {

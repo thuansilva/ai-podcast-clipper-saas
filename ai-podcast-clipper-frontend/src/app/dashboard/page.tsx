@@ -1,6 +1,9 @@
 import { redirect } from "next/navigation";
+import { CreateProjectClient } from "~/components/dashboard/create-project-client";
 import { RecentVideosClient } from "~/components/dashboard/recent-videos-client";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
+import { makeListUserVideosUseCase } from "~/infrastructure/factories/use-case-factories";
+import { getProcessingOptions } from "~/application/services/processing-options.service";
 import { db } from "~/server/db";
 
 export default async function DashboardPage() {
@@ -10,36 +13,27 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const userData = await db.user.findUniqueOrThrow({
-    where: { id: userId },
-    select: {
-      uploadedFiles: {
-        orderBy: { createdAt: "desc" },
-        take: 12,
-        select: {
-          id: true,
-          s3Key: true,
-          displayName: true,
-          status: true,
-          createdAt: true,
-          _count: {
-            select: { clips: true },
-          },
-        },
-      },
-    },
-  });
+  const listUserVideosUseCase = makeListUserVideosUseCase();
+  const [userData, options, videos] = await Promise.all([
+    db.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { credits: true },
+    }),
+    getProcessingOptions(),
+    listUserVideosUseCase.execute({ userId, limit: 5 }),
+  ]);
 
-  const formattedFiles = userData.uploadedFiles.map((file) => ({
-    id: file.id,
-    s3Key: file.s3Key,
-    filename: file.displayName ?? "Unknown filename",
-    status: file.status,
-    clipsCount: file._count.clips,
-    createdAt: file.createdAt,
-    // Em produção, buscaríamos a thumbnail real salva. Por enquanto, a UI tem um fallback elegante.
-    thumbnailUrl: undefined, 
-  }));
+  const credits = userData.credits;
 
-  return <RecentVideosClient uploadedFiles={formattedFiles} />;
+  return (
+    <div className="space-y-8">
+      <CreateProjectClient userCredits={credits} options={options}>
+        <hr className="border-[var(--linha)]" />
+        <div>
+          <h2 className="text-xl font-semibold mb-4 text-[var(--marfim)]">Acessados Recentemente</h2>
+          <RecentVideosClient uploadedFiles={videos.data} />
+        </div>
+      </CreateProjectClient>
+    </div>
+  );
 }

@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { AppSidebar } from "~/components/dashboard/sidebar/app-sidebar";
 import { Toaster } from "~/components/ui/sonner";
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "~/components/ui/sidebar";
+import { Badge } from "~/components/ui/badge";
+import { Coins } from "lucide-react";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { makeSyncUserUseCase } from "~/infrastructure/factories/use-case-factories";
 import { db } from "~/server/db";
@@ -77,6 +79,13 @@ export default async function DashboardLayout({
                   {/* Optional Search */}
                 </div>
                 <div className="flex items-center gap-2">
+                  <Badge
+                    variant="default"
+                    className="flex h-8 items-center gap-1.5 bg-[var(--ouro)] px-3 py-1 font-mono text-xs font-semibold text-[var(--tinta)] hover:bg-[var(--ouro)]/90 mr-2 border-none"
+                  >
+                    <Coins className="h-4 w-4" />
+                    {user.credits} créditos
+                  </Badge>
                   <LayoutControls />
                   <ThemeSwitcher />
                   <AccountSwitcher />

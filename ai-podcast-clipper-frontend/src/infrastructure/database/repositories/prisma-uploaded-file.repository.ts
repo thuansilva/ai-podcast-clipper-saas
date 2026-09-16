@@ -7,6 +7,8 @@ import type {
 import type {
   CreateUploadedFileInput,
   IUploadedFileRepository,
+  PaginatedResult,
+  PaginationParams,
   UpdateUploadedFileInput,
 } from "~/domain/ports/uploaded-file-repository";
 
@@ -70,6 +72,76 @@ export class PrismaUploadedFileRepository implements IUploadedFileRepository {
       createdAt: file.createdAt,
       updatedAt: file.updatedAt,
     }));
+  }
+
+  async findPaginatedByUserId(
+    userId: string,
+    params: PaginationParams
+  ): Promise<PaginatedResult<UploadedFileEntity & { clipsCount: number }>> {
+    const page = params.page && params.page > 0 ? params.page : 1;
+    const limit = params.limit && params.limit > 0 ? params.limit : 10;
+    const skip = (page - 1) * limit;
+    const take = limit;
+    const search = params.search?.trim();
+    const sort = params.sort === "asc" ? "asc" : "desc";
+
+    const where = {
+      userId,
+      ...(search
+        ? {
+            displayName: {
+              contains: search,
+              mode: "insensitive" as const,
+            },
+          }
+        : {}),
+    };
+
+    const [totalCount, files] = await Promise.all([
+      db.uploadedFile.count({ where }),
+      db.uploadedFile.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { createdAt: sort },
+        include: {
+          _count: {
+            select: { clips: true },
+          },
+        },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return {
+      data: files.map((file) => ({
+        id: file.id,
+        userId: file.userId,
+        s3Key: file.s3Key,
+        displayName: file.displayName,
+        sourceType: file.sourceType as SourceType,
+        youtubeUrl: file.youtubeUrl,
+        durationSeconds: file.durationSeconds,
+        creditsCost: file.creditsCost,
+        uploaded: file.uploaded,
+        status: file.status as UploadedFileStatus,
+        errorMessage: file.errorMessage,
+        sliceStartTime: file.sliceStartTime,
+        sliceEndTime: file.sliceEndTime,
+        genre: file.genre,
+        clipModel: file.clipModel,
+        aspectRatio: file.aspectRatio,
+        autoZoom: file.autoZoom,
+        subtitlePreset: file.subtitlePreset,
+        createdAt: file.createdAt,
+        updatedAt: file.updatedAt,
+        clipsCount: file._count.clips,
+      })),
+      totalCount,
+      totalPages,
+      currentPage: page,
+    };
   }
 
   async create(input: CreateUploadedFileInput): Promise<UploadedFileEntity> {

@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
-import { Loader2, PlayCircleIcon } from "lucide-react";
+import { PlayCircleIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
@@ -17,9 +17,19 @@ interface RecentVideosClientProps {
     createdAt: Date;
     thumbnailUrl?: string;
   }[];
+  title?: string;
+  description?: string;
+  hideHeader?: boolean;
+  emptyMessage?: string;
 }
 
-export function RecentVideosClient({ uploadedFiles }: RecentVideosClientProps) {
+export function RecentVideosClient({
+  uploadedFiles,
+  title = "Visão Geral",
+  description = "Acompanhe seus últimos projetos e processamentos em andamento.",
+  hideHeader = false,
+  emptyMessage = "Nenhum projeto recente.",
+}: RecentVideosClientProps) {
   
   const router = useRouter();
   const wasProcessingRef = useRef<boolean>(false);
@@ -43,10 +53,12 @@ export function RecentVideosClient({ uploadedFiles }: RecentVideosClientProps) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--marfim)]">Visão Geral</h1>
-        <p className="text-sm text-[var(--fumaca)]">Acompanhe seus últimos projetos e processamentos em andamento.</p>
-      </div>
+      {!hideHeader && (
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-[var(--marfim)]">{title}</h1>
+          <p className="text-sm text-[var(--fumaca)]">{description}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {uploadedFiles.map((file) => {
@@ -103,7 +115,7 @@ export function RecentVideosClient({ uploadedFiles }: RecentVideosClientProps) {
         
         {uploadedFiles.length === 0 && (
           <div className="col-span-full py-20 text-center border border-dashed border-[var(--linha-2)] rounded-2xl bg-[var(--superficie-2)]/30">
-            <p className="text-[var(--fumaca)]">Nenhum projeto recente.</p>
+            <p className="text-[var(--fumaca)]">{emptyMessage}</p>
           </div>
         )}
       </div>
