@@ -3,7 +3,7 @@
 import { Card, CardContent } from "~/components/ui/card";
 import { Badge } from "~/components/ui/badge";
 import { Loader2, PlayCircleIcon } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 
@@ -20,7 +20,7 @@ interface RecentVideosClientProps {
 }
 
 export function RecentVideosClient({ uploadedFiles }: RecentVideosClientProps) {
-  const [refreshing, setRefreshing] = useState(false);
+  
   const router = useRouter();
   const wasProcessingRef = useRef<boolean>(false);
 

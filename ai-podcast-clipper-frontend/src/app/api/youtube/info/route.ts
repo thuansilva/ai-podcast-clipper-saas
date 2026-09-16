@@ -23,9 +23,9 @@ export async function GET(request: Request) {
       throw new Error("Video not found or private");
     }
 
-    const oembedData = await oembedResponse.json();
-    const title = oembedData.title;
-    const thumbnailUrl = oembedData.thumbnail_url;
+    const oembedData = (await oembedResponse.json()) as { title?: string; thumbnail_url?: string };
+    const title = oembedData.title ?? "";
+    const thumbnailUrl = oembedData.thumbnail_url ?? "";
 
     // Para buscar a duração sem bibliotecas pesadas, fazemos um fetch rápido na página HTML
     // e usamos regex para extrair lengthSeconds
@@ -39,8 +39,8 @@ export async function GET(request: Request) {
     let durationSeconds = 0;
     if (pageResponse.ok) {
       const html = await pageResponse.text();
-      const match = html.match(/"lengthSeconds":"(\d+)"/);
-      if (match && match[1]) {
+      const match = /"lengthSeconds":"(\d+)"/.exec(html);
+      if (match?.[1]) {
         durationSeconds = parseInt(match[1], 10);
       }
     }
@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       durationSeconds,
       thumbnailUrl,
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Failed to fetch youtube info:", error);
     return NextResponse.json({ error: "Failed to fetch video info" }, { status: 500 });
   }

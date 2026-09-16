@@ -98,7 +98,8 @@ export function ShowcaseCarousel() {
                 {/* Mockup Overlay for context */}
                 <div className="absolute inset-0 bg-gradient-to-t from-[var(--tinta)] via-transparent to-transparent opacity-80 z-20" />
                 
-                <img
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+<img
                   src={showcase.bgImage}
                   alt={showcase.title}
                   className="w-full h-full object-cover opacity-60 scale-105 transition-transform duration-[10s] group-hover:scale-100"

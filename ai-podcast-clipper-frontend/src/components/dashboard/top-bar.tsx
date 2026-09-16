@@ -1,8 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { UserButton } from "@clerk/nextjs";
+
 import { ThemeToggle } from "~/components/theme-toggle";
+import { SidebarTrigger } from "~/components/ui/sidebar";
 
 export function TopBar({ credits, email }: { credits: number; email: string }) {
   const pathname = usePathname();
@@ -15,15 +16,19 @@ export function TopBar({ credits, email }: { credits: number; email: string }) {
 
   return (
     <header className="h-16 flex items-center justify-between px-6 border-b border-[var(--linha)] bg-[var(--tinta)]/80 backdrop-blur-md sticky top-0 z-30">
-      <div className="flex items-center gap-2 text-sm text-[var(--fumaca)] font-medium">
-        {breadcrumbs.map((crumb, idx) => (
-          <span key={idx} className="flex items-center gap-2">
-            {idx > 0 && <span className="text-[var(--linha-2)]">/</span>}
-            <span className={idx === breadcrumbs.length - 1 ? "text-[var(--marfim)]" : ""}>
-              {crumb}
+      <div className="flex items-center gap-4">
+        <SidebarTrigger className="-ml-1 text-[var(--fumaca)] hover:text-[var(--marfim)]" />
+        <div className="h-4 w-px bg-[var(--linha)] hidden sm:block"></div>
+        <div className="flex items-center gap-2 text-sm text-[var(--fumaca)] font-medium">
+          {breadcrumbs.map((crumb, idx) => (
+            <span key={idx} className="flex items-center gap-2">
+              {idx > 0 && <span className="text-[var(--linha-2)]">/</span>}
+              <span className={idx === breadcrumbs.length - 1 ? "text-[var(--marfim)]" : ""}>
+                {crumb}
+              </span>
             </span>
-          </span>
-        ))}
+          ))}
+        </div>
       </div>
       
       <div className="flex items-center gap-4">
@@ -32,7 +37,6 @@ export function TopBar({ credits, email }: { credits: number; email: string }) {
           <span className="text-xs font-mono text-[var(--ouro)] font-semibold">{credits} credits left</span>
         </div>
         <ThemeToggle />
-        <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: "h-8 w-8 rounded-full border border-[var(--linha-2)]" } }} />
       </div>
     </header>
   );

@@ -12,7 +12,6 @@ import {
 } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Select } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
 import {
   Loader2,
@@ -40,7 +39,7 @@ interface CreateProjectClientProps {
 function getDefaultOptionValue(options?: ProcessingOption[]): string {
   if (!options || options.length === 0) return "";
   const defaultOption = options.find((opt) => opt.isDefault);
-  return defaultOption ? defaultOption.value : (options[0]?.value ?? "");
+  return defaultOption ? defaultOption.value : (options[0]?.value || "");
 }
 
 export function CreateProjectClient({
@@ -56,14 +55,11 @@ export function CreateProjectClient({
   const [genre, setGenre] = useState(() =>
     getDefaultOptionValue(options.GENRE),
   );
-  const [targetDuration, setTargetDuration] = useState(() =>
-    getDefaultOptionValue(options.DURATION),
+  const [clipModel, setClipModel] = useState(() =>
+    getDefaultOptionValue(options.CLIP_MODEL),
   );
   const [aspectRatio, setAspectRatio] = useState(() =>
     getDefaultOptionValue(options.ASPECT_RATIO),
-  );
-  const [layout, setLayout] = useState(() =>
-    getDefaultOptionValue(options.LAYOUT),
   );
   const [autoZoom, setAutoZoom] = useState(true);
 
@@ -75,16 +71,13 @@ export function CreateProjectClient({
     if (options.GENRE?.length && !genre) {
       setGenre(getDefaultOptionValue(options.GENRE));
     }
-    if (options.DURATION?.length && !targetDuration) {
-      setTargetDuration(getDefaultOptionValue(options.DURATION));
+    if (options.CLIP_MODEL?.length && !clipModel) {
+      setClipModel(getDefaultOptionValue(options.CLIP_MODEL));
     }
     if (options.ASPECT_RATIO?.length && !aspectRatio) {
       setAspectRatio(getDefaultOptionValue(options.ASPECT_RATIO));
     }
-    if (options.LAYOUT?.length && !layout) {
-      setLayout(getDefaultOptionValue(options.LAYOUT));
-    }
-  }, [options, genre, targetDuration, aspectRatio, layout]);
+  }, [options, genre, clipModel, aspectRatio]);
 
   const handleFetchMeta = async (targetUrl: string) => {
     if (!targetUrl) return;
@@ -93,14 +86,14 @@ export function CreateProjectClient({
       const res = await fetch(
         `/api/youtube/info?url=${encodeURIComponent(targetUrl)}`,
       );
-      const data = await res.json();
+      const data = (await res.json()) as { error?: string; title?: string; durationSeconds?: number; thumbnailUrl?: string; };
       if (!res.ok) throw new Error(data.error || "Failed to fetch metadata");
 
-      setMetadata(data);
-      const defaultDuration = Math.min(5 * 60, data.durationSeconds);
+      setMetadata(data as VideoMetadata);
+      const defaultDuration = Math.min(5 * 60, data.durationSeconds || 300);
       setRange([0, Math.floor(defaultDuration / 60)]);
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Erro desconhecido");
     } finally {
       setLoadingMeta(false);
     }
@@ -114,14 +107,14 @@ export function CreateProjectClient({
     ) {
       // Debounce simples para evitar múltiplas chamadas se o usuário estiver digitando
       const timer = setTimeout(() => {
-        handleFetchMeta(url);
+        void handleFetchMeta(url);
       }, 500);
       return () => clearTimeout(timer);
     }
   }, [url]);
 
-  const startMin = range[0] ?? 0;
-  const endMin = range[1] ?? 5;
+  const startMin = range[0] || 0;
+  const endMin = range[1] || 5;
   const cost = Math.max(1, endMin - startMin);
 
   const handleSubmit = async () => {
@@ -143,9 +136,8 @@ export function CreateProjectClient({
         sliceEndTime: endMin * 60,
         mode: "auto",
         genre: genre || undefined,
-        targetDuration: targetDuration || undefined,
+        clipModel: clipModel || undefined,
         aspectRatio: aspectRatio || undefined,
-        layout: layout || undefined,
         autoZoom,
       });
 
@@ -156,8 +148,8 @@ export function CreateProjectClient({
       toast.success("Vídeo enviado para processamento!");
       router.push("/dashboard");
       router.refresh();
-    } catch (e: any) {
-      toast.error(e.message || "Ocorreu um erro ao processar o vídeo.");
+    } catch (e: unknown) {
+      toast.error((e instanceof Error ? e.message : "Ocorreu um erro ao processar o vídeo."));
       setProcessing(false);
     }
   };
@@ -233,7 +225,8 @@ export function CreateProjectClient({
           <div className="grid grid-cols-1 gap-8 md:grid-cols-12">
             <div className="md:col-span-4">
               <div className="overflow-hidden rounded-xl border border-[var(--linha)] bg-[var(--superficie)] shadow-lg">
-                <img
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+<img
                   src={metadata.thumbnailUrl}
                   alt="Thumbnail"
                   className="aspect-video w-full object-cover"
@@ -250,17 +243,17 @@ export function CreateProjectClient({
             </div>
 
             <div className="space-y-6 md:col-span-8">
-              <Card className="border-[var(--linha)] bg-[var(--superficie)]">
-                <CardHeader className="pb-4">
-                  <CardTitle className="flex items-center gap-2 text-lg text-[var(--marfim)]">
-                    <ScissorsIcon className="h-4 w-4 text-[var(--ouro)]" />
+              <div className="space-y-6 rounded-xl border border-[var(--linha)] bg-[var(--superficie)] p-6">
+                <div>
+                  <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--marfim)]">
+                    <ScissorsIcon className="h-5 w-5 text-[var(--ouro)]" />
                     Fatiador Inteligente
-                  </CardTitle>
-                  <CardDescription className="text-[var(--fumaca)]">
+                  </h2>
+                  <p className="mt-1 text-sm text-[var(--fumaca)]">
                     Deslize para selecionar o trecho que nossa IA deve analisar
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-8">
+                  </p>
+                </div>
+                <div className="space-y-8">
                   <div className="px-2 pt-4 pb-2">
                     <Slider
                       value={range}
@@ -268,8 +261,8 @@ export function CreateProjectClient({
                       max={Math.floor(metadata.durationSeconds / 60)}
                       step={1}
                       onValueChange={(val) => {
-                        const v0 = val[0] ?? 0;
-                        const v1 = val[1] ?? v0 + 1;
+                        const v0 = val[0] || 0;
+                        const v1 = val[1] || v0 + 1;
                         const maxMinutes = Math.floor(
                           metadata.durationSeconds / 60,
                         );
@@ -304,22 +297,22 @@ export function CreateProjectClient({
                       <span className="text-sm font-normal">Créditos</span>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
               {/* Opções de Processamento Dinâmicas */}
-              <Card className="border-[var(--linha)] bg-[var(--superficie)]">
-                <CardHeader className="pb-4">
-                  <CardTitle className="flex items-center gap-2 text-lg text-[var(--marfim)]">
-                    <SlidersHorizontalIcon className="h-4 w-4 text-[var(--ouro)]" />
+              <div className="space-y-6 rounded-xl border border-[var(--linha)] bg-[var(--superficie)] p-6">
+                <div>
+                  <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--marfim)]">
+                    <SlidersHorizontalIcon className="h-5 w-5 text-[var(--ouro)]" />
                     Configurações do Corte
-                  </CardTitle>
-                  <CardDescription className="text-[var(--fumaca)]">
-                    Personalize o formato, duração e estilo dos seus cortes
+                  </h2>
+                  <p className="mt-1 text-sm text-[var(--fumaca)]">
+                    Personalize o formato, foco e estilo dos seus cortes
                     gerados por IA
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
+                  </p>
+                </div>
+                <div className="space-y-6">
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {/* Gênero */}
                     <div className="space-y-2">
@@ -329,7 +322,7 @@ export function CreateProjectClient({
                       >
                         Gênero do Conteúdo
                       </Label>
-                      <Select
+                      <select
                         id="select-genre"
                         aria-label="Gênero do Conteúdo"
                         value={genre}
@@ -353,25 +346,25 @@ export function CreateProjectClient({
                             Padrão
                           </option>
                         )}
-                      </Select>
+                      </select>
                     </div>
 
-                    {/* Duração */}
+                    {/* Modelo do Clipe */}
                     <div className="space-y-2">
                       <Label
-                        htmlFor="select-duration"
+                        htmlFor="select-clip-model"
                         className="text-sm font-medium text-[var(--marfim)]"
                       >
-                        Duração do Corte
+                        Modelo do Clipe (Modo de IA)
                       </Label>
-                      <Select
-                        id="select-duration"
-                        aria-label="Duração do Corte"
-                        value={targetDuration}
-                        onChange={(e) => setTargetDuration(e.target.value)}
+                      <select
+                        id="select-clip-model"
+                        aria-label="Modelo do Clipe"
+                        value={clipModel}
+                        onChange={(e) => setClipModel(e.target.value)}
                       >
-                        {options.DURATION && options.DURATION.length > 0 ? (
-                          options.DURATION.map((opt) => (
+                        {options.CLIP_MODEL && options.CLIP_MODEL.length > 0 ? (
+                          options.CLIP_MODEL.map((opt) => (
                             <option
                               key={opt.id || opt.value}
                               value={opt.value}
@@ -381,14 +374,22 @@ export function CreateProjectClient({
                             </option>
                           ))
                         ) : (
-                          <option
-                            value=""
-                            className="bg-[var(--superficie)] text-[var(--marfim)]"
-                          >
-                            Padrão
-                          </option>
+                          <>
+                            <option
+                              value="auto"
+                              className="bg-[var(--superficie)] text-[var(--marfim)]"
+                            >
+                              Padrão
+                            </option>
+                            <option
+                              value="face_focus"
+                              className="bg-[var(--superficie)] text-[var(--marfim)]"
+                            >
+                              Foco no enquadramento
+                            </option>
+                          </>
                         )}
-                      </Select>
+                      </select>
                     </div>
 
                     {/* Proporção */}
@@ -399,7 +400,7 @@ export function CreateProjectClient({
                       >
                         Proporção (Aspect Ratio)
                       </Label>
-                      <Select
+                      <select
                         id="select-aspect-ratio"
                         aria-label="Proporção"
                         value={aspectRatio}
@@ -418,48 +419,13 @@ export function CreateProjectClient({
                           ))
                         ) : (
                           <option
-                            value=""
+                            value="9:16"
                             className="bg-[var(--superficie)] text-[var(--marfim)]"
                           >
-                            Padrão
+                            9:16 (Vertical)
                           </option>
                         )}
-                      </Select>
-                    </div>
-
-                    {/* Layout */}
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="select-layout"
-                        className="text-sm font-medium text-[var(--marfim)]"
-                      >
-                        Layout do Vídeo
-                      </Label>
-                      <Select
-                        id="select-layout"
-                        aria-label="Layout"
-                        value={layout}
-                        onChange={(e) => setLayout(e.target.value)}
-                      >
-                        {options.LAYOUT && options.LAYOUT.length > 0 ? (
-                          options.LAYOUT.map((opt) => (
-                            <option
-                              key={opt.id || opt.value}
-                              value={opt.value}
-                              className="bg-[var(--superficie)] text-[var(--marfim)]"
-                            >
-                              {opt.label}
-                            </option>
-                          ))
-                        ) : (
-                          <option
-                            value=""
-                            className="bg-[var(--superficie)] text-[var(--marfim)]"
-                          >
-                            Padrão
-                          </option>
-                        )}
-                      </Select>
+                      </select>
                     </div>
                   </div>
 
@@ -484,14 +450,19 @@ export function CreateProjectClient({
                       onCheckedChange={setAutoZoom}
                     />
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
 
               {/* Estilo da Legenda */}
-              <div className="space-y-4">
-                <h3 className="text-sm font-medium text-[var(--marfim)]">
-                  Estilo da Legenda
-                </h3>
+              <div className="space-y-4 rounded-xl border border-[var(--linha)] bg-[var(--superficie)] p-6">
+                <div>
+                  <h2 className="text-lg font-semibold text-[var(--marfim)]">
+                    Estilo da Legenda
+                  </h2>
+                  <p className="mt-1 text-sm text-[var(--fumaca)]">
+                    Escolha a aparência visual do texto gerado
+                  </p>
+                </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div
                     onClick={() => setPreset("HORMOZI")}

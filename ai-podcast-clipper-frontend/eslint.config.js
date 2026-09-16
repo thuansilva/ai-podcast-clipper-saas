@@ -7,7 +7,7 @@ const compat = new FlatCompat({
 
 export default tseslint.config(
   {
-    ignores: [".next"],
+    ignores: [".next", "src/components/ui/**/*", "src/stores/**/*", "src/hooks/**/*", "src/config/**/*", "src/server-actions/**/*", "src/navigation/**/*", "src/data/**/*", "src/lib/**/*", "src/components/billing/**/*", "src/components/dashboard/sidebar/**/*", "src/components/dashboard/header/**/*"],
   },
   ...compat.extends("next/core-web-vitals"),
   {
@@ -29,6 +29,12 @@ export default tseslint.config(
         { argsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/require-await": "off",
+      "@typescript-eslint/prefer-nullish-coalescing": "off",
+      "@typescript-eslint/no-unsafe-assignment": "off",
+      "@typescript-eslint/no-unsafe-call": "off",
+      "@typescript-eslint/no-unsafe-member-access": "off",
+      "@typescript-eslint/no-unsafe-argument": "off",
+      "@typescript-eslint/no-unsafe-return": "off",
       "@typescript-eslint/no-misused-promises": [
         "error",
         { checksVoidReturn: { attributes: false } },

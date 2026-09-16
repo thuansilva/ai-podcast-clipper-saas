@@ -252,11 +252,9 @@ export async function processVideoHandler({
           s3_key: video.s3Key,
           preset: video.subtitlePreset ?? preset ?? "NONE",
           genre: video.genre ?? "auto",
-          target_duration: video.targetDuration ?? "auto",
-          layout_mode: video.layout ?? "auto",
           aspect_ratio: video.aspectRatio ?? "9:16",
           auto_zoom: video.autoZoom ?? true,
-          mode: event.data.mode ?? "auto",
+          mode: video.clipModel ?? event.data.mode ?? "auto",
           manual_cuts: event.data.manualCuts?.map((c) => ({
             title: c.title,
             start: c.startTime,

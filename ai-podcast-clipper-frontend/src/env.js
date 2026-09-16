@@ -23,6 +23,11 @@ export const env = createEnv({
     STRIPE_STARTER_ANNUAL_PRICE_ID: z.string().default("price_starter_annual"),
     STRIPE_PRO_MONTHLY_PRICE_ID: z.string().default("price_pro_monthly"),
     STRIPE_PRO_ANNUAL_PRICE_ID: z.string().default("price_pro_annual"),
+    STRIPE_SMALL_CREDIT_PACK: z.string().default("price_small"),
+    STRIPE_MEDIUM_CREDIT_PACK: z.string().default("price_medium"),
+    STRIPE_LARGE_CREDIT_PACK: z.string().default("price_large"),
+    STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID: z.string().default("price_creator"),
+    STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID: z.string().default("price_pro_studio"),
     
     BASE_URL: z.string(),
     STRIPE_WEBHOOK_SECRET: z.string(),
@@ -58,6 +63,11 @@ export const env = createEnv({
     STRIPE_STARTER_ANNUAL_PRICE_ID: process.env.STRIPE_STARTER_ANNUAL_PRICE_ID,
     STRIPE_PRO_MONTHLY_PRICE_ID: process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
     STRIPE_PRO_ANNUAL_PRICE_ID: process.env.STRIPE_PRO_ANNUAL_PRICE_ID,
+    STRIPE_SMALL_CREDIT_PACK: process.env.STRIPE_SMALL_CREDIT_PACK,
+    STRIPE_MEDIUM_CREDIT_PACK: process.env.STRIPE_MEDIUM_CREDIT_PACK,
+    STRIPE_LARGE_CREDIT_PACK: process.env.STRIPE_LARGE_CREDIT_PACK,
+    STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID: process.env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
+    STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID: process.env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
     
     BASE_URL: process.env.BASE_URL,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,

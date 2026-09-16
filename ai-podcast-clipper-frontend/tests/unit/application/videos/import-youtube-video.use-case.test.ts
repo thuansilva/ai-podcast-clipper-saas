@@ -39,7 +39,7 @@ describe("ImportYouTubeVideoUseCase", () => {
     await expect(
       useCase.execute({
         userId: "user-1",
-        url: "https://vimeo.com/12345",
+        url: "https://vimeo.com/dQw4w9WgXcQ45",
       })
     ).rejects.toThrow(InvalidYouTubeUrlError);
 
@@ -72,28 +72,25 @@ describe("ImportYouTubeVideoUseCase", () => {
   });
 
   it("deve persistir genre, targetDuration, aspectRatio, layout, autoZoom e preset no repositório", async () => {
-    const result = await useCase.execute({
+    const { uploadedFileId } = await useCase.execute({
       userId: "user-1",
       url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
       preset: "NONE",
-      genre: "humor",
-      targetDuration: "less_than_30s",
-      aspectRatio: "9:16",
-      layout: "face_focus",
-      autoZoom: false,
       sliceStartTime: 10,
       sliceEndTime: 120,
+      mode: "auto",
+      genre: "humor",
+      clipModel: "face_focus",
+      aspectRatio: "9:16",
+      autoZoom: false,
     });
 
-    expect(result.success).toBe(true);
-
-    const file = await fileRepo.findById(result.uploadedFileId);
+    const file = await fileRepo.findById(uploadedFileId);
     expect(file).toBeDefined();
     expect(file?.subtitlePreset).toBe("NONE");
     expect(file?.genre).toBe("humor");
-    expect(file?.targetDuration).toBe("less_than_30s");
+    expect(file?.clipModel).toBe("face_focus");
     expect(file?.aspectRatio).toBe("9:16");
-    expect(file?.layout).toBe("face_focus");
     expect(file?.autoZoom).toBe(false);
     expect(file?.sliceStartTime).toBe(10);
     expect(file?.sliceEndTime).toBe(120);

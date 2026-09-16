@@ -164,8 +164,6 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
       s3_key: "uploads/file-123/video.mp4",
       preset: "HORMOZI",
       genre: "auto",
-      target_duration: "auto",
-      layout_mode: "auto",
       aspect_ratio: "9:16",
       auto_zoom: true,
       mode: "manual",
@@ -355,12 +353,9 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
       s3_key: "uploads/file-custom-opts/video.mp4",
       preset: "NONE",
       genre: "humor",
-      target_duration: "less_than_30s",
-      layout_mode: "split",
       aspect_ratio: "1:1",
       auto_zoom: false,
       mode: "auto",
-      manual_cuts: undefined,
     });
   });
 });

@@ -15,9 +15,8 @@ export interface ImportYouTubeVideoInput {
   sliceStartTime?: number;
   sliceEndTime?: number;
   genre?: string;
-  targetDuration?: string;
+  clipModel?: string;
   aspectRatio?: string;
-  layout?: string;
   autoZoom?: boolean;
 }
 
@@ -46,19 +45,13 @@ export async function importYouTubeVideo(
       throw new DomainError("Invalid genre");
     }
     if (
-      input.targetDuration &&
-      !options.DURATION?.some((o) => o.value === input.targetDuration)
-    ) {
-      throw new DomainError("Invalid duration");
-    }
-    if (
       input.aspectRatio &&
       !options.ASPECT_RATIO?.some((o) => o.value === input.aspectRatio)
     ) {
       throw new DomainError("Invalid aspect ratio");
     }
-    if (input.layout && !options.LAYOUT?.some((o) => o.value === input.layout)) {
-      throw new DomainError("Invalid layout");
+    if (input.clipModel && !options.CLIP_MODEL?.some((o) => o.value === input.clipModel)) {
+      throw new DomainError("Invalid clip model");
     }
 
     const useCase = makeImportYouTubeVideoUseCase();
@@ -71,9 +64,8 @@ export async function importYouTubeVideo(
       sliceStartTime: input.sliceStartTime,
       sliceEndTime: input.sliceEndTime,
       genre: input.genre,
-      targetDuration: input.targetDuration,
+      clipModel: input.clipModel,
       aspectRatio: input.aspectRatio,
-      layout: input.layout,
       autoZoom: input.autoZoom,
     });
 

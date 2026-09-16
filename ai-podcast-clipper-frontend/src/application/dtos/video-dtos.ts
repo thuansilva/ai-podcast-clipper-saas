@@ -29,9 +29,8 @@ export interface ImportYouTubeVideoInput {
   sliceStartTime?: number;
   sliceEndTime?: number;
   genre?: string;
-  targetDuration?: string;
+  clipModel?: string;
   aspectRatio?: string;
-  layout?: string;
   autoZoom?: boolean;
 }
 

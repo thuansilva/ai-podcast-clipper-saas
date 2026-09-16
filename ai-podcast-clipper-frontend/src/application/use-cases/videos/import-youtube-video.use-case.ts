@@ -38,9 +38,8 @@ export class ImportYouTubeVideoUseCase {
       sliceStartTime: input.sliceStartTime ?? 0,
       sliceEndTime: input.sliceEndTime ?? 0,
       genre: input.genre,
-      targetDuration: input.targetDuration,
+      clipModel: input.clipModel,
       aspectRatio: input.aspectRatio,
-      layout: input.layout,
       autoZoom: input.autoZoom,
       subtitlePreset: input.preset,
     });

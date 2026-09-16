@@ -55,26 +55,6 @@ const mockOptions: Record<string, ProcessingOption[]> = {
       isDefault: true,
     },
   ],
-  DURATION: [
-    {
-      id: "3",
-      type: "DURATION",
-      value: "30-60",
-      label: "30 a 60 segundos",
-      order: 1,
-      isActive: true,
-      isDefault: true,
-    },
-    {
-      id: "4",
-      type: "DURATION",
-      value: "60-90",
-      label: "60 a 90 segundos",
-      order: 2,
-      isActive: true,
-      isDefault: false,
-    },
-  ],
   ASPECT_RATIO: [
     {
       id: "5",
@@ -95,21 +75,21 @@ const mockOptions: Record<string, ProcessingOption[]> = {
       isDefault: false,
     },
   ],
-  LAYOUT: [
+  CLIP_MODEL: [
     {
       id: "7",
-      type: "LAYOUT",
+      type: "CLIP_MODEL",
       value: "auto",
-      label: "Automático",
+      label: "Padrão",
       order: 1,
       isActive: true,
       isDefault: true,
     },
     {
       id: "8",
-      type: "LAYOUT",
-      value: "split",
-      label: "Dividido",
+      type: "CLIP_MODEL",
+      value: "face_focus",
+      label: "Foco no Rosto",
       order: 2,
       isActive: true,
       isDefault: false,
@@ -161,9 +141,9 @@ describe("CreateProjectClient", () => {
     // Verify dynamic options rendered
     expect(screen.getByText("Configurações do Corte")).toBeInTheDocument();
     expect(screen.getByText("Gênero do Conteúdo")).toBeInTheDocument();
-    expect(screen.getByText("Duração do Corte")).toBeInTheDocument();
+    expect(screen.getByText("Modelo do Clipe (Modo de IA)")).toBeInTheDocument();
     expect(screen.getByText("Proporção (Aspect Ratio)")).toBeInTheDocument();
-    expect(screen.getByText("Layout do Vídeo")).toBeInTheDocument();
+    expect(screen.getByText("Auto Zoom")).toBeInTheDocument();
     expect(screen.getByText("Auto Zoom")).toBeInTheDocument();
 
     // Verify Sem Legenda card is present
@@ -198,18 +178,16 @@ describe("CreateProjectClient", () => {
     ) as HTMLSelectElement;
     expect(genreSelect.value).toBe("podcast"); // id: 2 isDefault
 
-    const durationSelect = screen.getByLabelText(
-      "Duração do Corte",
+    const clipModelSelect = screen.getByLabelText(
+      "Modelo do Clipe (Modo de IA)",
     ) as HTMLSelectElement;
-    expect(durationSelect.value).toBe("30-60"); // id: 3 isDefault
+    expect(clipModelSelect.value).toBe("auto"); // id: 7 isDefault
 
     const aspectSelect = screen.getByLabelText(
       "Proporção",
     ) as HTMLSelectElement;
     expect(aspectSelect.value).toBe("9:16");
 
-    const layoutSelect = screen.getByLabelText("Layout") as HTMLSelectElement;
-    expect(layoutSelect.value).toBe("auto");
 
     const autoZoomSwitch = screen.getByLabelText(
       "Auto Zoom",
@@ -267,9 +245,8 @@ describe("CreateProjectClient", () => {
         sliceEndTime: 300,
         mode: "auto",
         genre: "humor",
-        targetDuration: "30-60",
+        clipModel: "auto",
         aspectRatio: "9:16",
-        layout: "auto",
         autoZoom: false,
       });
     });

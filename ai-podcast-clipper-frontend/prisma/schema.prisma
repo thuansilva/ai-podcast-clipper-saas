@@ -78,9 +78,8 @@ model UploadedFile {
   status          String   @default("queued") // processing, processed, no credits, failed
   errorMessage    String?
   genre           String?
-  targetDuration  String?
+  clipModel       String?
   aspectRatio     String?
-  layout          String?
   autoZoom        Boolean?
   subtitlePreset  String?
   createdAt       DateTime @default(now())

@@ -1,11 +1,18 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-import { Sidebar } from "~/components/dashboard/sidebar";
-import { TopBar } from "~/components/dashboard/top-bar";
+import { AppSidebar } from "~/components/dashboard/sidebar/app-sidebar";
 import { Toaster } from "~/components/ui/sonner";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "~/components/ui/sidebar";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { makeSyncUserUseCase } from "~/infrastructure/factories/use-case-factories";
 import { db } from "~/server/db";
+import { AccountSwitcher } from "~/components/dashboard/header/account-switcher";
+import { LayoutControls } from "~/components/dashboard/header/layout-controls";
+import { ThemeSwitcher } from "~/components/dashboard/header/theme-switcher";
+import { Separator } from "~/components/ui/separator";
+import { PreferencesStoreProvider } from "~/stores/preferences/preferences-provider";
+import { PREFERENCE_DEFAULTS } from "~/lib/preferences/preferences-config";
+import { TooltipProvider } from "~/components/ui/tooltip";
 
 export default async function DashboardLayout({
   children,
@@ -21,7 +28,7 @@ export default async function DashboardLayout({
 
   let user = await db.user.findUnique({
     where: { id: userId },
-    select: { credits: true, email: true },
+    select: { credits: true, email: true, image: true },
   });
 
   if (!user) {
@@ -32,39 +39,58 @@ export default async function DashboardLayout({
         clerkUserId: userId,
         email: authUser.email,
         name: authUser.name,
-        image: authUser.imageUrl,
+        image: authUser.imageUrl ?? null,
       });
       user = {
         credits: syncedUser.credits,
         email: syncedUser.email,
+        image: authUser.imageUrl ?? null,
       };
     } else {
       redirect("/login");
     }
   }
 
+  // Adapter for the template's users list
+  const users = [
+    {
+      id: userId,
+      name: user.email.split("@")[0] ?? "User",
+      email: user.email,
+      role: "User",
+      avatar: user.image ?? "",
+      status: "active" as const,
+    }
+  ];
+
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--tinta)] text-[var(--marfim)] selection:bg-[var(--ouro)]/20 selection:text-[var(--ouro)]">
-      {/* Sidebar */}
-      <Sidebar />
-      
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
-        {/* Subtle Ambient Filament Glow */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none fixed top-0 left-1/2 -translate-x-1/2 h-[450px] w-full max-w-5xl bg-[radial-gradient(ellipse_at_top,rgba(232,186,82,0.04),transparent_70%)] z-0"
-        />
-        
-        <TopBar credits={user.credits} email={user.email} />
-        
-        <main className="flex-1 overflow-y-auto z-10 relative">
-          <div className="container mx-auto p-6 max-w-6xl">
-            {children}
-          </div>
-        </main>
-        <Toaster />
-      </div>
-    </div>
+    <TooltipProvider>
+      <PreferencesStoreProvider initialValues={PREFERENCE_DEFAULTS}>
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset className="relative flex-1 min-w-0 flex flex-col">
+            <header className="flex h-12 shrink-0 items-center gap-2 border-b">
+              <div className="flex w-full items-center justify-between px-4 lg:px-6">
+                <div className="flex items-center gap-1 lg:gap-2">
+                  <SidebarTrigger className="-ml-1" />
+                  <Separator orientation="vertical" className="mx-2 h-4" />
+                  {/* Optional Search */}
+                </div>
+                <div className="flex items-center gap-2">
+                  <LayoutControls />
+                  <ThemeSwitcher />
+                  <AccountSwitcher />
+                </div>
+              </div>
+            </header>
+
+            <main className="flex-1 overflow-y-auto p-4 md:p-6">
+              {children}
+            </main>
+            <Toaster />
+          </SidebarInset>
+        </SidebarProvider>
+      </PreferencesStoreProvider>
+    </TooltipProvider>
   );
 }

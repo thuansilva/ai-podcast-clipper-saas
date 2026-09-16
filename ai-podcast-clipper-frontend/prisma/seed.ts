@@ -42,8 +42,35 @@ async function main() {
       create: user,
     });
   }
-
   console.log(`✅ Seeded ${usersToSeed.length} users successfully.`);
+
+  console.log("Seeding Processing Options...");
+
+  const processingOptions = [
+    // Gêneros (GENRE)
+    { type: "GENRE", value: "humor", label: "Humor", order: 1, isDefault: false },
+    { type: "GENRE", value: "perguntas", label: "Perguntas", order: 2, isDefault: false },
+    { type: "GENRE", value: "jogos", label: "Jogos", order: 3, isDefault: false },
+    { type: "GENRE", value: "outros", label: "Outros (Padrão)", order: 4, isDefault: true },
+
+    // Proporções (ASPECT_RATIO)
+    { type: "ASPECT_RATIO", value: "9:16", label: "9:16 (TikTok/Reels/Shorts)", order: 1, isDefault: true },
+    { type: "ASPECT_RATIO", value: "1:1", label: "1:1 (Quadrado/Feed)", order: 2, isDefault: false },
+    { type: "ASPECT_RATIO", value: "16:9", label: "16:9 (YouTube Padrão)", order: 3, isDefault: false },
+    { type: "ASPECT_RATIO", value: "4:5", label: "4:5 (Instagram Portrait)", order: 4, isDefault: false },
+
+    // Modelo de Clipe (CLIP_MODEL)
+    { type: "CLIP_MODEL", value: "auto", label: "Padrão (Auto)", order: 1, isDefault: true },
+    { type: "CLIP_MODEL", value: "face_focus", label: "Foco no Rosto", order: 2, isDefault: false },
+  ];
+
+  // Limpa as opções antigas para evitar duplicidade e recria
+  await prisma.processingOption.deleteMany({});
+  for (const opt of processingOptions) {
+    await prisma.processingOption.create({ data: opt });
+  }
+
+  console.log(`✅ Seeded ${processingOptions.length} processing options successfully.`);
 }
 
 main()

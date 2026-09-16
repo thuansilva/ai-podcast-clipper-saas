@@ -25,9 +25,8 @@ export interface UploadedFileEntity {
   sliceStartTime?: number;
   sliceEndTime?: number;
   genre?: string | null;
-  targetDuration?: string | null;
+  clipModel?: string | null;
   aspectRatio?: string | null;
-  layout?: string | null;
   autoZoom?: boolean | null;
   subtitlePreset?: string | null;
   createdAt: Date;
