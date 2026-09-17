@@ -72,7 +72,7 @@ export function RecentVideosClient({
               className="block group focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ouro)] rounded-2xl"
             >
               <Card className="overflow-hidden border border-[var(--linha)] bg-[var(--superficie)] rounded-2xl transition-all group-hover:border-[var(--linha-2)] flex flex-col h-full">
-                <div className="relative aspect-[9/16] bg-[var(--superficie-2)] overflow-hidden shrink-0">
+                <div className="relative aspect-video bg-[var(--superficie-2)] overflow-hidden shrink-0">
                   {/* Thumbnail */}
                   <div 
                     className={`absolute inset-0 bg-cover bg-center transition-all ${isProcessing ? "blur-sm scale-105 opacity-60" : "opacity-90 group-hover:opacity-100"}`}
