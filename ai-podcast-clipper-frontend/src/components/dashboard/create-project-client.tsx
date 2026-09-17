@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
-import { Input } from "~/components/ui/input";
+import {   } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
 import {
@@ -11,7 +11,7 @@ import {
   ScissorsIcon,
   UploadCloudIcon,
   SlidersHorizontalIcon,
-  LinkIcon,
+  
   YoutubeIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -31,6 +31,7 @@ interface CreateProjectClientProps {
   children?: React.ReactNode;
   initialUrl?: string;
   isConfigRoute?: boolean;
+  initialMetadata?: VideoMetadata | null;
 }
 
 function getDefaultOptionValue(options?: ProcessingOption[]): string {
@@ -45,12 +46,19 @@ export function CreateProjectClient({
   children,
   initialUrl = "",
   isConfigRoute = false,
+  initialMetadata = null,
 }: CreateProjectClientProps) {
   const [url, setUrl] = useState(initialUrl);
-  const [metadata, setMetadata] = useState<VideoMetadata | null>(null);
+  const [metadata, setMetadata] = useState<VideoMetadata | null>(initialMetadata);
   const [loadingMeta, setLoadingMeta] = useState(false);
 
-  const [range, setRange] = useState<[number, number]>([0, 5]);
+  const [range, setRange] = useState<[number, number]>(() => {
+    if (initialMetadata?.durationSeconds) {
+      const defaultDuration = Math.min(5 * 60, initialMetadata.durationSeconds);
+      return [0, Math.floor(defaultDuration / 60)];
+    }
+    return [0, 5];
+  });
   const [preset, setPreset] = useState("HORMOZI");
   const [genre, setGenre] = useState(() =>
     getDefaultOptionValue(options.GENRE),
@@ -82,12 +90,13 @@ export function CreateProjectClient({
   const handleFetchMeta = async (targetUrl: string) => {
     if (!targetUrl) return;
 
+    setLoadingMeta(true);
+
     if (!isConfigRoute) {
       router.push(`/dashboard/new?url=${encodeURIComponent(targetUrl)}`);
       return;
     }
 
-    setLoadingMeta(true);
     try {
       const res = await fetch(
         `/api/youtube/info?url=${encodeURIComponent(targetUrl)}`,
@@ -107,6 +116,8 @@ export function CreateProjectClient({
 
   // Auto-fetch quando a URL parece ser do YouTube
   useEffect(() => {
+    if (metadata && url === initialUrl) return;
+
     if (
       url &&
       (url.includes("youtube.com/watch") || url.includes("youtu.be/"))
@@ -117,7 +128,7 @@ export function CreateProjectClient({
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [url]);
+  }, [url, metadata, initialUrl]);
 
   const startMin = range[0] || 0;
   const endMin = range[1] || 5;
@@ -181,7 +192,7 @@ export function CreateProjectClient({
                 Cole o link do seu vídeo do YouTube e nossa IA cuidará de todo o resto para você.
               </p>
 
-              {/* Input Form Area */}
+              {/*   Form Area */}
               <div className="w-full max-w-2xl mt-8 relative group">
                 <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-[var(--ouro)]/0 via-[var(--ouro)]/40 to-[var(--ouro)]/0 blur opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 
@@ -197,18 +208,10 @@ export function CreateProjectClient({
                     className="flex-1 bg-transparent border-none outline-none text-base md:text-lg text-[var(--marfim)] placeholder:text-[var(--fumaca)]/50 px-2 h-14 w-full"
                   />
 
-                  {loadingMeta ? (
+                  {loadingMeta && (
                     <div className="pr-4">
                       <Loader2 className="h-5 w-5 animate-spin text-[var(--ouro)]" />
                     </div>
-                  ) : (
-                    <button 
-                      onClick={() => url && handleFetchMeta(url)}
-                      disabled={!url}
-                      className="h-12 px-6 rounded-full bg-[var(--ouro)] text-[var(--tinta)] font-bold text-base flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--ouro)]/90 transition-colors"
-                    >
-                      Cortar
-                    </button>
                   )}
                 </div>
 

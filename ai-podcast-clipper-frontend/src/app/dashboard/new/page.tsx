@@ -5,6 +5,7 @@ import { getProcessingOptions } from "~/application/services/processing-options.
 import { db } from "~/server/db";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { fetchYouTubeVideoInfo } from "~/actions/youtube-info";
 
 export default async function NewProjectPage(props: {
   searchParams: Promise<{ url?: string }>;
@@ -17,6 +18,15 @@ export default async function NewProjectPage(props: {
 
   const searchParams = await props.searchParams;
   const initialUrl = searchParams.url || "";
+
+  let initialMetadata = null;
+  if (initialUrl) {
+    try {
+      initialMetadata = await fetchYouTubeVideoInfo(initialUrl);
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
   const [userData, options] = await Promise.all([
     db.user.findUniqueOrThrow({
@@ -42,6 +52,7 @@ export default async function NewProjectPage(props: {
         options={options}
         initialUrl={initialUrl}
         isConfigRoute={true}
+        initialMetadata={initialMetadata}
       />
     </div>
   );
