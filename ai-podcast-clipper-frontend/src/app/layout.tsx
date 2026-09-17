@@ -3,6 +3,7 @@ import "~/styles/globals.css";
 
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
+import { Toaster } from "~/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "Podcast Clipper",
@@ -36,6 +37,7 @@ export default function RootLayout({
         </head>
         <body className="bg-[var(--tinta)] text-[var(--marfim)] selection:bg-[var(--ouro)]/20 selection:text-[var(--ouro)] min-h-screen">
           {children}
+          <Toaster />
         </body>
       </html>
     </ClerkProvider>

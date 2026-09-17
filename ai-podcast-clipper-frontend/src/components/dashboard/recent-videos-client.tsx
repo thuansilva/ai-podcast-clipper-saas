@@ -95,7 +95,7 @@ export function RecentVideosClient({
                     {file.filename}
                   </h3>
                   <div className="flex justify-between items-center mt-auto pt-2 border-t border-[var(--linha)]/50">
-                    <span className="text-[10px] sm:text-xs text-[var(--fumaca)] font-mono">{new Date(file.createdAt).toLocaleDateString()}</span>
+                    <span className="text-[10px] sm:text-xs text-[var(--fumaca)] font-mono">{new Date(file.createdAt).toLocaleDateString("pt-BR")}</span>
                     
                     {isProcessing ? (
                       <Badge variant="outline" className="text-[9px] sm:text-[10px] px-1.5 py-0 sm:px-2 sm:py-0.5 font-mono uppercase bg-[var(--ouro)]/10 text-[var(--ouro)] border-[var(--ouro)]/50 shadow-[0_0_10px_rgba(232,186,82,0.15)] animate-pulse">

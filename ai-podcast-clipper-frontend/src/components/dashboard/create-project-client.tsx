@@ -164,7 +164,7 @@ export function CreateProjectClient({
     <div className="w-full">
       {!metadata ? (
         <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="relative flex flex-col items-center justify-center pt-24 pb-16 w-full mb-12">
+          <div className="relative flex flex-col items-center justify-center pt-8 pb-16 w-full mb-12">
             {/* Background huge text */}
             <div className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none select-none z-0">
               <h1 className="text-[10rem] md:text-[14rem] font-black text-[var(--superficie-2)]/50 tracking-tighter whitespace-nowrap">
@@ -212,8 +212,12 @@ export function CreateProjectClient({
                   )}
                 </div>
 
-                <div className="mt-6 flex items-center justify-center">
-                  <button className="flex items-center gap-2 text-sm text-[var(--fumaca)] hover:text-[var(--marfim)] transition-colors cursor-pointer group/btn">
+                <div className="mt-6 flex items-center justify-center relative z-10">
+                  <button 
+                    type="button"
+                    onClick={() => toast.info("Upload de arquivo local estará disponível em breve!")}
+                    className="flex items-center gap-2 text-sm text-[var(--fumaca)] hover:text-[var(--marfim)] transition-colors cursor-pointer group/btn"
+                  >
                     <UploadCloudIcon className="h-4 w-4 group-hover/btn:-translate-y-0.5 transition-transform" />
                     <span className="font-medium underline underline-offset-4 decoration-[var(--linha-2)] group-hover/btn:decoration-[var(--marfim)]/50">
                       Enviar

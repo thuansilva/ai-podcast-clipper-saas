@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { AppSidebar } from "~/components/dashboard/sidebar/app-sidebar";
-import { Toaster } from "~/components/ui/sonner";
+
 import { SidebarProvider, SidebarInset, SidebarTrigger } from "~/components/ui/sidebar";
 import { Badge } from "~/components/ui/badge";
 import { Coins } from "lucide-react";
@@ -91,7 +91,7 @@ export default async function DashboardLayout({
           <main className="flex-1 overflow-y-auto p-4 md:p-6">
             {children}
           </main>
-          <Toaster />
+          
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
