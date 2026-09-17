@@ -3,22 +3,16 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
 import {
   Loader2,
   ScissorsIcon,
-  YoutubeIcon,
   UploadCloudIcon,
   SlidersHorizontalIcon,
+  LinkIcon,
+  YoutubeIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { importYouTubeVideo } from "~/actions/youtube";
@@ -167,74 +161,84 @@ export function CreateProjectClient({
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--marfim)]">
-          Criar Novo Projeto
-        </h1>
-        <p className="text-sm text-[var(--fumaca)]">
-          Cole a URL, defina o tempo de corte e deixe a Inteligência Artificial
-          fazer o resto.
-        </p>
-      </div>
-
+    <div className="w-full">
       {!metadata ? (
-        <div className="space-y-6">
-          <Card className="border-[var(--linha)] bg-[var(--superficie)]">
-            <CardHeader>
-              <CardTitle className="text-lg text-[var(--marfim)]">
-                Importar do YouTube
-              </CardTitle>
-              <CardDescription className="text-[var(--fumaca)]">
-                Copie e cole o link do vídeo para começarmos
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="relative">
-                <YoutubeIcon className="absolute top-2.5 left-3 h-5 w-5 text-[var(--linha-2)]" />
-                <Input
-                  placeholder="https://youtube.com/watch?v=..."
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  className="border-[var(--linha)] bg-[var(--tinta)] pr-10 pl-10 text-[var(--marfim)]"
-                />
-                {loadingMeta && (
-                  <div className="absolute top-2.5 right-3">
-                    <Loader2 className="h-5 w-5 animate-spin text-[var(--ouro)]" />
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-[var(--linha)]" />
+        <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="relative flex flex-col items-center justify-center pt-24 pb-16 w-full mb-12">
+            {/* Background huge text */}
+            <div className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none select-none z-0">
+              <h1 className="text-[10rem] md:text-[14rem] font-black text-[var(--superficie-2)]/50 tracking-tighter whitespace-nowrap">
+                AI CLIPPER
+              </h1>
             </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-[var(--tinta)] px-2 text-[var(--fumaca)]">
-                Ou
-              </span>
+
+            <div className="relative z-10 w-full max-w-3xl flex flex-col items-center text-center space-y-6">
+              <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight text-[var(--marfim)]">
+                Transforme vídeos longos em <span className="text-[var(--ouro)]">Cortes Virais</span>
+              </h1>
+              
+              <p className="text-lg text-[var(--fumaca)] max-w-xl">
+                Cole o link do seu vídeo do YouTube e nossa IA cuidará de todo o resto para você.
+              </p>
+
+              {/* Input Form Area */}
+              <div className="w-full max-w-2xl mt-8 relative group">
+                <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-[var(--ouro)]/0 via-[var(--ouro)]/40 to-[var(--ouro)]/0 blur opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                
+                <div className="relative flex items-center bg-[var(--superficie)] rounded-full border border-[var(--linha)] p-2 shadow-2xl focus-within:border-[var(--ouro)] transition-all">
+                  <div className="pl-4 pr-2 flex items-center justify-center text-[var(--linha-2)]">
+                    <YoutubeIcon className="h-6 w-6 group-focus-within:text-[var(--ouro)] transition-colors" />
+                  </div>
+                  
+                  <input
+                    placeholder="Cole o link do YouTube (ex: https://youtube.com/watch?v=...)"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                    className="flex-1 bg-transparent border-none outline-none text-base md:text-lg text-[var(--marfim)] placeholder:text-[var(--fumaca)]/50 px-2 h-14 w-full"
+                  />
+
+                  {loadingMeta ? (
+                    <div className="pr-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-[var(--ouro)]" />
+                    </div>
+                  ) : (
+                    <button 
+                      onClick={() => url && handleFetchMeta(url)}
+                      disabled={!url}
+                      className="h-12 px-6 rounded-full bg-[var(--ouro)] text-[var(--tinta)] font-bold text-base flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--ouro)]/90 transition-colors"
+                    >
+                      Cortar
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-6 flex items-center justify-center">
+                  <button className="flex items-center gap-2 text-sm text-[var(--fumaca)] hover:text-[var(--marfim)] transition-colors cursor-pointer group/btn">
+                    <UploadCloudIcon className="h-4 w-4 group-hover/btn:-translate-y-0.5 transition-transform" />
+                    <span className="font-medium underline underline-offset-4 decoration-[var(--linha-2)] group-hover/btn:decoration-[var(--marfim)]/50">
+                      Enviar
+                    </span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-
-          <Card className="cursor-pointer border-dashed border-[var(--linha)] bg-[var(--superficie)] opacity-70 transition-opacity hover:opacity-100">
-            <CardContent className="flex flex-col items-center justify-center p-8 text-center">
-              <div className="mb-4 rounded-full bg-[var(--superficie-2)] p-3">
-                <UploadCloudIcon className="h-6 w-6 text-[var(--marfim)]" />
-              </div>
-              <p className="text-sm font-medium text-[var(--marfim)]">
-                Fazer upload de arquivo local
-              </p>
-              <p className="mt-1 text-xs text-[var(--fumaca)]">
-                MP4, MOV ou WebM (Em breve)
-              </p>
-            </CardContent>
-          </Card>
-          {children}
+          
+          <div className="w-full mx-auto">
+            {children}
+          </div>
         </div>
       ) : (
-        <div className="animate-in fade-in slide-in-from-bottom-4 space-y-8 duration-500">
+        <div className="max-w-4xl mx-auto space-y-8">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-[var(--marfim)] mb-1">
+              Configurar Projeto
+            </h1>
+            <p className="text-sm text-[var(--fumaca)]">
+              Ajuste os parâmetros de corte e deixe a IA fazer o resto.
+            </p>
+          </div>
+          <div className="animate-in fade-in slide-in-from-bottom-4 space-y-8 duration-500">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-12">
             <div className="md:col-span-4">
               <div className="overflow-hidden rounded-xl border border-[var(--linha)] bg-[var(--superficie)] shadow-lg">
@@ -536,6 +540,7 @@ export function CreateProjectClient({
               </div>
             </div>
           </div>
+        </div>
         </div>
       )}
     </div>

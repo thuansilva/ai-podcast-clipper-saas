@@ -9,11 +9,8 @@ import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { makeSyncUserUseCase } from "~/infrastructure/factories/use-case-factories";
 import { db } from "~/server/db";
 import { AccountSwitcher } from "~/components/dashboard/header/account-switcher";
-import { LayoutControls } from "~/components/dashboard/header/layout-controls";
-import { ThemeSwitcher } from "~/components/dashboard/header/theme-switcher";
+import { ThemeToggle } from "~/components/theme-toggle";
 import { Separator } from "~/components/ui/separator";
-import { PreferencesStoreProvider } from "~/stores/preferences/preferences-provider";
-import { PREFERENCE_DEFAULTS } from "~/lib/preferences/preferences-config";
 import { TooltipProvider } from "~/components/ui/tooltip";
 
 export default async function DashboardLayout({
@@ -67,39 +64,36 @@ export default async function DashboardLayout({
 
   return (
     <TooltipProvider>
-      <PreferencesStoreProvider initialValues={PREFERENCE_DEFAULTS}>
-        <SidebarProvider>
-          <AppSidebar />
-          <SidebarInset className="relative flex-1 min-w-0 flex flex-col">
-            <header className="flex h-12 shrink-0 items-center gap-2 border-b">
-              <div className="flex w-full items-center justify-between px-4 lg:px-6">
-                <div className="flex items-center gap-1 lg:gap-2">
-                  <SidebarTrigger className="-ml-1" />
-                  <Separator orientation="vertical" className="mx-2 h-4" />
-                  {/* Optional Search */}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="default"
-                    className="flex h-8 items-center gap-1.5 bg-[var(--ouro)] px-3 py-1 font-mono text-xs font-semibold text-[var(--tinta)] hover:bg-[var(--ouro)]/90 mr-2 border-none"
-                  >
-                    <Coins className="h-4 w-4" />
-                    {user.credits} créditos
-                  </Badge>
-                  <LayoutControls />
-                  <ThemeSwitcher />
-                  <AccountSwitcher />
-                </div>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset className="relative flex-1 min-w-0 flex flex-col">
+          <header className="flex h-12 shrink-0 items-center gap-2 border-b">
+            <div className="flex w-full items-center justify-between px-4 lg:px-6">
+              <div className="flex items-center gap-1 lg:gap-2">
+                <SidebarTrigger className="-ml-1" />
+                <Separator orientation="vertical" className="mx-2 h-4" />
+                {/* Optional Search */}
               </div>
-            </header>
+              <div className="flex items-center gap-2">
+                <Badge
+                  variant="default"
+                  className="flex h-8 items-center gap-1.5 bg-[var(--ouro)] px-3 py-1 font-mono text-xs font-semibold text-[var(--tinta)] hover:bg-[var(--ouro)]/90 mr-2 border-none"
+                >
+                  <Coins className="h-4 w-4" />
+                  {user.credits} créditos
+                </Badge>
+                <ThemeToggle />
+                <AccountSwitcher />
+              </div>
+            </div>
+          </header>
 
-            <main className="flex-1 overflow-y-auto p-4 md:p-6">
-              {children}
-            </main>
-            <Toaster />
-          </SidebarInset>
-        </SidebarProvider>
-      </PreferencesStoreProvider>
+          <main className="flex-1 overflow-y-auto p-4 md:p-6">
+            {children}
+          </main>
+          <Toaster />
+        </SidebarInset>
+      </SidebarProvider>
     </TooltipProvider>
   );
 }

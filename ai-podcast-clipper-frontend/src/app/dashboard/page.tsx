@@ -31,7 +31,7 @@ export default async function DashboardPage() {
         <hr className="border-[var(--linha)]" />
         <div>
           <h2 className="text-xl font-semibold mb-4 text-[var(--marfim)]">Acessados Recentemente</h2>
-          <RecentVideosClient uploadedFiles={videos.data} />
+          <RecentVideosClient uploadedFiles={videos.data} hideHeader />
         </div>
       </CreateProjectClient>
     </div>

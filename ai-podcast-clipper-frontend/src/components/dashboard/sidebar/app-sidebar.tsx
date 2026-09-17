@@ -3,8 +3,6 @@
 import Link from "next/link";
 
 import { Command } from "lucide-react";
-import { useShallow } from "zustand/react/shallow";
-
 import {
   Sidebar,
   SidebarContent,
@@ -15,28 +13,14 @@ import {
   SidebarMenuItem,
 } from "~/components/ui/sidebar";
 import { APP_CONFIG } from "~/config/app-config";
-import { rootUser } from "~/data/users";
 import { sidebarItems } from "~/navigation/sidebar/sidebar-items";
-import { usePreferencesStore } from "~/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
-import { NavUser } from "./nav-user";
 import { SupportCard } from "./support-card";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
-    useShallow((s) => ({
-      sidebarVariant: s.values.sidebar_variant,
-      sidebarCollapsible: s.values.sidebar_collapsible,
-      isSynced: s.isSynced,
-    })),
-  );
-
-  const variant = isSynced ? sidebarVariant : props.variant;
-  const collapsible = isSynced ? sidebarCollapsible : props.collapsible;
-
   return (
-    <Sidebar {...props} variant={variant} collapsible={collapsible}>
+    <Sidebar {...props} variant={props.variant || "sidebar"} collapsible={props.collapsible || "icon"}>
       <SidebarHeader>
         <SidebarMenu>
           <SidebarMenuItem>
@@ -54,7 +38,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
       <SidebarFooter>
         <SupportCard />
-        <NavUser />
       </SidebarFooter>
     </Sidebar>
   );
