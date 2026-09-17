@@ -10,7 +10,7 @@ export function Sidebar() {
   const links = [
     { href: "/dashboard", label: "Overview", icon: <LayoutDashboardIcon className="h-4 w-4" /> },
     { href: "/dashboard/create", label: "New Project", icon: <PlusCircleIcon className="h-4 w-4" /> },
-    { href: "/dashboard/videos", label: "My Videos", icon: <VideoIcon className="h-4 w-4" /> },
+    { href: "/dashboard/projects", label: "Meus Projetos", icon: <VideoIcon className="h-4 w-4" /> },
     { href: "/dashboard/clips", label: "My Clips", icon: <ClapperboardIcon className="h-4 w-4" /> },
     { href: "/dashboard/billing", label: "Billing", icon: <CreditCardIcon className="h-4 w-4" /> },
   ];

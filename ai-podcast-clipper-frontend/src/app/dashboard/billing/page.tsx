@@ -197,7 +197,8 @@ export interface BillingPageProps {
   user?: UserBillingData | null;
 }
 
-export default function BillingPage(props?: unknown) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export default function BillingPage(props: any) {
   const initialUser = (props as BillingPageProps | undefined)?.user;
   const [user, setUser] = useState<UserBillingData | null>(initialUser ?? null);
   const [activeTab, setActiveTab] = useState<PricingTab>("monthly");

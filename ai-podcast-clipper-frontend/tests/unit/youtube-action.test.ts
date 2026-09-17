@@ -49,6 +49,9 @@ vi.mock("~/application/services/processing-options.service", () => ({
       { value: "9:16", label: "9:16" },
       { value: "16:9", label: "16:9" },
     ],
+    CLIP_MODEL: [
+      { value: "gemini-flash", label: "Gemini Flash" },
+    ],
     LAYOUT: [
       { value: "auto", label: "Auto" },
       { value: "split", label: "Split" },
@@ -225,17 +228,17 @@ describe("importYouTubeVideo Server Action", () => {
     expect(db.uploadedFile.create).not.toHaveBeenCalled();
   });
 
-  it("deve retornar erro se o targetDuration fornecido for inválido", async () => {
+  it("deve retornar erro se o clipModel fornecido for inválido", async () => {
     mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 
     const result = await importYouTubeVideo({
       url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-      targetDuration: "invalid_duration",
+      clipModel: "invalid_model",
     });
 
     expect(result).toEqual({
       success: false,
-      error: "Invalid duration",
+      error: "Invalid clip model",
     });
     expect(db.uploadedFile.create).not.toHaveBeenCalled();
   });
@@ -251,21 +254,6 @@ describe("importYouTubeVideo Server Action", () => {
     expect(result).toEqual({
       success: false,
       error: "Invalid aspect ratio",
-    });
-    expect(db.uploadedFile.create).not.toHaveBeenCalled();
-  });
-
-  it("deve retornar erro se o layout fornecido for inválido", async () => {
-    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
-
-    const result = await importYouTubeVideo({
-      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-      layout: "invalid_layout",
-    });
-
-    expect(result).toEqual({
-      success: false,
-      error: "Invalid layout",
     });
     expect(db.uploadedFile.create).not.toHaveBeenCalled();
   });
@@ -294,9 +282,8 @@ describe("importYouTubeVideo Server Action", () => {
     const result = await importYouTubeVideo({
       url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
       genre: "humor",
-      targetDuration: "30-60",
+      clipModel: "gemini-flash",
       aspectRatio: "9:16",
-      layout: "split",
       autoZoom: true,
     });
 

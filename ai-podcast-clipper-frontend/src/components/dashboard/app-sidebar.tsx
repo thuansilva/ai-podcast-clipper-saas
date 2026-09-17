@@ -34,7 +34,7 @@ export function AppSidebar() {
   const links = [
     { href: "/dashboard", label: "Overview", icon: LayoutDashboardIcon },
     { href: "/dashboard/create", label: "Novo Projeto", icon: PlusCircleIcon },
-    { href: "/dashboard/videos", label: "Meus Vídeos", icon: VideoIcon },
+    { href: "/dashboard/projects", label: "Meus Projetos", icon: VideoIcon },
     { href: "/dashboard/clips", label: "Meus Cortes", icon: ClapperboardIcon },
   ];
 

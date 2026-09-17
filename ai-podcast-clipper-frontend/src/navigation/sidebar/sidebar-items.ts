@@ -61,9 +61,9 @@ export const sidebarItems: NavGroup[] = [
     label: "Meus Projetos",
     items: [
       {
-        id: "videos",
-        title: "Meus Vídeos",
-        url: "/dashboard/videos",
+        id: "projects",
+        title: "Meus Projetos",
+        url: "/dashboard/projects",
         icon: Video,
       },
     ],

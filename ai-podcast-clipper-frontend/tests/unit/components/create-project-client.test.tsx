@@ -104,14 +104,14 @@ describe("CreateProjectClient", () => {
   });
 
   it("renders the initial URL import input", () => {
-    render(<CreateProjectClient userCredits={10} options={mockOptions} />);
+    render(<CreateProjectClient isConfigRoute={true} userCredits={10} options={mockOptions} />);
 
-    expect(screen.getByText("Criar Novo Projeto")).toBeInTheDocument();
+    expect(screen.getByText(/Transforme vídeos longos em/i)).toBeInTheDocument();
     expect(
-      screen.getByPlaceholderText("https://youtube.com/watch?v=..."),
+      screen.getByPlaceholderText("Cole o link do YouTube (ex: https://youtube.com/watch?v=...)"),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Fazer upload de arquivo local"),
+      screen.getByText("Enviar"),
     ).toBeInTheDocument();
   });
 
@@ -125,10 +125,10 @@ describe("CreateProjectClient", () => {
       }),
     });
 
-    render(<CreateProjectClient userCredits={10} options={mockOptions} />);
+    render(<CreateProjectClient isConfigRoute={true} userCredits={10} options={mockOptions} />);
 
     const input = screen.getByPlaceholderText(
-      "https://youtube.com/watch?v=...",
+      "Cole o link do YouTube (ex: https://youtube.com/watch?v=...)",
     );
     fireEvent.change(input, {
       target: { value: "https://youtube.com/watch?v=12345" },
@@ -160,10 +160,10 @@ describe("CreateProjectClient", () => {
       }),
     });
 
-    render(<CreateProjectClient userCredits={10} options={mockOptions} />);
+    render(<CreateProjectClient isConfigRoute={true} userCredits={10} options={mockOptions} />);
 
     fireEvent.change(
-      screen.getByPlaceholderText("https://youtube.com/watch?v=..."),
+      screen.getByPlaceholderText("Cole o link do YouTube (ex: https://youtube.com/watch?v=...)"),
       {
         target: { value: "https://youtube.com/watch?v=12345" },
       },
@@ -210,10 +210,10 @@ describe("CreateProjectClient", () => {
       uploadedFileId: "file-xyz",
     });
 
-    render(<CreateProjectClient userCredits={10} options={mockOptions} />);
+    render(<CreateProjectClient isConfigRoute={true} userCredits={10} options={mockOptions} />);
 
     fireEvent.change(
-      screen.getByPlaceholderText("https://youtube.com/watch?v=..."),
+      screen.getByPlaceholderText("Cole o link do YouTube (ex: https://youtube.com/watch?v=...)"),
       {
         target: { value: "https://youtube.com/watch?v=12345" },
       },
@@ -269,10 +269,10 @@ describe("CreateProjectClient", () => {
     });
 
     // user has only 2 credits, default slice 0..5 costs 5 credits
-    render(<CreateProjectClient userCredits={2} options={mockOptions} />);
+    render(<CreateProjectClient isConfigRoute={true} userCredits={2} options={mockOptions} />);
 
     fireEvent.change(
-      screen.getByPlaceholderText("https://youtube.com/watch?v=..."),
+      screen.getByPlaceholderText("Cole o link do YouTube (ex: https://youtube.com/watch?v=...)"),
       {
         target: { value: "https://youtube.com/watch?v=12345" },
       },
