@@ -23,20 +23,30 @@ export async function fetchYouTubeVideoInfo(url: string) {
   const title = oembedData.title ?? "";
   const thumbnailUrl = oembedData.thumbnail_url ?? "";
 
-  const pageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      "Accept-Language": "en-US,en;q=0.9"
-    }
-  });
-
   let durationSeconds = 0;
-  if (pageResponse.ok) {
-    const html = await pageResponse.text();
-    const match = /"lengthSeconds":"(\d+)"/.exec(html);
-    if (match?.[1]) {
-      durationSeconds = parseInt(match[1], 10);
+  try {
+    const playerResponse = await fetch("https://www.youtube.com/youtubei/v1/player", {
+      method: "POST",
+      body: JSON.stringify({
+        context: {
+          client: {
+            hl: "en",
+            clientName: "WEB",
+            clientVersion: "2.20210721.00.00"
+          }
+        },
+        videoId: videoId
+      })
+    });
+    
+    if (playerResponse.ok) {
+      const playerData = await playerResponse.json();
+      if (playerData?.videoDetails?.lengthSeconds) {
+        durationSeconds = parseInt(playerData.videoDetails.lengthSeconds, 10);
+      }
     }
+  } catch (err) {
+    console.error("Failed to fetch duration from youtubei:", err);
   }
 
   return { title, durationSeconds, thumbnailUrl };

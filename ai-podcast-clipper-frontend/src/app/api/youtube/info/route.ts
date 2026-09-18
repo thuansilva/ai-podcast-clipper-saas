@@ -16,32 +16,50 @@ export async function GET(request: Request) {
 
   try {
     const videoId = ytUrl.videoId;
-    // Busca os dados primários via oEmbed (rápido e oficial para thumbnail e title)
-    const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
-    
-    if (!oembedResponse.ok) {
-      throw new Error("Video not found or private");
+    let title = "";
+    let thumbnailUrl = "";
+    let durationSeconds = 0;
+
+    // Tentativa primária via youtubei (mais estável)
+    try {
+      const playerResponse = await fetch("https://www.youtube.com/youtubei/v1/player", {
+        method: "POST",
+        body: JSON.stringify({
+          context: {
+            client: {
+              hl: "en",
+              clientName: "WEB",
+              clientVersion: "2.20210721.00.00"
+            }
+          },
+          videoId: videoId
+        })
+      });
+      
+      if (playerResponse.ok) {
+        const playerData = await playerResponse.json();
+        title = playerData?.videoDetails?.title || "";
+        if (playerData?.videoDetails?.lengthSeconds) {
+          durationSeconds = parseInt(playerData.videoDetails.lengthSeconds, 10);
+        }
+        if (playerData?.videoDetails?.thumbnail?.thumbnails?.length > 0) {
+          const thumbs = playerData.videoDetails.thumbnail.thumbnails;
+          thumbnailUrl = thumbs[thumbs.length - 1].url;
+        }
+      }
+    } catch (err) {
+      console.error("youtubei fetch failed", err);
     }
 
-    const oembedData = (await oembedResponse.json()) as { title?: string; thumbnail_url?: string };
-    const title = oembedData.title ?? "";
-    const thumbnailUrl = oembedData.thumbnail_url ?? "";
-
-    // Para buscar a duração sem bibliotecas pesadas, fazemos um fetch rápido na página HTML
-    // e usamos regex para extrair lengthSeconds
-    const pageResponse = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept-Language": "en-US,en;q=0.9"
-      }
-    });
-
-    let durationSeconds = 0;
-    if (pageResponse.ok) {
-      const html = await pageResponse.text();
-      const match = /"lengthSeconds":"(\d+)"/.exec(html);
-      if (match?.[1]) {
-        durationSeconds = parseInt(match[1], 10);
+    // Fallback para oEmbed se faltar title ou thumbnail
+    if (!title || !thumbnailUrl) {
+      const oembedResponse = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+      if (oembedResponse.ok) {
+        const oembedData = await oembedResponse.json();
+        title = title || oembedData.title || "";
+        thumbnailUrl = thumbnailUrl || oembedData.thumbnail_url || "";
+      } else if (!title) {
+        throw new Error("Video not found or private");
       }
     }
 
