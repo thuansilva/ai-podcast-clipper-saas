@@ -62,27 +62,36 @@ export default async function ProjectDetailsPage({
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-            {project.clips.map((clip) => (
-              <Card
-                key={clip.id}
-                className="bg-[var(--superficie-2)] border-[var(--linha)]"
-              >
-                <div className="aspect-[9/16] bg-black relative">
-                  {/* Clip Player or Thumbnail here */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <span className="text-[var(--fumaca)] text-xs">Thumbnail</span>
+            {project.clips.map((clip) => {
+              // Verifica se é uma chave de storage local ou URL completa
+              const videoUrl = clip.s3Key && (clip.s3Key.startsWith("http") || clip.s3Key.startsWith("blob:"))
+                ? clip.s3Key
+                : `/api/local-storage?key=${encodeURIComponent(clip.s3Key || "")}`;
+
+              return (
+                <Card
+                  key={clip.id}
+                  className="bg-[var(--superficie-2)] border-[var(--linha)] overflow-hidden flex flex-col"
+                >
+                  <div className="aspect-[9/16] bg-black relative group flex-shrink-0">
+                    <video
+                      src={videoUrl}
+                      controls
+                      preload="metadata"
+                      className="w-full h-full object-cover"
+                    />
                   </div>
-                </div>
-                <CardContent className="p-3">
-                  <p className="font-semibold text-sm text-[var(--marfim)] truncate">
-                    {clip.title}
-                  </p>
-                  <p className="text-xs text-[var(--ouro)] mt-1">
-                    Score: {clip.viralityScore != null ? Math.round(clip.viralityScore) : "N/A"}
-                  </p>
-                </CardContent>
-              </Card>
-            ))}
+                  <CardContent className="p-3">
+                    <p className="font-semibold text-sm text-[var(--marfim)] line-clamp-2">
+                      {clip.title}
+                    </p>
+                    <p className="text-xs text-[var(--ouro)] mt-1 font-medium">
+                      🚀 Score: {clip.viralityScore != null ? Math.round(clip.viralityScore) : "N/A"}
+                    </p>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>

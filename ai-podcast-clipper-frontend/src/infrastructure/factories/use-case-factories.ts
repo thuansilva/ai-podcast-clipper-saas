@@ -5,8 +5,10 @@ import { PrismaCreditTransactionRepository } from "../database/repositories/pris
 import { PrismaSubscriptionRepository } from "../database/repositories/prisma-subscription.repository";
 import { PrismaUnitOfWork } from "../database/repositories/prisma-unit-of-work";
 import { S3StorageGateway } from "../storage/s3-storage.gateway";
+import { LocalStorageGateway } from "../storage/local-storage.gateway";
 import { StripePaymentGateway } from "../payments/stripe-payment.gateway";
 import { InngestQueueGateway } from "../queue/inngest-queue.gateway";
+import { env } from "~/env";
 
 import { HoldCreditsUseCase } from "~/application/use-cases/credits/hold-credits.use-case";
 import { ConsumeCreditsUseCase } from "~/application/use-cases/credits/consume-credits.use-case";
@@ -93,8 +95,9 @@ export function makeProcessSubscriptionCheckoutUseCase(): ProcessSubscriptionChe
 
 // --- Fábricas de Vídeos ---
 export function makeGenerateUploadUrlUseCase(): GenerateUploadUrlUseCase {
+  const storageGateway = env.STORAGE_PROVIDER === "local" ? new LocalStorageGateway() : new S3StorageGateway();
   return new GenerateUploadUrlUseCase(
-    new S3StorageGateway(),
+    storageGateway,
     new PrismaUploadedFileRepository()
   );
 }
@@ -113,9 +116,10 @@ export function makeListUserVideosUseCase(): ListUserVideosUseCase {
 
 // --- Fábricas de Clipes ---
 export function makeGetClipPlayUrlUseCase(): GetClipPlayUrlUseCase {
+  const storageGateway = env.STORAGE_PROVIDER === "local" ? new LocalStorageGateway() : new S3StorageGateway();
   return new GetClipPlayUrlUseCase(
     new PrismaClipRepository(),
-    new S3StorageGateway()
+    storageGateway
   );
 }
 
@@ -124,9 +128,10 @@ export function makeUpdateClipUseCase(): UpdateClipUseCase {
 }
 
 export function makeDeleteClipUseCase(): DeleteClipUseCase {
+  const storageGateway = env.STORAGE_PROVIDER === "local" ? new LocalStorageGateway() : new S3StorageGateway();
   return new DeleteClipUseCase(
     new PrismaClipRepository(),
-    new S3StorageGateway()
+    storageGateway
   );
 }
 

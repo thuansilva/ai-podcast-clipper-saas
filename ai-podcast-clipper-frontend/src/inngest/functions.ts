@@ -15,6 +15,7 @@ import { Prisma } from "@prisma/client";
 import { calculateManualCutsCredits } from "~/domain/services/credit-pricing.service";
 import { validateVideoDuration } from "~/domain/services/plan-policy.service";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
+import { fetch as undiciFetch, Agent } from "undici";
 
 export interface ProcessVideoEventData {
   uploadedFileId: string;
@@ -78,8 +79,12 @@ export async function downloadYouTubeVideo({
 }): Promise<YouTubeDownloadResult> {
   const endpoint = getYouTubeDownloadEndpoint();
 
-  const response = await fetch(endpoint, {
+  
+  const agent = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+
+  const response = await undiciFetch(endpoint, {
     method: "POST",
+    dispatcher: agent,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.PROCESS_VIDEO_ENDPOINT_AUTH}`,
@@ -242,8 +247,12 @@ export async function processVideoHandler({
         where: { id: uploadedFileId },
       });
 
-      const response = await fetch(env.PROCESS_VIDEO_ENDPOINT, {
+      
+      const agent = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+
+      const response = await undiciFetch(env.PROCESS_VIDEO_ENDPOINT, {
         method: "POST",
+        dispatcher: agent,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${env.PROCESS_VIDEO_ENDPOINT_AUTH}`,
