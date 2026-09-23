@@ -4,13 +4,28 @@ import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
 import { ArrowLeft, Clock, Film } from "lucide-react";
 import { Card, CardContent } from "~/components/ui/card";
+import { ClipCard } from "~/components/clip-card";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "~/components/ui/pagination";
 
-export default async function ProjectDetailsPage({
-  params,
-}: {
+const CLIPS_PER_PAGE = 10;
+
+export default async function ProjectDetailsPage(props: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const { id } = await params;
+  const { id } = await props.params;
+  const searchParams = await props.searchParams;
+  
+  const pageParam = typeof searchParams.page === 'string' ? parseInt(searchParams.page, 10) : 1;
+  const page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+
   const userId = await makeAuthGateway().getUserId();
   if (!userId) redirect("/login");
 
@@ -19,16 +34,24 @@ export default async function ProjectDetailsPage({
     include: {
       clips: {
         orderBy: {
-          createdAt: "asc",
+          createdAt: "desc",
         },
+        take: CLIPS_PER_PAGE,
+        skip: (page - 1) * CLIPS_PER_PAGE,
       },
+      _count: {
+        select: { clips: true }
+      }
     },
   });
 
   if (!project) redirect("/dashboard/projects");
 
+  const totalClips = project._count.clips;
+  const totalPages = Math.ceil(totalClips / CLIPS_PER_PAGE);
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8 p-4 md:p-6">
+    <div className="w-full h-full space-y-8 p-4 md:p-6">
       <Link
         href="/dashboard/projects"
         className="inline-flex items-center text-sm text-[var(--fumaca)] hover:text-[var(--marfim)]"
@@ -45,14 +68,14 @@ export default async function ProjectDetailsPage({
             <Clock className="mr-1 h-4 w-4" /> {Math.floor(project.durationSeconds / 60)} min
           </span>
           <span className="flex items-center">
-            <Film className="mr-1 h-4 w-4" /> {project.clips.length} cortes gerados
+            <Film className="mr-1 h-4 w-4" /> {totalClips} cortes gerados
           </span>
         </div>
       </div>
 
       <div>
         <h2 className="text-xl font-bold text-[var(--marfim)] mb-4">Cortes Gerados</h2>
-        {project.clips.length === 0 ? (
+        {totalClips === 0 ? (
           <div className="py-20 text-center text-[var(--fumaca)] border border-dashed border-[var(--linha)] rounded-xl">
             {project.status === "processing" || project.status === "queued"
               ? "O projeto está sendo processado. Os cortes aparecerão aqui em breve."
@@ -61,38 +84,48 @@ export default async function ProjectDetailsPage({
                 : "Nenhum corte gerado."}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-            {project.clips.map((clip) => {
-              // Verifica se é uma chave de storage local ou URL completa
-              const videoUrl = clip.s3Key && (clip.s3Key.startsWith("http") || clip.s3Key.startsWith("blob:"))
-                ? clip.s3Key
-                : `/api/local-storage?key=${encodeURIComponent(clip.s3Key || "")}`;
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+              {project.clips.map((clip) => (
+                <ClipCard key={clip.id} clip={clip} />
+              ))}
+            </div>
 
-              return (
-                <Card
-                  key={clip.id}
-                  className="bg-[var(--superficie-2)] border-[var(--linha)] overflow-hidden flex flex-col"
-                >
-                  <div className="aspect-[9/16] bg-black relative group flex-shrink-0">
-                    <video
-                      src={videoUrl}
-                      controls
-                      preload="metadata"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <CardContent className="p-3">
-                    <p className="font-semibold text-sm text-[var(--marfim)] line-clamp-2">
-                      {clip.title}
-                    </p>
-                    <p className="text-xs text-[var(--ouro)] mt-1 font-medium">
-                      🚀 Score: {clip.viralityScore != null ? Math.round(clip.viralityScore) : "N/A"}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+            {totalPages > 1 && (
+              <div className="mt-8">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href={page > 1 ? `/dashboard/projects/${id}?page=${page - 1}` : "#"}
+                        className={page === 1 ? "pointer-events-none opacity-50" : ""}
+                        aria-disabled={page === 1}
+                      />
+                    </PaginationItem>
+                    
+                    {Array.from({ length: totalPages }).map((_, i) => (
+                      <PaginationItem key={i}>
+                        <PaginationLink
+                          href={`/dashboard/projects/${id}?page=${i + 1}`}
+                          isActive={page === i + 1}
+                        >
+                          {i + 1}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+
+                    <PaginationItem>
+                      <PaginationNext
+                        href={page < totalPages ? `/dashboard/projects/${id}?page=${page + 1}` : "#"}
+                        className={page === totalPages ? "pointer-events-none opacity-50" : ""}
+                        aria-disabled={page === totalPages}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

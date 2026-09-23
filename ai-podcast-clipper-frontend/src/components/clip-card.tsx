@@ -3,25 +3,17 @@
 import type { Clip } from "@prisma/client";
 import { useEffect, useState } from "react";
 import {
-  Check,
+  Calendar,
   Clock,
-  Copy,
   Download,
   Loader2,
-  Pencil,
   Play,
-  Sparkles,
+  Scissors,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-} from "~/components/ui/card";
 import { deleteClip, getClipPlayUrl } from "~/actions/generation";
 import { ClipEditorModal } from "./clip-editor-modal";
 
@@ -33,7 +25,6 @@ export interface ClipCardProps {
 export function ClipCard({ clip, onDelete }: ClipCardProps) {
   const [playUrl, setPlayUrl] = useState<string | null>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(true);
-  const [copiedHook, setCopiedHook] = useState(false);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -68,18 +59,6 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
       isMounted = false;
     };
   }, [clip.id]);
-
-  const handleCopyHook = async () => {
-    if (!clip.hook) return;
-    try {
-      await navigator.clipboard.writeText(clip.hook);
-      setCopiedHook(true);
-      toast.success("Hook copiado para a área de transferência!");
-      setTimeout(() => setCopiedHook(false), 2000);
-    } catch {
-      toast.error("Falha ao copiar hook");
-    }
-  };
 
   const handleDownload = () => {
     if (!playUrl) {
@@ -121,9 +100,9 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
 
   return (
     <>
-      <Card className="flex flex-col overflow-hidden rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] text-[var(--marfim)] transition-all hover:border-[var(--linha-2)] hover:shadow-[0_0_24px_rgba(0,0,0,0.5)]">
-        {/* Player vertical 9:16 */}
-        <div className="relative aspect-[9/16] w-full overflow-hidden bg-[var(--tinta)]">
+      <div className="flex flex-col group">
+        {/* Player vertical 9:16 com bordas arredondadas */}
+        <div className="relative aspect-[9/16] w-full overflow-hidden rounded-xl bg-[var(--tinta)] border border-transparent transition-colors hover:border-[var(--linha)]">
           {isLoadingUrl ? (
             <div className="flex h-full w-full items-center justify-center">
               <Loader2 className="h-8 w-8 animate-spin text-[var(--fumaca)]" />
@@ -143,139 +122,69 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
             </div>
           )}
 
-          {/* Badges de sobreposição no topo do player */}
-          <div className="pointer-events-none absolute left-2 right-2 top-2 flex items-center justify-between gap-1">
-            {clip.viralityScore !== null && clip.viralityScore !== undefined ? (
-              <Badge
-                variant="default"
-                className="border border-[var(--ouro)]/50 bg-[var(--superficie)]/90 font-mono text-[11px] font-semibold text-[var(--ouro)] shadow-xs backdrop-blur-md"
-                data-testid="virality-badge"
-              >
-                🔥 {clip.viralityScore}/10
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="border border-[var(--linha)] bg-[var(--superficie)]/80 text-[var(--fumaca)] backdrop-blur-xs">
-                Score N/A
-              </Badge>
-            )}
-
+          {/* Duração no Player (inferior direito) - Estilo da imagem */}
+          <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1">
             {clip.durationSeconds > 0 && (
               <Badge
                 variant="secondary"
-                className="flex items-center gap-1 border border-[var(--linha)] bg-[var(--tinta)]/80 font-mono text-[10px] text-[var(--marfim)] backdrop-blur-xs"
+                className="flex items-center gap-1 border-none bg-black/60 font-mono text-[10px] text-[var(--marfim)] backdrop-blur-md px-1.5 py-0.5"
               >
-                <Clock className="h-3 w-3 text-[var(--ouro)]" />
-                {Math.round(clip.durationSeconds)}s
+                00:00 {String(Math.round(clip.durationSeconds)).padStart(2, '0')}
               </Badge>
             )}
           </div>
         </div>
 
-        {/* Informações do Clipe */}
-        <CardHeader className="p-4 pb-2">
-          <div className="flex items-start justify-between gap-2">
-            <h3
-              className="line-clamp-2 text-sm font-semibold leading-snug text-[var(--marfim)]"
-              title={clip.title}
-            >
-              {clip.title}
-            </h3>
-            {clip.subtitlePreset && (
-              <Badge
-                variant="outline"
-                className="shrink-0 rounded-full border border-[var(--ouro)]/30 bg-[var(--ouro)]/10 px-2 py-0 text-[10px] uppercase font-mono text-[var(--ouro)]"
-              >
-                {clip.subtitlePreset}
-              </Badge>
-            )}
-          </div>
-        </CardHeader>
-
-        <CardContent className="flex flex-1 flex-col justify-between space-y-3 p-4 pt-0">
-          {clip.hook && (
-            <div className="space-y-1.5 rounded-xl border border-[var(--linha)] bg-[var(--tinta)] p-3 text-xs">
-              <div className="flex items-center justify-between text-[11px] font-medium text-[var(--fumaca)]">
-                <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[var(--marfim)]">
-                  <Sparkles className="h-3 w-3 text-[var(--ouro)]" />
-                  Hook Sugerido
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCopyHook}
-                  className="h-6 px-1.5 text-xs text-[var(--fumaca)] hover:bg-[var(--superficie-2)] hover:text-[var(--marfim)] cursor-pointer"
-                  aria-label="Copiar Hook"
-                >
-                  {copiedHook ? (
-                    <span className="flex items-center gap-1 font-medium text-[var(--patina)]">
-                      <Check className="h-3 w-3" /> Copiado!
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1">
-                      <Copy className="h-3 w-3" /> Copiar Hook
-                    </span>
-                  )}
-                </Button>
-              </div>
-              <p className="italic text-[var(--marfim-2)] line-clamp-2">
-                &ldquo;{clip.hook}&rdquo;
-              </p>
+        {/* Informações do Clipe e Ações fora do vídeo (abaixo) */}
+        <div className="flex flex-col gap-2 mt-3">
+          {/* Linha 1: Score e Ações */}
+          <div className="flex items-center justify-between">
+            <div className="text-[22px] font-bold text-[var(--ouro)]">
+              {clip.viralityScore !== null && clip.viralityScore !== undefined ? clip.viralityScore : "--"}
             </div>
-          )}
+            
+            <div className="flex items-center gap-1.5">
+              <button
+                className="text-[var(--fumaca)] hover:text-[var(--marfim)] transition-colors p-1"
+                title="Agendar/Calendário"
+              >
+                <Calendar className="h-[18px] w-[18px]" />
+              </button>
+              <button
+                className="text-[var(--fumaca)] hover:text-[var(--marfim)] transition-colors p-1"
+                onClick={handleDownload}
+                disabled={!playUrl}
+                title="Download"
+              >
+                <Download className="h-[18px] w-[18px]" />
+              </button>
+              <button
+                className="text-[var(--fumaca)] hover:text-[var(--marfim)] transition-colors p-1"
+                onClick={() => setIsEditorOpen(true)}
+                title="Editar Clipe"
+              >
+                <Scissors className="h-[18px] w-[18px]" />
+              </button>
+              <button
+                className="text-[var(--fumaca)] hover:text-[var(--perigo)] transition-colors p-1"
+                onClick={handleDelete}
+                disabled={isDeleting}
+                title="Excluir Clipe"
+              >
+                {isDeleting ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Trash2 className="h-[18px] w-[18px]" />}
+              </button>
+            </div>
+          </div>
 
-          {clip.reason && (
-            <p
-              className="text-[11px] text-[var(--fumaca)] line-clamp-2"
-              title={clip.reason}
-            >
-              <span className="font-medium text-[var(--marfim)]">
-                Por que viraliza:
-              </span>{" "}
-              {clip.reason}
-            </p>
-          )}
-        </CardContent>
-
-        {/* Ações: Download, Edição e Exclusão */}
-        <CardFooter className="flex items-center gap-2 border-t border-[var(--linha)] p-4 pt-3 bg-[var(--superficie)]">
-          <Button
-            size="sm"
-            onClick={handleDownload}
-            disabled={!playUrl}
-            className="btn-ouro flex-1 text-xs !h-8"
-            aria-label="Download"
+          {/* Linha 2: Título */}
+          <h3
+            className="line-clamp-2 text-[13px] font-medium leading-tight text-[var(--marfim)]"
+            title={clip.title}
           >
-            <Download className="mr-1.5 h-3.5 w-3.5" />
-            Download
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={() => setIsEditorOpen(true)}
-            className="btn-linha px-2.5 text-xs !h-8"
-            title="Editar Clipe"
-            aria-label="Editar"
-          >
-            <Pencil className="h-3.5 w-3.5 sm:mr-1" />
-            <span className="hidden sm:inline">Editar</span>
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={handleDelete}
-            disabled={isDeleting}
-            className="rounded-full border border-[var(--perigo)]/30 bg-[var(--perigo)]/10 text-[var(--perigo)] hover:bg-[var(--perigo)] hover:text-white px-2.5 text-xs !h-8 transition-colors cursor-pointer"
-            title="Excluir Clipe"
-            aria-label="Excluir"
-          >
-            {isDeleting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Trash2 className="h-3.5 w-3.5" />
-            )}
-          </Button>
-        </CardFooter>
-      </Card>
+            {clip.title}
+          </h3>
+        </div>
+      </div>
 
       {/* Modal de Edição */}
       <ClipEditorModal

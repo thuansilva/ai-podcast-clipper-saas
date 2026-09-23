@@ -43,6 +43,8 @@ ai-podcast-clipper-frontend/.next/
 ai-podcast-clipper-frontend/out/
 ai-podcast-clipper-frontend/.env
 ai-podcast-clipper-frontend/.env*.local
+ai-podcast-clipper-frontend/.env.development
+ai-podcast-clipper-frontend/.env.production
 ai-podcast-clipper-frontend/*.tsbuildinfo
 ai-podcast-clipper-frontend/next-env.d.ts
 ai-podcast-clipper-frontend/coverage/
