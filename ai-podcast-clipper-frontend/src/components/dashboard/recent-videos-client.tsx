@@ -98,20 +98,22 @@ export function RecentVideosClient({
         </div>
       )}
 
-      {horizontalScroll && canScrollLeft && (
+      {horizontalScroll && uploadedFiles.length > 0 && (
         <button
+          disabled={!canScrollLeft}
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); scrollByAmount(-300); }}
-          className="absolute left-2 top-1/2 -translate-y-1/2 z-50 bg-[var(--superficie)] border border-[var(--linha)] text-[var(--marfim)] hover:text-[var(--ouro)] hover:border-[var(--ouro)] rounded-full p-2 shadow-[0_4px_20px_rgba(0,0,0,0.5)] opacity-0 group-hover/carousel:opacity-100 transition-all duration-200 cursor-pointer"
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-50 bg-[var(--superficie)] border border-[var(--linha)] text-[var(--marfim)] hover:text-[var(--ouro)] hover:border-[var(--ouro)] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-[var(--linha)] disabled:hover:text-[var(--marfim)] rounded-full p-2 shadow-[0_4px_20px_rgba(0,0,0,0.5)] opacity-0 group-hover/carousel:opacity-100 transition-all duration-200"
           aria-label="Rolar para a esquerda"
         >
           <ChevronLeft className="w-5 h-5" pointerEvents="none" />
         </button>
       )}
 
-      {horizontalScroll && canScrollRight && uploadedFiles.length > 0 && (
+      {horizontalScroll && uploadedFiles.length > 0 && (
         <button
+          disabled={!canScrollRight}
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); scrollByAmount(300); }}
-          className="absolute right-2 top-1/2 -translate-y-1/2 z-50 bg-[var(--superficie)] border border-[var(--linha)] text-[var(--marfim)] hover:text-[var(--ouro)] hover:border-[var(--ouro)] rounded-full p-2 shadow-[0_4px_20px_rgba(0,0,0,0.5)] opacity-0 group-hover/carousel:opacity-100 transition-all duration-200 cursor-pointer"
+          className="absolute right-2 top-1/2 -translate-y-1/2 z-50 bg-[var(--superficie)] border border-[var(--linha)] text-[var(--marfim)] hover:text-[var(--ouro)] hover:border-[var(--ouro)] disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-[var(--linha)] disabled:hover:text-[var(--marfim)] rounded-full p-2 shadow-[0_4px_20px_rgba(0,0,0,0.5)] opacity-0 group-hover/carousel:opacity-100 transition-all duration-200"
           aria-label="Rolar para a direita"
         >
           <ChevronRight className="w-5 h-5" pointerEvents="none" />
