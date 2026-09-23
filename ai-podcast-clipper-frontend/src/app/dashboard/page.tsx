@@ -20,7 +20,7 @@ export default async function DashboardPage() {
       select: { credits: true },
     }),
     getProcessingOptions(),
-    listUserVideosUseCase.execute({ userId, limit: 5 }),
+    listUserVideosUseCase.execute({ userId, limit: 10 }),
   ]);
 
   const credits = userData.credits;
@@ -31,7 +31,7 @@ export default async function DashboardPage() {
         <hr className="border-[var(--linha)]" />
         <div>
           <h2 className="text-xl font-semibold mb-4 text-[var(--marfim)]">Acessados Recentemente</h2>
-          <RecentVideosClient uploadedFiles={videos.data} hideHeader />
+          <RecentVideosClient uploadedFiles={videos.data} hideHeader horizontalScroll={true} />
         </div>
       </CreateProjectClient>
     </div>
