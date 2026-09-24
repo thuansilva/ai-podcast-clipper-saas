@@ -83,6 +83,7 @@ model UploadedFile {
   aspectRatio     String?
   autoZoom        Boolean?
   subtitlePreset  String?
+  manualCutsJson  Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

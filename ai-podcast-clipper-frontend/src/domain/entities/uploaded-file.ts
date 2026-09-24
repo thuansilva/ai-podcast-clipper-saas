@@ -30,6 +30,7 @@ export interface UploadedFileEntity {
   aspectRatio?: string | null;
   autoZoom?: boolean | null;
   subtitlePreset?: string | null;
+  manualCutsJson?: any | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -24,7 +24,7 @@ export class RetryProjectUseCase {
     }
 
     // Reset status to queued
-    await prisma.uploadedFile.update({
+    const updatedRaw = await prisma.uploadedFile.update({
       where: { id: input.projectId },
       data: {
         status: "queued",
@@ -41,7 +41,9 @@ export class RetryProjectUseCase {
     await this.queueGateway.sendProcessVideoEvent({
       uploadedFileId: project.id,
       userId: project.userId,
-      preset: project.subtitlePreset || "HORMOZI",
+      preset: updatedRaw.subtitlePreset || "HORMOZI",
+      mode: updatedRaw.clipModel === "manual" ? "manual" : "auto",
+      manualCuts: updatedRaw.manualCutsJson ? JSON.parse(updatedRaw.manualCutsJson as string) : undefined,
     });
   }
 }
