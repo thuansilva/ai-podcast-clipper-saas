@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, MoreVertical, Edit2, Trash2, Loader2, RefreshCw } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreVertical, Edit2, Trash2, Loader2, RefreshCw, Settings2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "~/components/ui/dialog";
@@ -23,6 +23,10 @@ interface RecentVideosClientProps {
     clipsCount: number;
     createdAt: Date;
     thumbnailUrl?: string;
+    subtitlePreset?: string;
+    clipModel?: string;
+    aspectRatio?: string;
+    autoZoom?: boolean;
   }[];
   title?: string;
   description?: string;
@@ -252,6 +256,18 @@ export function RecentVideosClient({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-40 bg-[var(--superficie)] border-[var(--linha)]">
+                    {isFailed && (
+                      <DropdownMenuItem 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          router.push(`/dashboard/projects/${file.id}/edit`);
+                        }}
+                        className="cursor-pointer text-[var(--ouro)] focus:bg-[var(--ouro)]/10 focus:text-[var(--ouro)]"
+                      >
+                        <Settings2 className="w-4 h-4 mr-2" />
+                        Editar Configs
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem 
                       onClick={(e) => { e.stopPropagation(); setProjectToRename({ id: file.id, name: file.filename }); setNewName(file.filename); }}
                       className="cursor-pointer hover:bg-[var(--superficie-2)]"

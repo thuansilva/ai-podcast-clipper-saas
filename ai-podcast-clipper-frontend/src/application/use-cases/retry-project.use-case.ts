@@ -12,7 +12,18 @@ export class RetryProjectUseCase {
     private readonly queueGateway: IQueueGateway
   ) {}
 
-  async execute(input: { projectId: string; userId: string }): Promise<void> {
+  async execute(input: {
+    projectId: string;
+    userId: string;
+    updates?: {
+      subtitlePreset?: string;
+      clipModel?: string;
+      aspectRatio?: string;
+      autoZoom?: boolean;
+      sliceStartTime?: number;
+      sliceEndTime?: number;
+    };
+  }): Promise<void> {
     const project = await this.uploadedFileRepository.findById(input.projectId);
 
     if (!project) {
@@ -23,13 +34,25 @@ export class RetryProjectUseCase {
       throw new UnauthorizedError("tentar reprocessar este projeto");
     }
 
+    // Prepare data to update
+    const updateData: any = {
+      status: "queued",
+      errorMessage: null,
+    };
+
+    if (input.updates) {
+      if (input.updates.subtitlePreset !== undefined) updateData.subtitlePreset = input.updates.subtitlePreset;
+      if (input.updates.clipModel !== undefined) updateData.clipModel = input.updates.clipModel;
+      if (input.updates.aspectRatio !== undefined) updateData.aspectRatio = input.updates.aspectRatio;
+      if (input.updates.autoZoom !== undefined) updateData.autoZoom = input.updates.autoZoom;
+      if (input.updates.sliceStartTime !== undefined) updateData.sliceStartTime = input.updates.sliceStartTime;
+      if (input.updates.sliceEndTime !== undefined) updateData.sliceEndTime = input.updates.sliceEndTime;
+    }
+
     // Reset status to queued
     const updatedRaw = await prisma.uploadedFile.update({
       where: { id: input.projectId },
-      data: {
-        status: "queued",
-        errorMessage: null,
-      },
+      data: updateData,
     });
 
     // Delete any clips that might have been partially generated to avoid duplicates

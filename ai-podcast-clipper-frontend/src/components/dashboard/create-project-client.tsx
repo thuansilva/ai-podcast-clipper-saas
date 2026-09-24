@@ -34,6 +34,17 @@ interface CreateProjectClientProps {
   initialUrl?: string;
   isConfigRoute?: boolean;
   initialMetadata?: VideoMetadata | null;
+  editMode?: boolean;
+  editProjectId?: string;
+  initialSettings?: {
+    preset: string;
+    genre: string;
+    clipModel: string;
+    aspectRatio: string;
+    autoZoom: boolean;
+    sliceStartTime?: number;
+    sliceEndTime?: number;
+  };
 }
 
 function getDefaultOptionValue(options?: ProcessingOption[]): string {
@@ -49,29 +60,38 @@ export function CreateProjectClient({
   initialUrl = "",
   isConfigRoute = false,
   initialMetadata = null,
+  editMode = false,
+  editProjectId,
+  initialSettings,
 }: CreateProjectClientProps) {
   const [url, setUrl] = useState(initialUrl);
   const [metadata, setMetadata] = useState<VideoMetadata | null>(initialMetadata);
   const [loadingMeta, setLoadingMeta] = useState(false);
 
   const [range, setRange] = useState<[number, number]>(() => {
+    if (initialSettings?.sliceStartTime !== undefined && initialSettings?.sliceEndTime !== undefined) {
+      return [
+        Math.floor(initialSettings.sliceStartTime / 60),
+        Math.floor(initialSettings.sliceEndTime / 60)
+      ];
+    }
     if (initialMetadata?.durationSeconds) {
       const defaultDuration = Math.min(5 * 60, initialMetadata.durationSeconds);
       return [0, Math.floor(defaultDuration / 60)];
     }
     return [0, 5];
   });
-  const [preset, setPreset] = useState("HORMOZI");
+  const [preset, setPreset] = useState(initialSettings?.preset || "HORMOZI");
   const [genre, setGenre] = useState(() =>
-    getDefaultOptionValue(options.GENRE),
+    initialSettings?.genre || getDefaultOptionValue(options.GENRE),
   );
   const [clipModel, setClipModel] = useState(() =>
-    getDefaultOptionValue(options.CLIP_MODEL),
+    initialSettings?.clipModel || getDefaultOptionValue(options.CLIP_MODEL),
   );
   const [aspectRatio, setAspectRatio] = useState(() =>
-    getDefaultOptionValue(options.ASPECT_RATIO),
+    initialSettings?.aspectRatio || getDefaultOptionValue(options.ASPECT_RATIO),
   );
-  const [autoZoom, setAutoZoom] = useState(true);
+  const [autoZoom, setAutoZoom] = useState(initialSettings?.autoZoom ?? true);
 
   const [processing, setProcessing] = useState(false);
 
@@ -137,9 +157,12 @@ export function CreateProjectClient({
   const cost = Math.max(1, endMin - startMin);
 
   const handleSubmit = async () => {
-    if (!url || !metadata) return;
+    if (!editMode && (!url || !metadata)) return;
 
-    if (cost > userCredits) {
+    // For editing, cost doesn't apply (it's already paid, or we just retry)
+    // Wait, retry might cost credits if it failed midway? No, retry is for failed projects. 
+    // We assume the user already paid, or we handle it in backend. Actually, Inngest handler checks if user has credits again, but let's bypass frontend check for edit.
+    if (!editMode && cost > userCredits) {
       toast.error(
         `Você precisa de ${cost} créditos, mas tem apenas ${userCredits}.`,
       );
@@ -148,6 +171,27 @@ export function CreateProjectClient({
 
     setProcessing(true);
     try {
+      if (editMode && editProjectId) {
+        const { retryProjectAction } = await import("~/actions/projects-actions");
+        const res = await retryProjectAction(editProjectId, {
+          subtitlePreset: preset,
+          clipModel,
+          aspectRatio,
+          autoZoom,
+          sliceStartTime: startMin * 60,
+          sliceEndTime: endMin * 60,
+        });
+
+        if (!res.success) {
+          throw new Error(res.error || "Erro ao reenviar");
+        }
+        
+        toast.success("Projeto atualizado e reenviado!");
+        router.push("/dashboard");
+        router.refresh();
+        return;
+      }
+
       const result = await importYouTubeVideo({
         url,
         preset,

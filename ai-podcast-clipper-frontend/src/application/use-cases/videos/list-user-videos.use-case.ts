@@ -33,6 +33,10 @@ export class ListUserVideosUseCase {
       clipsCount: file.clipsCount,
       createdAt: file.createdAt,
       thumbnailUrl: file.thumbnailUrl ?? undefined,
+      subtitlePreset: file.subtitlePreset ?? undefined,
+      clipModel: file.clipModel ?? undefined,
+      aspectRatio: file.aspectRatio ?? undefined,
+      autoZoom: file.autoZoom ?? undefined,
     }));
 
     return {

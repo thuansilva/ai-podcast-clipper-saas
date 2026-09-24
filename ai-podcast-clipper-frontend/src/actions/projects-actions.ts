@@ -73,14 +73,24 @@ export async function renameProjectAction(id: string, newName: string) {
   }
 }
 
-export async function retryProjectAction(projectId: string): Promise<{ success: boolean; error?: string }> {
+export async function retryProjectAction(
+  projectId: string, 
+  updates?: {
+    subtitlePreset?: string;
+    clipModel?: string;
+    aspectRatio?: string;
+    autoZoom?: boolean;
+    sliceStartTime?: number;
+    sliceEndTime?: number;
+  }
+): Promise<{ success: boolean; error?: string }> {
   const userId = await makeAuthGateway().getUserId();
   if (!userId) return { success: false, error: "Não autorizado." };
   
   try {
     const { makeRetryProjectUseCase } = await import("~/infrastructure/factories/use-case-factories");
     const useCase = makeRetryProjectUseCase();
-    await useCase.execute({ projectId, userId });
+    await useCase.execute({ projectId, userId, updates });
     
     revalidatePath("/dashboard");
     return { success: true };

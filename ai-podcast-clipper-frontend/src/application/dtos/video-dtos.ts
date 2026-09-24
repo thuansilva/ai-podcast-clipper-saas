@@ -71,6 +71,10 @@ export interface UploadedFileDTO {
   clipsCount: number;
   createdAt: Date;
   thumbnailUrl?: string;
+  subtitlePreset?: string;
+  clipModel?: string;
+  aspectRatio?: string;
+  autoZoom?: boolean;
 }
 
 export interface ListUserVideosInput {
