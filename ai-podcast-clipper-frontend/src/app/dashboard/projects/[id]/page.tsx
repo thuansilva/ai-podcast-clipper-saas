@@ -18,7 +18,7 @@ const CLIPS_PER_PAGE = 10;
 
 export default async function ProjectDetailsPage(props: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { id } = await props.params;
   const searchParams = await props.searchParams;

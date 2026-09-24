@@ -1,4 +1,4 @@
-import { IStorageGateway } from "~/domain/ports/storage-gateway";
+import type { IStorageGateway } from "~/domain/ports/storage-gateway";
 
 export class LocalStorageGateway implements IStorageGateway {
   async createUploadPresignedUrl(

@@ -10,12 +10,14 @@ import {
   Play,
   Scissors,
   Trash2,
+  Flame,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { deleteClip, getClipPlayUrl } from "~/actions/generation";
 import { ClipEditorModal } from "./clip-editor-modal";
+import { CustomVideoPlayer } from "./custom-video-player";
 
 export interface ClipCardProps {
   clip: Clip;
@@ -108,13 +110,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
               <Loader2 className="h-8 w-8 animate-spin text-[var(--fumaca)]" />
             </div>
           ) : playUrl ? (
-            <video
-              src={playUrl}
-              controls
-              preload="metadata"
-              className="h-full w-full object-cover"
-              aria-label={`Vídeo do clipe ${clip.title}`}
-            />
+            <CustomVideoPlayer src={playUrl} />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center text-[var(--fumaca)]">
               <Play className="h-10 w-10 opacity-40 text-[var(--ouro)]" />
@@ -139,8 +135,11 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
         <div className="flex flex-col gap-2 mt-3">
           {/* Linha 1: Score e Ações */}
           <div className="flex items-center justify-between">
-            <div className="text-[22px] font-bold text-[var(--ouro)]">
-              {clip.viralityScore !== null && clip.viralityScore !== undefined ? clip.viralityScore : "--"}
+            <div className="flex items-center gap-1.5 text-[22px] font-bold text-[var(--ouro)]" title="Potencial Viral">
+              <Flame className="h-5 w-5" />
+              {clip.viralityScore !== null && clip.viralityScore !== undefined 
+                ? `${Math.round(clip.viralityScore * 10)}%` 
+                : "--"}
             </div>
             
             <div className="flex items-center gap-1.5">

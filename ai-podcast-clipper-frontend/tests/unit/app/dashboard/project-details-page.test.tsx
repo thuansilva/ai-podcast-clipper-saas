@@ -36,7 +36,7 @@ describe("ProjectDetailsPage", () => {
     } as any);
 
     await expect(
-      ProjectDetailsPage({ params: Promise.resolve({ id: "proj-123" }) })
+      ProjectDetailsPage({ params: Promise.resolve({ id: "proj-123" }), searchParams: Promise.resolve({}) })
     ).rejects.toThrow("NEXT_REDIRECT");
     expect(redirect).toHaveBeenCalledWith("/login");
   });
@@ -49,7 +49,7 @@ describe("ProjectDetailsPage", () => {
     vi.mocked(db.uploadedFile.findUnique).mockResolvedValue(null);
 
     await expect(
-      ProjectDetailsPage({ params: Promise.resolve({ id: "proj-nonexistent" }) })
+      ProjectDetailsPage({ params: Promise.resolve({ id: "proj-nonexistent" }), searchParams: Promise.resolve({}) })
     ).rejects.toThrow("NEXT_REDIRECT");
     expect(db.uploadedFile.findUnique).toHaveBeenCalledWith({
       where: { id: "proj-nonexistent", userId: "user-1" },
@@ -73,7 +73,7 @@ describe("ProjectDetailsPage", () => {
     } as any);
 
     const result = await ProjectDetailsPage({
-      params: Promise.resolve({ id: "proj-1" }),
+      params: Promise.resolve({ id: "proj-1" }), searchParams: Promise.resolve({}),
     });
 
     expect(result).toBeDefined();
@@ -99,7 +99,7 @@ describe("ProjectDetailsPage", () => {
     } as any);
 
     const result = await ProjectDetailsPage({
-      params: Promise.resolve({ id: "proj-failed" }),
+      params: Promise.resolve({ id: "proj-failed" }), searchParams: Promise.resolve({}),
     });
 
     render(result);
@@ -139,7 +139,7 @@ describe("ProjectDetailsPage", () => {
     } as any);
 
     const result = await ProjectDetailsPage({
-      params: Promise.resolve({ id: "proj-2" }),
+      params: Promise.resolve({ id: "proj-2" }), searchParams: Promise.resolve({}),
     });
 
     render(result);
