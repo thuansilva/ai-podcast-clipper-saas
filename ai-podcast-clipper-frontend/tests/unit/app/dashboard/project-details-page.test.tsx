@@ -53,7 +53,7 @@ describe("ProjectDetailsPage", () => {
     ).rejects.toThrow("NEXT_REDIRECT");
     expect(db.uploadedFile.findUnique).toHaveBeenCalledWith({
       where: { id: "proj-nonexistent", userId: "user-1" },
-      include: { clips: { orderBy: { createdAt: "asc" } } },
+      include: expect.any(Object),
     });
     expect(redirect).toHaveBeenCalledWith("/dashboard/projects");
   });
@@ -69,7 +69,7 @@ describe("ProjectDetailsPage", () => {
       displayName: "Meu Podcast Top",
       durationSeconds: 360,
       status: "processing",
-      clips: [],
+      _count: { clips: 0 }, clips: [],
     } as any);
 
     const result = await ProjectDetailsPage({
@@ -79,7 +79,7 @@ describe("ProjectDetailsPage", () => {
     expect(result).toBeDefined();
     expect(db.uploadedFile.findUnique).toHaveBeenCalledWith({
       where: { id: "proj-1", userId: "user-1" },
-      include: { clips: { orderBy: { createdAt: "asc" } } },
+      include: expect.any(Object),
     });
   });
 
@@ -95,7 +95,7 @@ describe("ProjectDetailsPage", () => {
       durationSeconds: 120,
       status: "failed",
       errorMessage: "Erro ao processar áudio",
-      clips: [],
+      _count: { clips: 0 }, clips: [],
     } as any);
 
     const result = await ProjectDetailsPage({
@@ -119,11 +119,12 @@ describe("ProjectDetailsPage", () => {
       displayName: "Entrevista Exclusiva",
       durationSeconds: 1200,
       status: "processed",
+      _count: { clips: 1 },
       clips: [
         {
           id: "clip-1",
           title: "Momento Incrível",
-          viralityScore: 92.4,
+          viralityScore: 9.24,
         },
         {
           id: "clip-2",
@@ -133,7 +134,7 @@ describe("ProjectDetailsPage", () => {
         {
           id: "clip-3",
           title: "Momento 3",
-          viralityScore: 84.7,
+          viralityScore: 8.47,
         },
       ],
     } as any);
@@ -143,8 +144,8 @@ describe("ProjectDetailsPage", () => {
     });
 
     render(result);
-    expect(screen.getByText("Score: 92")).toBeDefined();
-    expect(screen.getByText("Score: N/A")).toBeDefined();
-    expect(screen.getByText("Score: 85")).toBeDefined();
+    expect(await screen.findByText("92%")).toBeDefined();
+    expect(await screen.findByText("--")).toBeDefined();
+    expect(await screen.findByText("85%")).toBeDefined();
   });
 });

@@ -65,6 +65,32 @@ export class PrismaClipRepository implements IClipRepository {
     }));
   }
 
+  async findByUploadedFileId(uploadedFileId: string): Promise<ClipEntity[]> {
+    const clips = await db.clip.findMany({
+      where: { uploadedFileId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return clips.map((clip) => ({
+      id: clip.id,
+      userId: clip.userId,
+      uploadedFileId: clip.uploadedFileId,
+      s3Key: clip.s3Key,
+      title: clip.title,
+      hook: clip.hook,
+      viralityScore: clip.viralityScore,
+      reason: clip.reason,
+      startTime: clip.startTime,
+      endTime: clip.endTime,
+      durationSeconds: clip.durationSeconds,
+      subtitlePreset: clip.subtitlePreset as SubtitlePreset,
+      layoutMode: clip.layoutMode as LayoutMode,
+      transcriptWords: clip.transcriptWords,
+      createdAt: clip.createdAt,
+      updatedAt: clip.updatedAt,
+    }));
+  }
+
   async createMany(clips: CreateClipInput[]): Promise<number> {
     const result = await db.clip.createMany({
       data: clips.map((clip) => ({

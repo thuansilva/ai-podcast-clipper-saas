@@ -10,5 +10,5 @@ export interface IStorageGateway {
     expiresInSeconds?: number
   ): Promise<string>;
 
-  deleteObject(s3Key: string): Promise<void>;
+  deleteFile(key: string): Promise<void>;
 }

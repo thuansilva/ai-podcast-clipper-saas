@@ -17,6 +17,7 @@ export interface UploadedFileEntity {
   displayName?: string | null;
   sourceType: SourceType;
   youtubeUrl?: string | null;
+  thumbnailUrl?: string | null;
   durationSeconds: number;
   creditsCost: number;
   uploaded: boolean;
@@ -40,6 +41,7 @@ export interface CreateUploadedFileInput {
   displayName?: string | null;
   sourceType?: SourceType;
   youtubeUrl?: string | null;
+  thumbnailUrl?: string | null;
   durationSeconds?: number;
   creditsCost?: number;
   uploaded?: boolean;
@@ -52,11 +54,13 @@ export class UploadedFile {
   private _displayName?: string | null;
   public readonly sourceType: SourceType;
   public readonly youtubeUrl?: string | null;
+  thumbnailUrl?: string | null;
   private _durationSeconds: number;
   private _creditsCost: number;
   private _uploaded: boolean;
   private _status: UploadedFileStatus;
   private _errorMessage?: string | null;
+  private _thumbnailUrl?: string | null;
   public readonly createdAt: Date;
   private _updatedAt: Date;
 
@@ -75,6 +79,7 @@ export class UploadedFile {
     uploaded: boolean,
     status: UploadedFileStatus,
     errorMessage: string | null | undefined,
+    thumbnailUrl: string | null | undefined,
     createdAt: Date,
     updatedAt: Date
   ) {
@@ -99,6 +104,7 @@ export class UploadedFile {
     this._uploaded = uploaded;
     this._status = status;
     this._errorMessage = errorMessage ?? null;
+    this._thumbnailUrl = thumbnailUrl ?? null;
     this.createdAt = createdAt;
     this._updatedAt = updatedAt;
   }
@@ -123,6 +129,7 @@ export class UploadedFile {
       input.uploaded ?? false,
       "queued",
       null,
+      input.thumbnailUrl ?? null,
       now,
       now
     );
@@ -144,6 +151,7 @@ export class UploadedFile {
       data.uploaded,
       data.status,
       data.errorMessage,
+      data.thumbnailUrl,
       data.createdAt,
       data.updatedAt
     );
@@ -176,6 +184,10 @@ export class UploadedFile {
 
   get errorMessage(): string | null | undefined {
     return this._errorMessage;
+  }
+
+  get thumbnailUrl(): string | null | undefined {
+    return this._thumbnailUrl;
   }
 
   get updatedAt(): Date {
@@ -252,6 +264,7 @@ export class UploadedFile {
       uploaded: this._uploaded,
       status: this._status,
       errorMessage: this._errorMessage,
+      thumbnailUrl: this._thumbnailUrl,
       createdAt: this.createdAt,
       updatedAt: this._updatedAt,
     };

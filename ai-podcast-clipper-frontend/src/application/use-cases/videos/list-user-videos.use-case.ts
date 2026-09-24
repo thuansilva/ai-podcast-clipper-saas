@@ -32,6 +32,7 @@ export class ListUserVideosUseCase {
       status: file.status,
       clipsCount: file.clipsCount,
       createdAt: file.createdAt,
+      thumbnailUrl: file.thumbnailUrl ?? undefined,
     }));
 
     return {

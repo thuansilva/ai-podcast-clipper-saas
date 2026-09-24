@@ -24,6 +24,7 @@ export interface CreateUploadedFileInput {
   displayName?: string | null;
   sourceType: SourceType;
   youtubeUrl?: string | null;
+  thumbnailUrl?: string | null;
   durationSeconds?: number;
   creditsCost?: number;
   uploaded?: boolean;

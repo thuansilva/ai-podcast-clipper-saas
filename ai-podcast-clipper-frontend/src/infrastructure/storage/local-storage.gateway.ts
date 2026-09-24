@@ -18,10 +18,10 @@ export class LocalStorageGateway implements IStorageGateway {
     return `/api/local-storage?key=${encodeURIComponent(s3Key)}`;
   }
 
-  async deleteObject(s3Key: string): Promise<void> {
+  async deleteFile(key: string): Promise<void> {
     // Requisição interna para a API local deletar o arquivo
     try {
-      await fetch(`http://localhost:3000/api/local-storage?key=${encodeURIComponent(s3Key)}`, {
+      await fetch(`http://localhost:3000/api/local-storage?key=${encodeURIComponent(key)}`, {
         method: "DELETE"
       });
     } catch (e) {

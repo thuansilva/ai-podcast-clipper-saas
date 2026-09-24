@@ -25,6 +25,7 @@ export class GenerateUploadUrlUseCase {
       displayName: input.filename,
       sourceType: "UPLOAD",
       status: "queued",
+      thumbnailUrl: input.thumbnailUrl,
       uploaded: false,
     });
 

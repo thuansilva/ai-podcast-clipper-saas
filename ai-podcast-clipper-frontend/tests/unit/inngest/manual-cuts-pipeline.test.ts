@@ -2,6 +2,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { processVideoHandler, type PipelineStep } from "~/inngest/functions";
 import { env } from "~/env";
 
+
+import { fetch as undiciFetch } from "undici";
+vi.mock("undici", () => {
+  return {
+    Agent: vi.fn(),
+    fetch: vi.fn(),
+  };
+});
+
 // Mock env
 vi.mock("~/env", () => ({
   env: {
@@ -88,7 +97,7 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
     mockUploadedFileUpdate.mockResolvedValue({});
     mockClipCreateMany.mockResolvedValue({ count: 2 });
 
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    vi.mocked(undiciFetch).mockImplementation(async (url) => {
       if (url.toString() === env.PROCESS_VIDEO_ENDPOINT) {
         return new Response(
           JSON.stringify({
@@ -154,7 +163,7 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
     });
 
     // 2. Verifica payload despachado para o Modal GPU
-    const fetchSpy = vi.mocked(globalThis.fetch);
+    const fetchSpy = vi.mocked(undiciFetch);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [calledUrl, requestInit] = fetchSpy.mock.calls[0]!;
     expect(calledUrl).toBe(env.PROCESS_VIDEO_ENDPOINT);
@@ -218,7 +227,7 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
       amount: undefined,
     });
 
-    const fetchSpy = vi.mocked(globalThis.fetch);
+    const fetchSpy = vi.mocked(undiciFetch);
     const [, requestInit] = fetchSpy.mock.calls[0]!;
     const parsedBody = JSON.parse(requestInit?.body as string);
 
@@ -256,7 +265,7 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
       amount: undefined,
     });
 
-    const fetchSpy = vi.mocked(globalThis.fetch);
+    const fetchSpy = vi.mocked(undiciFetch);
     const [, requestInit] = fetchSpy.mock.calls[0]!;
     const parsedBody = JSON.parse(requestInit?.body as string);
 
@@ -345,7 +354,7 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
 
     expect(result.success).toBe(true);
 
-    const fetchSpy = vi.mocked(globalThis.fetch);
+    const fetchSpy = vi.mocked(undiciFetch);
     const [, requestInit] = fetchSpy.mock.calls[0]!;
     const parsedBody = JSON.parse(requestInit?.body as string);
 

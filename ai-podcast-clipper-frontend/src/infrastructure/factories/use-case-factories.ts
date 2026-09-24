@@ -21,7 +21,9 @@ import { ProcessSubscriptionCheckoutUseCase } from "~/application/use-cases/cred
 import { GenerateUploadUrlUseCase } from "~/application/use-cases/videos/generate-upload-url.use-case";
 import { ImportYouTubeVideoUseCase } from "~/application/use-cases/videos/import-youtube-video.use-case";
 import { ListUserVideosUseCase } from "~/application/use-cases/videos/list-user-videos.use-case";
+import { DeleteProjectUseCase } from "~/application/use-cases/delete-project.use-case";
 
+import { RenameProjectUseCase } from "~/application/use-cases/rename-project.use-case";
 
 import { GetClipPlayUrlUseCase } from "~/application/use-cases/clips/get-clip-play-url.use-case";
 import { UpdateClipUseCase } from "~/application/use-cases/clips/update-clip.use-case";
@@ -107,6 +109,19 @@ export function makeImportYouTubeVideoUseCase(): ImportYouTubeVideoUseCase {
     new PrismaUploadedFileRepository(),
     new InngestQueueGateway()
   );
+}
+
+export function makeDeleteProjectUseCase(): DeleteProjectUseCase {
+  const storageGateway = env.STORAGE_PROVIDER === "local" ? new LocalStorageGateway() : new S3StorageGateway();
+  return new DeleteProjectUseCase(
+    new PrismaUploadedFileRepository(),
+    new PrismaClipRepository(),
+    storageGateway
+  );
+}
+
+export function makeRenameProjectUseCase(): RenameProjectUseCase {
+  return new RenameProjectUseCase(new PrismaUploadedFileRepository());
 }
 
 export function makeListUserVideosUseCase(): ListUserVideosUseCase {

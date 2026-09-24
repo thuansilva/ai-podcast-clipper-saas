@@ -51,10 +51,10 @@ export class S3StorageGateway implements IStorageGateway {
     });
   }
 
-  async deleteObject(s3Key: string): Promise<void> {
+  async deleteFile(key: string): Promise<void> {
     const command = new DeleteObjectCommand({
       Bucket: env.S3_BUCKET_NAME,
-      Key: s3Key,
+      Key: key,
     });
 
     await this.s3Client.send(command);

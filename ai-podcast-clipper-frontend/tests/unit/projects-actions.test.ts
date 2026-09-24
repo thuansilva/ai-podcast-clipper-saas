@@ -21,7 +21,7 @@ describe("loadMoreProjectsAction", () => {
       getUserId: vi.fn().mockResolvedValue(null),
     } as any);
 
-    await expect(loadMoreProjectsAction(1)).rejects.toThrow("Unauthorized");
+    await expect(loadMoreProjectsAction(1)).rejects.toThrow("Não autorizado.");
   });
 
   it("calls ListUserVideosUseCase with default limit 20 and desc sort", async () => {

@@ -118,7 +118,7 @@ describe("DashboardPage", () => {
     expect(getProcessingOptions).toHaveBeenCalled();
     expect(mockExecute).toHaveBeenCalledWith({
       userId: "user-123",
-      limit: 5,
+      limit: 10,
     });
 
     // Verify rendered output

@@ -11,6 +11,7 @@ export interface GenerateUploadUrlInput {
   userId: string;
   filename: string;
   contentType: string;
+  thumbnailUrl?: string;
 }
 
 export interface GenerateUploadUrlOutput {

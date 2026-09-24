@@ -7,6 +7,7 @@ import { DomainError } from "~/domain/errors/domain-error";
 export async function generateUploadUrl(fileInfo: {
   filename: string;
   contentType: string;
+  thumbnailUrl?: string;
 }): Promise<{
   success: boolean;
   signedUrl: string;
@@ -25,6 +26,7 @@ export async function generateUploadUrl(fileInfo: {
       userId,
       filename: fileInfo.filename,
       contentType: fileInfo.contentType,
+      thumbnailUrl: fileInfo.thumbnailUrl,
     });
 
     return {

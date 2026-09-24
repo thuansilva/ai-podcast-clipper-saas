@@ -26,7 +26,7 @@ export class DeleteClipUseCase {
       throw new UnauthorizedError("Você não tem permissão para excluir este clipe.");
     }
 
-    await this.storageGateway.deleteObject(clip.s3Key);
+    await this.storageGateway.deleteFile(clip.s3Key);
     await this.clipRepository.delete(input.clipId);
 
     return {

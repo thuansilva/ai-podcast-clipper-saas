@@ -23,7 +23,7 @@ export class InMemoryStorageGateway implements IStorageGateway {
     return url;
   }
 
-  async deleteObject(s3Key: string): Promise<void> {
+  async deleteFile(s3Key: string): Promise<void> {
     this.deletedKeys.push(s3Key);
   }
 }

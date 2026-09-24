@@ -3,6 +3,15 @@
  */
 import { describe, it, expect, afterEach, afterAll, vi } from "vitest";
 import { db } from "~/server/db";
+
+import { fetch as undiciFetch } from "undici";
+vi.mock("undici", () => {
+  return {
+    Agent: vi.fn(),
+    fetch: vi.fn(),
+  };
+});
+
 import { env } from "~/env";
 import {
   processVideo,
@@ -107,7 +116,7 @@ describe("Inngest Pipeline Integration Tests", () => {
     ];
 
     // Mock fetch para o endpoint de GPU do Modal
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    vi.mocked(undiciFetch).mockImplementation(async (url) => {
       const urlStr = url.toString();
       if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
         return new Response(
@@ -189,7 +198,7 @@ describe("Inngest Pipeline Integration Tests", () => {
     const file = await createTestFile(user.id, { durationSeconds: 120 });
 
     // Mock fetch simulando erro 500 no Modal GPU
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    vi.mocked(undiciFetch).mockImplementation(async (url) => {
       const urlStr = url.toString();
       if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
         return new Response(
@@ -253,7 +262,7 @@ describe("Inngest Pipeline Integration Tests", () => {
     // Vídeo de 180s exige ceil(180/60) = 3 créditos
     const file = await createTestFile(user.id, { durationSeconds: 180 });
 
-    const mockFetch = vi.spyOn(globalThis, "fetch");
+    const mockFetch = vi.mocked(undiciFetch);
     const mockStep = createMockStep();
 
     const result = await processVideoHandler({
@@ -325,7 +334,7 @@ describe("Inngest Pipeline Integration Tests", () => {
       },
     ];
 
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    vi.mocked(undiciFetch).mockImplementation(async (url) => {
       const urlStr = url.toString();
       if (urlStr === ytEndpoint) {
         return new Response(JSON.stringify(mockDownloadResponse), {
@@ -408,7 +417,7 @@ describe("Inngest Pipeline Integration Tests", () => {
 
     const ytEndpoint = getYouTubeDownloadEndpoint();
 
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    vi.mocked(undiciFetch).mockImplementation(async (url) => {
       const urlStr = url.toString();
       if (urlStr === ytEndpoint) {
         return new Response(
@@ -458,7 +467,7 @@ describe("Inngest Pipeline Integration Tests", () => {
     const user = await createTestUser(10, 0);
     const file = await createTestFile(user.id, { durationSeconds: 60 });
 
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+    vi.mocked(undiciFetch).mockImplementation(async (url) => {
       const urlStr = url.toString();
       if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
         return new Response(

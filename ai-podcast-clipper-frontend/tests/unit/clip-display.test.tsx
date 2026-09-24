@@ -71,10 +71,10 @@ describe("ClipDisplay Component", () => {
     render(<ClipDisplay clips={mockClips} />);
 
     expect(screen.getByText("Primeiro Corte Viral")).toBeInTheDocument();
-    expect(screen.getByText("🔥 9.8/10")).toBeInTheDocument();
+    expect(screen.getByText("98%")).toBeInTheDocument();
 
     expect(screen.getByText("Segundo Corte Viral")).toBeInTheDocument();
-    expect(screen.getByText("🔥 8.5/10")).toBeInTheDocument();
+    expect(screen.getByText("85%")).toBeInTheDocument();
 
     await waitFor(() => {
       expect(getClipPlayUrl).toHaveBeenCalledWith("clip-1");

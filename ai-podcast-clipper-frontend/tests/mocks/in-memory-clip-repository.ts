@@ -18,6 +18,12 @@ export class InMemoryClipRepository implements IClipRepository {
     );
   }
 
+  async findByUploadedFileId(uploadedFileId: string): Promise<ClipEntity[]> {
+    return Array.from(this.clips.values()).filter(
+      (clip) => clip.uploadedFileId === uploadedFileId
+    );
+  }
+
   async createMany(clips: CreateClipInput[]): Promise<number> {
     const now = new Date();
     for (const input of clips) {

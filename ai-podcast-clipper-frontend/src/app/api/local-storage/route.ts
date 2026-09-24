@@ -111,8 +111,12 @@ export async function DELETE(req: NextRequest) {
 
   const filePath = key.startsWith('/') ? key : path.join(UPLOAD_DIR, key);
   
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+  try {
+    await fs.promises.unlink(filePath);
+  } catch (error: any) {
+    if (error.code !== "ENOENT") {
+      console.warn("Failed to delete file:", error);
+    }
   }
 
   return NextResponse.json({ success: true });
