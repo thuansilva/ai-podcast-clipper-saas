@@ -54,7 +54,6 @@ export class UploadedFile {
   private _displayName?: string | null;
   public readonly sourceType: SourceType;
   public readonly youtubeUrl?: string | null;
-  thumbnailUrl?: string | null;
   private _durationSeconds: number;
   private _creditsCost: number;
   private _uploaded: boolean;

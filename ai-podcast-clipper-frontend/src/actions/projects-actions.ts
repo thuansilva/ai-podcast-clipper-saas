@@ -1,5 +1,7 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
+
 import {
   makeListUserVideosUseCase,
   makeDeleteProjectUseCase,
@@ -68,5 +70,21 @@ export async function renameProjectAction(id: string, newName: string) {
       success: false, 
       error: error instanceof Error ? error.message : "Ocorreu um erro inesperado ao renomear o projeto." 
     };
+  }
+}
+
+export async function retryProjectAction(projectId: string): Promise<{ success: boolean; error?: string }> {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) return { success: false, error: "Não autorizado." };
+  
+  try {
+    const { makeRetryProjectUseCase } = await import("~/infrastructure/factories/use-case-factories");
+    const useCase = makeRetryProjectUseCase();
+    await useCase.execute({ projectId, userId });
+    
+    revalidatePath("/dashboard");
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : "Erro desconhecido" };
   }
 }

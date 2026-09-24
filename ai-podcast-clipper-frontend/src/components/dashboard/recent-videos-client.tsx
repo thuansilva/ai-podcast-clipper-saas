@@ -6,13 +6,13 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, MoreVertical, Edit2, Trash2, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, MoreVertical, Edit2, Trash2, Loader2, RefreshCw } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "~/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "~/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
-import { deleteProjectAction, renameProjectAction } from "~/actions/projects-actions";
+import { deleteProjectAction, renameProjectAction, retryProjectAction } from "~/actions/projects-actions";
 
 interface RecentVideosClientProps {
   uploadedFiles: {
@@ -228,6 +228,26 @@ export function RecentVideosClient({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-40 bg-[var(--superficie)] border-[var(--linha)]">
+                    {isFailed && (
+                      <DropdownMenuItem 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          startTransition(async () => {
+                            const res = await retryProjectAction(file.id);
+                            if (res.success) {
+                              toast.success("Projeto reenviado para processamento!");
+                              router.refresh();
+                            } else {
+                              toast.error(res.error || "Falha ao reenviar projeto.");
+                            }
+                          });
+                        }}
+                        className="cursor-pointer text-[var(--ouro)] focus:bg-[var(--ouro)]/10 focus:text-[var(--ouro)]"
+                      >
+                        {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                        Tentar Novamente
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem 
                       onClick={(e) => { e.stopPropagation(); setProjectToRename({ id: file.id, name: file.filename }); setNewName(file.filename); }}
                       className="cursor-pointer hover:bg-[var(--superficie-2)]"

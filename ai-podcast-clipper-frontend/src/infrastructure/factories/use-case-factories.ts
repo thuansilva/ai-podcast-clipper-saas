@@ -184,3 +184,12 @@ export function makeTriggerVideoProcessingUseCase(): TriggerVideoProcessingUseCa
     new InngestQueueGateway()
   );
 }
+
+import { RetryProjectUseCase } from "~/application/use-cases/retry-project.use-case";
+
+export function makeRetryProjectUseCase(): RetryProjectUseCase {
+  return new RetryProjectUseCase(
+    new PrismaUploadedFileRepository(),
+    new InngestQueueGateway()
+  );
+}
