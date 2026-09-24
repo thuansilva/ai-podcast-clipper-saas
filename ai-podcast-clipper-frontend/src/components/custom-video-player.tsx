@@ -30,18 +30,6 @@ export function CustomVideoPlayer({ src, className }: CustomVideoPlayerProps) {
     }
   };
 
-  const handleMouseEnter = () => {
-    if (videoRef.current) {
-      void videoRef.current.play();
-    }
-  };
-
-  const handleMouseLeave = () => {
-    if (videoRef.current) {
-      videoRef.current.pause();
-    }
-  };
-
   const toggleMute = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -84,8 +72,6 @@ export function CustomVideoPlayer({ src, className }: CustomVideoPlayerProps) {
     <div 
       className={cn("relative w-full h-full group bg-black cursor-pointer overflow-hidden", className)}
       onClick={togglePlay}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
     >
       <video
         ref={videoRef}

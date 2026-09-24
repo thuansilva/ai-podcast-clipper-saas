@@ -6,6 +6,7 @@ import {
   Calendar,
   Clock,
   Download,
+  Info,
   Loader2,
   Play,
   Scissors,
@@ -17,6 +18,7 @@ import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { deleteClip, getClipPlayUrl } from "~/actions/generation";
 import { ClipEditorModal } from "./clip-editor-modal";
+import { ClipDetailsModal } from "./clip-details-modal";
 import { CustomVideoPlayer } from "./custom-video-player";
 
 export interface ClipCardProps {
@@ -28,6 +30,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
   const [playUrl, setPlayUrl] = useState<string | null>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
@@ -118,8 +121,17 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
             </div>
           )}
 
+          {/* Botão de Detalhes (Info) no Canto Superior Direito */}
+          <button
+            onClick={() => setIsDetailsOpen(true)}
+            className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 hover:bg-black/80 text-[var(--marfim)] border border-transparent hover:border-[var(--linha)] transition-all z-10 opacity-80 hover:opacity-100 backdrop-blur-sm"
+            title="Ver Detalhes e Transcrição"
+          >
+            <Info className="h-4 w-4" />
+          </button>
+
           {/* Duração no Player (inferior direito) - Estilo da imagem */}
-          <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1">
+          <div className="pointer-events-none absolute bottom-2 right-2 flex items-center gap-1 z-10">
             {clip.durationSeconds > 0 && (
               <Badge
                 variant="secondary"
@@ -190,6 +202,15 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
         clip={clip}
         isOpen={isEditorOpen}
         onClose={() => setIsEditorOpen(false)}
+      />
+
+      {/* Modal de Detalhes (Info) */}
+      <ClipDetailsModal
+        clip={clip}
+        playUrl={playUrl}
+        isLoadingUrl={isLoadingUrl}
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
       />
     </>
   );
