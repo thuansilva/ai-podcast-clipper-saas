@@ -177,9 +177,33 @@ export function RecentVideosClient({
                   <div className="relative aspect-video bg-[var(--superficie-2)] overflow-hidden shrink-0">
                     {/* Thumbnail */}
                     <div 
-                      className={`absolute inset-0 bg-cover bg-center transition-all ${isProcessing ? "blur-sm scale-105 opacity-60" : "opacity-90 group-hover:opacity-100"}`}
+                      className={`absolute inset-0 bg-cover bg-center transition-all ${isProcessing ? "blur-sm scale-105 opacity-60" : isFailed ? "grayscale opacity-50" : "opacity-90 group-hover:opacity-100"}`}
                       style={{ backgroundImage: `url(${file.thumbnailUrl || "https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?q=80&w=600&auto=format&fit=crop"})` }}
                     />
+
+                    {isFailed && (
+                      <div 
+                        className="absolute inset-0 flex flex-col items-center justify-center bg-[var(--tinta)]/60 hover:bg-[var(--tinta)]/80 transition-colors z-10 cursor-pointer backdrop-blur-sm"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          startTransition(async () => {
+                            const res = await retryProjectAction(file.id);
+                            if (res.success) {
+                              toast.success("Projeto reenviado para processamento!");
+                              router.refresh();
+                            } else {
+                              toast.error(res.error || "Falha ao reenviar projeto.");
+                            }
+                          });
+                        }}
+                      >
+                        <div className="flex flex-col items-center gap-2 text-[var(--ouro)] drop-shadow-md transition-transform hover:scale-105">
+                          {isPending ? <Loader2 className="w-10 h-10 animate-spin" /> : <RefreshCw className="w-10 h-10" />}
+                          <span className="text-[10px] font-bold tracking-wider uppercase font-mono bg-black/50 px-2 py-1 rounded-md">Tentar Novamente</span>
+                        </div>
+                      </div>
+                    )}
                     
                     {!isProcessing && !isFailed && (
                       <div className="absolute inset-0 flex items-center justify-center bg-[var(--tinta)]/10 group-hover:bg-[var(--tinta)]/30 transition-colors z-10 cursor-pointer opacity-100">
@@ -228,26 +252,6 @@ export function RecentVideosClient({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-40 bg-[var(--superficie)] border-[var(--linha)]">
-                    {isFailed && (
-                      <DropdownMenuItem 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
-                          startTransition(async () => {
-                            const res = await retryProjectAction(file.id);
-                            if (res.success) {
-                              toast.success("Projeto reenviado para processamento!");
-                              router.refresh();
-                            } else {
-                              toast.error(res.error || "Falha ao reenviar projeto.");
-                            }
-                          });
-                        }}
-                        className="cursor-pointer text-[var(--ouro)] focus:bg-[var(--ouro)]/10 focus:text-[var(--ouro)]"
-                      >
-                        {isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-                        Tentar Novamente
-                      </DropdownMenuItem>
-                    )}
                     <DropdownMenuItem 
                       onClick={(e) => { e.stopPropagation(); setProjectToRename({ id: file.id, name: file.filename }); setNewName(file.filename); }}
                       className="cursor-pointer hover:bg-[var(--superficie-2)]"
