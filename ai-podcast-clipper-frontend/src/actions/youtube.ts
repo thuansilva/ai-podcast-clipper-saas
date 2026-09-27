@@ -18,6 +18,7 @@ export interface ImportYouTubeVideoInput {
   clipModel?: string;
   aspectRatio?: string;
   autoZoom?: boolean;
+  thumbnailUrl?: string;
 }
 
 export interface ImportYouTubeVideoResult {
@@ -67,6 +68,7 @@ export async function importYouTubeVideo(
       clipModel: input.clipModel,
       aspectRatio: input.aspectRatio,
       autoZoom: input.autoZoom,
+      thumbnailUrl: input.thumbnailUrl,
     });
 
     revalidatePath("/dashboard");

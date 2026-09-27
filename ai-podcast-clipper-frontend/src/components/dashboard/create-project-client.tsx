@@ -202,6 +202,7 @@ export function CreateProjectClient({
         clipModel: clipModel || undefined,
         aspectRatio: aspectRatio || undefined,
         autoZoom,
+        thumbnailUrl: metadata?.thumbnailUrl,
       });
 
       if (!result.success) {
@@ -575,40 +576,33 @@ export function CreateProjectClient({
                     Escolha a aparência visual do texto gerado
                   </p>
                 </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div
-                    onClick={() => setPreset("HORMOZI")}
-                    className={`cursor-pointer rounded-xl border p-4 transition-all ${preset === "HORMOZI" ? "border-[var(--ouro)] bg-[var(--superficie-2)] shadow-[0_0_15px_rgba(232,186,82,0.1)]" : "border-[var(--linha)] bg-[var(--superficie)] hover:border-[var(--linha-2)]"}`}
-                  >
-                    <p className="text-center text-lg font-bold text-yellow-400 uppercase italic drop-shadow-md">
-                      Viral Bold
-                    </p>
-                    <p className="mt-2 text-center text-xs text-[var(--fumaca)]">
-                      Cores chamativas e emojis
-                    </p>
-                  </div>
-                  <div
-                    onClick={() => setPreset("CLEAN")}
-                    className={`cursor-pointer rounded-xl border p-4 transition-all ${preset === "CLEAN" ? "border-[var(--ouro)] bg-[var(--superficie-2)] shadow-[0_0_15px_rgba(232,186,82,0.1)]" : "border-[var(--linha)] bg-[var(--superficie)] hover:border-[var(--linha-2)]"}`}
-                  >
-                    <p className="text-center font-sans text-lg font-semibold tracking-wide text-white">
-                      Clean Corp
-                    </p>
-                    <p className="mt-2 text-center text-xs text-[var(--fumaca)]">
-                      Minimalista e elegante
-                    </p>
-                  </div>
-                  <div
-                    onClick={() => setPreset("NONE")}
-                    className={`cursor-pointer rounded-xl border p-4 transition-all ${preset === "NONE" ? "border-[var(--ouro)] bg-[var(--superficie-2)] shadow-[0_0_15px_rgba(232,186,82,0.1)]" : "border-[var(--linha)] bg-[var(--superficie)] hover:border-[var(--linha-2)]"}`}
-                  >
-                    <p className="text-center font-sans text-lg font-semibold tracking-wide text-[var(--marfim)]">
-                      Sem Legenda
-                    </p>
-                    <p className="mt-2 text-center text-xs text-[var(--fumaca)]">
-                      Apenas áudio e vídeo original
-                    </p>
-                  </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 max-h-[300px] overflow-y-auto pr-2 pb-2 scrollbar-thin scrollbar-thumb-[var(--linha-2)]">
+                  {[
+                    { id: "HORMOZI", name: "Viral Bold", desc: "Amarelo em destaque, 1-2 palavras", color: "text-yellow-400 font-bold uppercase italic" },
+                    { id: "POPPING_GREEN", name: "MrBeast", desc: "Verde brilhante gigante e rápido", color: "text-green-400 font-bold uppercase" },
+                    { id: "GAMER", name: "Gamer Action", desc: "Vermelho e branco itálico", color: "text-red-500 font-bold italic uppercase" },
+                    { id: "LOUD", name: "Impacto Máximo", desc: "Branco gigante, 1 palavra", color: "text-white font-black uppercase text-xl" },
+                    { id: "NEON", name: "Cyberpunk", desc: "Ciano com brilho neon", color: "text-cyan-400 font-bold uppercase" },
+                    { id: "TRUE_CRIME", name: "Investigação", desc: "Vermelho escuro, sombrio", color: "text-red-700 font-mono font-bold" },
+                    { id: "MINIMAL", name: "Cinematic", desc: "Branco limpo, 5 palavras", color: "text-white font-sans font-light" },
+                    { id: "CORPORATE", name: "Corporativo", desc: "Fundo branco, texto azul", color: "text-blue-900 bg-white/90 px-2 rounded font-sans font-semibold" },
+                    { id: "VLOG", name: "Caixa Opaca", desc: "Fundo preto, texto branco", color: "text-white bg-black px-2 rounded font-sans font-semibold" },
+                    { id: "ASMR", name: "Delicado", desc: "Rosa pastel, fino e pequeno", color: "text-pink-300 font-serif italic text-sm" },
+                    { id: "NONE", name: "Sem Legenda", desc: "Apenas o vídeo original", color: "text-[var(--marfim)]" },
+                  ].map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => setPreset(p.id)}
+                      className={`cursor-pointer rounded-xl border p-4 transition-all flex flex-col items-center justify-center min-h-[100px] ${preset === p.id ? "border-[var(--ouro)] bg-[var(--superficie-2)] shadow-[0_0_15px_rgba(232,186,82,0.1)] scale-[1.02]" : "border-[var(--linha)] bg-[var(--superficie)] hover:border-[var(--linha-2)]"}`}
+                    >
+                      <p className={`text-center drop-shadow-md ${p.color}`}>
+                        {p.name}
+                      </p>
+                      <p className="mt-2 text-center text-[10px] sm:text-xs text-[var(--fumaca)] leading-tight">
+                        {p.desc}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               </div>
 

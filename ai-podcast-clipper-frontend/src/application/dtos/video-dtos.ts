@@ -33,6 +33,7 @@ export interface ImportYouTubeVideoInput {
   clipModel?: string;
   aspectRatio?: string;
   autoZoom?: boolean;
+  thumbnailUrl?: string;
 }
 
 export interface ImportYouTubeVideoOutput {

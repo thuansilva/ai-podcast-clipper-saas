@@ -42,6 +42,7 @@ export class ImportYouTubeVideoUseCase {
       aspectRatio: input.aspectRatio,
       autoZoom: input.autoZoom,
       subtitlePreset: input.preset,
+      thumbnailUrl: input.thumbnailUrl,
     });
 
     await this.queueGateway.sendProcessVideoEvent({

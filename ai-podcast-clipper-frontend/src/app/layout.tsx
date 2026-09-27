@@ -2,7 +2,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import "~/styles/globals.css";
 
 import { type Metadata } from "next";
-import { Geist } from "next/font/google";
+import localFont from "next/font/local";
 import { Toaster } from "~/components/ui/sonner";
 
 export const metadata: Metadata = {
@@ -11,8 +11,8 @@ export const metadata: Metadata = {
   icons: [{ rel: "icon", url: "/favicon.ico" }],
 };
 
-const geist = Geist({
-  subsets: ["latin"],
+const geist = localFont({
+  src: "../../node_modules/geist/dist/fonts/geist-sans/Geist-Variable.woff2",
   variable: "--font-geist-sans",
 });
 
