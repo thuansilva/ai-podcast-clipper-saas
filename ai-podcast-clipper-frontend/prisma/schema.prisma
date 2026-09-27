@@ -135,3 +135,10 @@ model ProcessingOption {
 
   @@index([type, isActive, order])
 }
+
+model ProcessedWebhookEvent {
+  id            String   @id @default(cuid())
+  stripeEventId String   @unique
+  eventType     String
+  processedAt   DateTime @default(now())
+}

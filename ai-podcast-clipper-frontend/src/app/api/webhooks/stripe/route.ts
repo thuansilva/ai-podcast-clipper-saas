@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { env } from "~/env";
+import { PrismaProcessedEventRepository } from "~/infrastructure/database/repositories/prisma-processed-event.repository";
 import {
   dispatchStripeCheckoutEvent,
   dispatchStripeSubscriptionEvent,
@@ -11,6 +12,8 @@ const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
 });
 
 const webhookSecret = env.STRIPE_WEBHOOK_SECRET;
+
+const processedEventRepository = new PrismaProcessedEventRepository();
 
 export async function POST(req: Request) {
   try {
@@ -26,6 +29,14 @@ export async function POST(req: Request) {
       return new NextResponse("Webhook signature verification failed", {
         status: 400,
       });
+    }
+
+    const isFirstDelivery = await processedEventRepository.tryMarkProcessed(
+      event.id,
+      event.type
+    );
+    if (!isFirstDelivery) {
+      return new NextResponse(null, { status: 200 });
     }
 
     if (event.type === "checkout.session.completed") {

@@ -11,6 +11,21 @@ vi.mock("~/infrastructure/queue/stripe-queue", () => ({
   dispatchStripeSubscriptionEvent: vi.fn(),
 }));
 
+const processedEventIds = new Set<string>();
+
+vi.mock(
+  "~/infrastructure/database/repositories/prisma-processed-event.repository",
+  () => ({
+    PrismaProcessedEventRepository: class {
+      async tryMarkProcessed(eventId: string) {
+        if (processedEventIds.has(eventId)) return false;
+        processedEventIds.add(eventId);
+        return true;
+      }
+    },
+  })
+);
+
 const mockConstructEvent = vi.fn();
 
 // Mock stripe constructEvent
@@ -32,6 +47,7 @@ vi.mock("stripe", () => {
 describe("Stripe Webhook Route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    processedEventIds.clear();
   });
 
   it("deve retornar 400 quando a assinatura do Stripe for inválida", async () => {
@@ -53,6 +69,7 @@ describe("Stripe Webhook Route", () => {
 
   it("deve retornar 200 e despachar evento assíncrono para checkout.session.completed em modo payment", async () => {
     const mockEvent = {
+      id: "evt_test_1",
       type: "checkout.session.completed",
       data: {
         object: {
@@ -84,6 +101,7 @@ describe("Stripe Webhook Route", () => {
 
   it("deve despachar evento para checkout.session.completed em modo subscription", async () => {
     const mockEvent = {
+      id: "evt_test_2",
       type: "checkout.session.completed",
       data: {
         object: {
@@ -120,6 +138,7 @@ describe("Stripe Webhook Route", () => {
 
   it("deve despachar evento para invoice.payment_succeeded", async () => {
     const mockEvent = {
+      id: "evt_test_3",
       type: "invoice.payment_succeeded",
       data: {
         object: {
@@ -160,6 +179,7 @@ describe("Stripe Webhook Route", () => {
 
   it("deve despachar evento para customer.subscription.updated", async () => {
     const mockEvent = {
+      id: "evt_test_4",
       type: "customer.subscription.updated",
       data: {
         object: {
@@ -197,6 +217,7 @@ describe("Stripe Webhook Route", () => {
 
   it("deve despachar evento para customer.subscription.deleted", async () => {
     const mockEvent = {
+      id: "evt_test_5",
       type: "customer.subscription.deleted",
       data: {
         object: {
@@ -223,5 +244,57 @@ describe("Stripe Webhook Route", () => {
         customerId: "cus_test_123",
       })
     );
+  });
+
+  describe("idempotência", () => {
+    const buildCheckoutEvent = (id: string) => ({
+      id,
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_test_idem",
+          customer: "cus_idem",
+          mode: "payment",
+          line_items: {
+            data: [{ price: { id: "price_small_pack" } }],
+          },
+        },
+      },
+    });
+
+    const buildRequest = (event: unknown) =>
+      new Request("http://localhost:3000/api/webhooks/stripe", {
+        method: "POST",
+        headers: { "stripe-signature": "valid_sig" },
+        body: JSON.stringify(event),
+      });
+
+    it("deve processar apenas uma vez quando o mesmo event.id chega duas vezes", async () => {
+      const mockEvent = buildCheckoutEvent("evt_duplicado");
+      mockConstructEvent.mockReturnValue(mockEvent);
+
+      const first = await POST(buildRequest(mockEvent));
+      const second = await POST(buildRequest(mockEvent));
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(dispatchStripeCheckoutEvent).toHaveBeenCalledTimes(1);
+      expect(dispatchStripeSubscriptionEvent).not.toHaveBeenCalled();
+    });
+
+    it("deve processar normalmente um event.id novo após um já processado", async () => {
+      const firstEvent = buildCheckoutEvent("evt_primeiro");
+      const secondEvent = buildCheckoutEvent("evt_segundo");
+      mockConstructEvent
+        .mockReturnValueOnce(firstEvent)
+        .mockReturnValueOnce(secondEvent);
+
+      const first = await POST(buildRequest(firstEvent));
+      const second = await POST(buildRequest(secondEvent));
+
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+      expect(dispatchStripeCheckoutEvent).toHaveBeenCalledTimes(2);
+    });
   });
 });
