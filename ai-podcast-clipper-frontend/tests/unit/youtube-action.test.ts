@@ -14,6 +14,15 @@ vi.mock("~/infrastructure/factories/auth-factory", () => ({
   makeAuthGateway: () => mockAuthGateway,
 }));
 
+// Rate limiting has its own dedicated coverage in
+// tests/unit/actions/youtube-import-rate-limit.test.ts. Here we keep it
+// unlimited so these business-logic tests don't depend on call order/count.
+vi.mock("~/infrastructure/factories/rate-limiter-factory", () => ({
+  makeYouTubeImportRateLimiter: () => ({
+    consume: vi.fn().mockResolvedValue(true),
+  }),
+}));
+
 vi.mock("~/server/db", () => ({
   db: {
     uploadedFile: {

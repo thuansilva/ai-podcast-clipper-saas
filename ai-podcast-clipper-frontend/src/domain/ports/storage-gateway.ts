@@ -2,6 +2,7 @@ export interface IStorageGateway {
   createUploadPresignedUrl(
     s3Key: string,
     contentType: string,
+    fileSizeBytes: number,
     expiresInSeconds?: number
   ): Promise<string>;
 

@@ -32,6 +32,7 @@ export class GenerateUploadUrlUseCase {
     const signedUrl = await this.storageGateway.createUploadPresignedUrl(
       s3Key,
       input.contentType,
+      input.fileSizeBytes,
       3600
     );
 

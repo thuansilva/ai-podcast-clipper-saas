@@ -7,6 +7,7 @@ export class InMemoryStorageGateway implements IStorageGateway {
   async createUploadPresignedUrl(
     s3Key: string,
     contentType: string,
+    _fileSizeBytes: number,
     expiresInSeconds = 3600
   ): Promise<string> {
     const url = `https://mock-s3.amazonaws.com/${s3Key}?upload=true&expires=${expiresInSeconds}&contentType=${encodeURIComponent(contentType)}`;

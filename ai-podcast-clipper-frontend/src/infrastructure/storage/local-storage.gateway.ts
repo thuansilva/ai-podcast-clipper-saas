@@ -1,9 +1,12 @@
+import fs from "fs";
 import type { IStorageGateway } from "~/domain/ports/storage-gateway";
+import { resolveLocalStoragePath } from "./local-storage-path";
 
 export class LocalStorageGateway implements IStorageGateway {
   async createUploadPresignedUrl(
     s3Key: string,
     _contentType: string,
+    _fileSizeBytes: number,
     _expiresInSeconds = 3600
   ): Promise<string> {
     // Retorna a URL da nossa API interna passando o key
@@ -19,13 +22,22 @@ export class LocalStorageGateway implements IStorageGateway {
   }
 
   async deleteFile(key: string): Promise<void> {
-    // Requisição interna para a API local deletar o arquivo
+    // Deleta diretamente do disco: esta classe já roda no servidor, então
+    // não há motivo (nem sessão de usuário disponível) para dar um round-trip
+    // HTTP até a própria API — o equivalente S3 também deleta diretamente,
+    // via SDK, sem HTTP intermediário.
+    const filePath = resolveLocalStoragePath(key);
+    if (!filePath) {
+      console.warn(`Refusing to delete local object outside upload dir: ${key}`);
+      return;
+    }
+
     try {
-      await fetch(`http://localhost:3000/api/local-storage?key=${encodeURIComponent(key)}`, {
-        method: "DELETE"
-      });
-    } catch (e) {
-      console.warn("Failed to delete local object", e);
+      await fs.promises.unlink(filePath);
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
+        console.warn("Failed to delete local object", error);
+      }
     }
   }
 }

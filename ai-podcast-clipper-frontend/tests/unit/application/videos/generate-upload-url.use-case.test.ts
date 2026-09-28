@@ -19,6 +19,7 @@ describe("GenerateUploadUrlUseCase", () => {
       userId: "user-1",
       filename: "podcast_ep1.mp4",
       contentType: "video/mp4",
+      fileSizeBytes: 500 * 1024 * 1024,
     });
 
     expect(result.success).toBe(true);

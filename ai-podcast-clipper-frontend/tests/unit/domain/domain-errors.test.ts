@@ -4,6 +4,7 @@ import { InsufficientCreditsError } from "~/domain/errors/insufficient-credits-e
 import { NotFoundError } from "~/domain/errors/not-found-error";
 import { UnauthorizedError } from "~/domain/errors/unauthorized-error";
 import { InvalidYouTubeUrlError } from "~/domain/errors/invalid-youtube-url-error";
+import { RateLimitExceededError } from "~/domain/errors/rate-limit-exceeded-error";
 
 describe("Domain Errors", () => {
   it("InsufficientCreditsError deve herdar de DomainError e conter detalhes", () => {
@@ -33,5 +34,16 @@ describe("Domain Errors", () => {
     const error = new InvalidYouTubeUrlError("https://invalid.com");
     expect(error).toBeInstanceOf(DomainError);
     expect(error.message).toContain("não é um link válido");
+  });
+
+  it("RateLimitExceededError deve herdar de DomainError e ter mensagem padrão", () => {
+    const error = new RateLimitExceededError();
+    expect(error).toBeInstanceOf(DomainError);
+    expect(error.message.length).toBeGreaterThan(0);
+  });
+
+  it("RateLimitExceededError deve aceitar mensagem customizada", () => {
+    const error = new RateLimitExceededError("Aguarde antes de tentar novamente.");
+    expect(error.message).toBe("Aguarde antes de tentar novamente.");
   });
 });

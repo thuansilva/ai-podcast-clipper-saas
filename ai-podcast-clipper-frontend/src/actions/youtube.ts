@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { makeImportYouTubeVideoUseCase } from "~/infrastructure/factories/use-case-factories";
+import { makeYouTubeImportRateLimiter } from "~/infrastructure/factories/rate-limiter-factory";
 import { DomainError } from "~/domain/errors/domain-error";
+import { RateLimitExceededError } from "~/domain/errors/rate-limit-exceeded-error";
 import { getProcessingOptions } from "~/application/services/processing-options.service";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 
@@ -40,6 +42,13 @@ export async function importYouTubeVideo(
   }
 
   try {
+    const allowed = await makeYouTubeImportRateLimiter().consume(userId);
+    if (!allowed) {
+      throw new RateLimitExceededError(
+        "Too many requests. Please wait a minute before importing another video."
+      );
+    }
+
     const options = await getProcessingOptions();
 
     if (input.genre && !options.GENRE?.some((o) => o.value === input.genre)) {

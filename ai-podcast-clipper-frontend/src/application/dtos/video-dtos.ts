@@ -11,6 +11,7 @@ export interface GenerateUploadUrlInput {
   userId: string;
   filename: string;
   contentType: string;
+  fileSizeBytes: number;
   thumbnailUrl?: string;
 }
 
@@ -53,7 +54,7 @@ export interface ProcessVideoEventData {
 
 export interface TriggerVideoProcessingInput {
   uploadedFileId: string;
-  userId?: string;
+  userId: string;
   preset?: string;
   mode?: ProcessingMode;
   manualCuts?: ManualCutDTO[];

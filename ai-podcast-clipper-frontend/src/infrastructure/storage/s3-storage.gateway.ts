@@ -24,12 +24,17 @@ export class S3StorageGateway implements IStorageGateway {
   async createUploadPresignedUrl(
     s3Key: string,
     contentType: string,
+    fileSizeBytes: number,
     expiresInSeconds = 3600
   ): Promise<string> {
     const command = new PutObjectCommand({
       Bucket: env.S3_BUCKET_NAME,
       Key: s3Key,
       ContentType: contentType,
+      // Assinar com ContentLength faz o S3 rejeitar qualquer PUT cujo corpo
+      // não bata exatamente com o tamanho declarado — impede que o cliente
+      // envie mais bytes do que o anunciado (e validado) em generateUploadUrl.
+      ContentLength: fileSizeBytes,
     });
 
     return await getSignedUrl(this.s3Client, command, {

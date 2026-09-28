@@ -236,6 +236,7 @@ export function CreateProjectClient({
       const result = await generateUploadUrl({
         filename: selectedFile.name,
         contentType: selectedFile.type,
+        fileSizeBytes: selectedFile.size,
         thumbnailUrl
       });
 
