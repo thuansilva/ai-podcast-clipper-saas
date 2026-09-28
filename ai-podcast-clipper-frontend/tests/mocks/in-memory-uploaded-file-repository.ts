@@ -21,6 +21,13 @@ export class InMemoryUploadedFileRepository implements IUploadedFileRepository {
     return this.files.get(id) ?? null;
   }
 
+  async findByS3Key(s3Key: string): Promise<UploadedFileEntity | null> {
+    return (
+      Array.from(this.files.values()).find((file) => file.s3Key === s3Key) ??
+      null
+    );
+  }
+
   async findByUserId(userId: string): Promise<UploadedFileEntity[]> {
     return Array.from(this.files.values()).filter(
       (file) => file.userId === userId

@@ -12,6 +12,13 @@ export class InMemoryClipRepository implements IClipRepository {
     return this.clips.get(id) ?? null;
   }
 
+  async findByS3Key(s3Key: string): Promise<ClipEntity | null> {
+    return (
+      Array.from(this.clips.values()).find((clip) => clip.s3Key === s3Key) ??
+      null
+    );
+  }
+
   async findByUserId(userId: string): Promise<ClipEntity[]> {
     return Array.from(this.clips.values()).filter(
       (clip) => clip.userId === userId

@@ -45,6 +45,38 @@ export class PrismaUploadedFileRepository implements IUploadedFileRepository {
     };
   }
 
+  async findByS3Key(s3Key: string): Promise<UploadedFileEntity | null> {
+    const file = await db.uploadedFile.findFirst({
+      where: { s3Key },
+    });
+
+    if (!file) return null;
+
+    return {
+      id: file.id,
+      userId: file.userId,
+      s3Key: file.s3Key,
+      displayName: file.displayName,
+      sourceType: file.sourceType as SourceType,
+      youtubeUrl: file.youtubeUrl,
+      thumbnailUrl: file.thumbnailUrl,
+      durationSeconds: file.durationSeconds,
+      creditsCost: file.creditsCost,
+      uploaded: file.uploaded,
+      status: file.status as UploadedFileStatus,
+      errorMessage: file.errorMessage,
+      sliceStartTime: file.sliceStartTime,
+      sliceEndTime: file.sliceEndTime,
+      genre: file.genre,
+      clipModel: file.clipModel,
+      aspectRatio: file.aspectRatio,
+      autoZoom: file.autoZoom,
+      subtitlePreset: file.subtitlePreset,
+      createdAt: file.createdAt,
+      updatedAt: file.updatedAt,
+    };
+  }
+
   async findByUserId(userId: string): Promise<UploadedFileEntity[]> {
     const files = await db.uploadedFile.findMany({
       where: { userId },

@@ -24,6 +24,7 @@ export interface UpdateClipInput {
 
 export interface IClipRepository {
   findById(id: string): Promise<ClipEntity | null>;
+  findByS3Key(s3Key: string): Promise<ClipEntity | null>;
   findByUserId(userId: string): Promise<ClipEntity[]>;
   findByUploadedFileId(uploadedFileId: string): Promise<ClipEntity[]>;
   createMany(clips: CreateClipInput[]): Promise<number>;

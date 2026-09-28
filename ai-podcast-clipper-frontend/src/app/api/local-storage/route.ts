@@ -2,8 +2,16 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
-
-const UPLOAD_DIR = "/tmp/ai-podcast-clipper";
+import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
+import {
+  makeUploadedFileRepository,
+  makeClipRepository,
+} from "~/infrastructure/factories/use-case-factories";
+import {
+  LOCAL_STORAGE_UPLOAD_DIR as UPLOAD_DIR,
+  resolveLocalStoragePath as resolveSafeUploadPath,
+} from "~/infrastructure/storage/local-storage-path";
+import { MAX_VIDEO_UPLOAD_SIZE_BYTES } from "~/domain/schemas/generate-upload-url.schema";
 
 function ensureDir() {
   if (!fs.existsSync(UPLOAD_DIR)) {
@@ -11,7 +19,30 @@ function ensureDir() {
   }
 }
 
+/**
+ * A local-storage "key" stands in for a real S3 presigned URL, but unlike a
+ * presigned URL it carries no signature/expiration — so we authorize each
+ * request by checking that the key belongs to an UploadedFile or Clip owned
+ * by the caller. Returns false both when the key isn't registered to anyone
+ * and when it belongs to someone else, so a response can't be used to probe
+ * which keys exist.
+ */
+async function isOwnedByUser(key: string, userId: string): Promise<boolean> {
+  const file = await makeUploadedFileRepository().findByS3Key(key);
+  if (file) return file.userId === userId;
+
+  const clip = await makeClipRepository().findByS3Key(key);
+  if (clip) return clip.userId === userId;
+
+  return false;
+}
+
 export async function PUT(req: NextRequest) {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const url = new URL(req.url);
   const key = url.searchParams.get("key");
 
@@ -19,30 +50,69 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Missing key" }, { status: 400 });
   }
 
+  const filePath = resolveSafeUploadPath(key);
+  if (!filePath) {
+    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  }
+
+  if (!(await isOwnedByUser(key, userId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   ensureDir();
-  const filePath = path.join(UPLOAD_DIR, key);
-  
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+
   // Create write stream
   const dest = fs.createWriteStream(filePath);
-  
-  if (req.body) {
-    // NextRequest.body is a ReadableStream (web stream)
-    const reader = req.body.getReader();
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        dest.write(value);
+  let bytesWritten = 0;
+  let tooLarge = false;
+
+  await new Promise<void>((resolve, reject) => {
+    dest.on("error", reject);
+    dest.on("finish", resolve);
+
+    void (async () => {
+      if (req.body) {
+        // NextRequest.body is a ReadableStream (web stream)
+        const reader = req.body.getReader();
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            bytesWritten += value.byteLength;
+            if (bytesWritten > MAX_VIDEO_UPLOAD_SIZE_BYTES) {
+              tooLarge = true;
+              await reader.cancel();
+              break;
+            }
+            dest.write(value);
+          }
+        } finally {
+          dest.end();
+        }
+      } else {
+        dest.end();
       }
-    } finally {
-      dest.end();
-    }
+    })().catch(reject);
+  });
+
+  if (tooLarge) {
+    await fs.promises.unlink(filePath).catch(() => undefined);
+    return NextResponse.json(
+      { error: "File exceeds the maximum upload size" },
+      { status: 413 }
+    );
   }
 
   return NextResponse.json({ success: true, url: filePath });
 }
 
 export async function GET(req: NextRequest) {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const url = new URL(req.url);
   const key = url.searchParams.get("key");
 
@@ -50,8 +120,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing key" }, { status: 400 });
   }
 
-  const filePath = key.startsWith('/') ? key : path.join(UPLOAD_DIR, key);
-  
+  const filePath = resolveSafeUploadPath(key);
+  if (!filePath) {
+    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  }
+
+  if (!(await isOwnedByUser(key, userId))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   if (!fs.existsSync(filePath)) {
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
@@ -102,6 +179,11 @@ export async function GET(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const url = new URL(req.url);
   const key = url.searchParams.get("key");
 
@@ -109,12 +191,15 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Missing key" }, { status: 400 });
   }
 
-  const filePath = key.startsWith('/') ? key : path.join(UPLOAD_DIR, key);
-  
+  const filePath = resolveSafeUploadPath(key);
+  if (!filePath) {
+    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  }
+
   try {
     await fs.promises.unlink(filePath);
-  } catch (error: any) {
-    if (error.code !== "ENOENT") {
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException)?.code !== "ENOENT") {
       console.warn("Failed to delete file:", error);
     }
   }

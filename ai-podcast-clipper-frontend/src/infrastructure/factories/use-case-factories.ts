@@ -33,6 +33,8 @@ import { GetUserBillingDataUseCase } from "~/application/use-cases/users/get-use
 import { TriggerVideoProcessingUseCase } from "~/application/use-cases/videos/trigger-video-processing.use-case";
 import type { IUserRepository } from "~/domain/ports/user-repository";
 import type { ISubscriptionRepository } from "~/domain/ports/subscription-repository";
+import type { IUploadedFileRepository } from "~/domain/ports/uploaded-file-repository";
+import type { IClipRepository } from "~/domain/ports/clip-repository";
 
 // --- Fábricas de Créditos ---
 export function makeHoldCreditsUseCase(): HoldCreditsUseCase {
@@ -165,6 +167,14 @@ export function makeSyncUserUseCase(): SyncUserUseCase {
 
 export function makeUserRepository(): IUserRepository {
   return new PrismaUserRepository();
+}
+
+export function makeUploadedFileRepository(): IUploadedFileRepository {
+  return new PrismaUploadedFileRepository();
+}
+
+export function makeClipRepository(): IClipRepository {
+  return new PrismaClipRepository();
 }
 
 export function makeSubscriptionRepository(): ISubscriptionRepository {

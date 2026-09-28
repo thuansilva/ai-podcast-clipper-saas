@@ -50,6 +50,7 @@ export interface UpdateUploadedFileInput {
 
 export interface IUploadedFileRepository {
   findById(id: string): Promise<UploadedFileEntity | null>;
+  findByS3Key(s3Key: string): Promise<UploadedFileEntity | null>;
   findByUserId(userId: string): Promise<UploadedFileEntity[]>;
   findPaginatedByUserId(
     userId: string,
