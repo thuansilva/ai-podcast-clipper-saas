@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "aws-cdk-development": {
+      "source": "zxkane/aws-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/aws-iac/skills/aws-cdk-development/SKILL.md",
+      "computedHash": "feec7466285bc32ff57e56d21fc97d46b1ad666f416f07a6116f450e5200e835"
+    },
+    "aws-cost-operations": {
+      "source": "zxkane/aws-skills",
+      "sourceType": "github",
+      "skillPath": "plugins/aws-cost-ops/skills/aws-cost-operations/SKILL.md",
+      "computedHash": "c3b1e4e88c8007d0795743376137b1b85489144774eca68cafa340b360227445"
+    }
+  }
+}
