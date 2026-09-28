@@ -113,6 +113,13 @@ npm run inngest-dev
 
 CORS policy for S3 bucket:
 
+> **Nunca use `"AllowedOrigins": ["*"]` em produção.** O endpoint de upload gera
+> presigned URLs de `PUT` autenticadas pelas credenciais do seu bucket — um
+> wildcard permite que **qualquer site na internet** use essas URLs para subir
+> arquivos para o seu S3. Liste explicitamente as origens permitidas: o mesmo
+> valor configurado em `BASE_URL` (produção) e, se necessário em
+> desenvolvimento local, `http://localhost:3000`.
+
 ```bash
 [
     {
@@ -125,7 +132,8 @@ CORS policy for S3 bucket:
             "PUT"
         ],
         "AllowedOrigins": [
-            "*"
+            "https://<seu-dominio-de-producao>",
+            "http://localhost:3000"
         ],
         "ExposeHeaders": [
             "ETag"
