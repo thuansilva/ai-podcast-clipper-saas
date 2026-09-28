@@ -44,6 +44,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit dependencies (fail on high/critical)
+        run: npm audit --audit-level=high
+
       - name: Generate Prisma Client & Push Schema
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper
