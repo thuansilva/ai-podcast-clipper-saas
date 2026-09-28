@@ -3,6 +3,7 @@ import { TriggerVideoProcessingUseCase } from "~/application/use-cases/videos/tr
 import { InMemoryUploadedFileRepository } from "../../../mocks/in-memory-uploaded-file-repository";
 import { InMemoryQueueGateway } from "../../../mocks/in-memory-queue-gateway";
 import { NotFoundError } from "~/domain/errors/not-found-error";
+import { UnauthorizedError } from "~/domain/errors/unauthorized-error";
 
 describe("TriggerVideoProcessingUseCase", () => {
   let uploadedFileRepository: InMemoryUploadedFileRepository;
@@ -22,8 +23,27 @@ describe("TriggerVideoProcessingUseCase", () => {
     await expect(
       useCase.execute({
         uploadedFileId: "non-existent-file",
+        userId: "user-1",
       })
     ).rejects.toThrow(NotFoundError);
+  });
+
+  it("deve lançar UnauthorizedError se o userId não for o dono do arquivo (IDOR)", async () => {
+    const file = await uploadedFileRepository.create({
+      userId: "user-1",
+      s3Key: "test.mp4",
+      sourceType: "UPLOAD",
+      uploaded: false,
+    });
+
+    await expect(
+      useCase.execute({
+        uploadedFileId: file.id,
+        userId: "attacker-user",
+      })
+    ).rejects.toThrow(UnauthorizedError);
+
+    expect(queueGateway.sentEvents).toHaveLength(0);
   });
 
   it("não deve disparar evento se o arquivo já estiver marcado como uploaded", async () => {
@@ -36,6 +56,7 @@ describe("TriggerVideoProcessingUseCase", () => {
 
     const result = await useCase.execute({
       uploadedFileId: file.id,
+      userId: "user-1",
     });
 
     expect(result.success).toBe(true);
@@ -57,6 +78,7 @@ describe("TriggerVideoProcessingUseCase", () => {
 
     const result = await useCase.execute({
       uploadedFileId: file.id,
+      userId: "user-1",
       preset: "HORMOZI",
       mode: "manual",
       manualCuts,

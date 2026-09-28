@@ -1,4 +1,5 @@
 import { NotFoundError } from "~/domain/errors/not-found-error";
+import { UnauthorizedError } from "~/domain/errors/unauthorized-error";
 import type { IUploadedFileRepository } from "~/domain/ports/uploaded-file-repository";
 import type { IQueueGateway } from "~/domain/ports/queue-gateway";
 import type {
@@ -21,6 +22,10 @@ export class TriggerVideoProcessingUseCase {
 
     if (!uploadedVideo) {
       throw new NotFoundError("Vídeo", input.uploadedFileId);
+    }
+
+    if (uploadedVideo.userId !== input.userId) {
+      throw new UnauthorizedError();
     }
 
     if (uploadedVideo.uploaded) {

@@ -11,6 +11,7 @@ import {
 import { DomainError } from "~/domain/errors/domain-error";
 import type { SubtitlePreset } from "~/domain/entities/clip";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
+import { updateClipSchema } from "~/domain/schemas/update-clip.schema";
 
 export async function processVideo(
   uploadedFileId: string,
@@ -18,9 +19,15 @@ export async function processVideo(
   mode?: ProcessingMode,
   manualCuts?: ManualCutDTO[],
 ) {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
+    throw new Error("Unauthorized");
+  }
+
   const useCase = makeTriggerVideoProcessingUseCase();
   const result = await useCase.execute({
     uploadedFileId,
+    userId,
     preset,
     mode,
     manualCuts,
@@ -101,14 +108,19 @@ export async function updateClip(
     return { success: false, error: "Unauthorized" };
   }
 
+  const parsed = updateClipSchema.safeParse(data);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
+  }
+
   try {
     const useCase = makeUpdateClipUseCase();
     await useCase.execute({
       clipId,
       userId,
-      title: data.title,
-      subtitlePreset: data.subtitlePreset as SubtitlePreset | undefined,
-      transcriptWords: data.transcriptWords,
+      title: parsed.data.title,
+      subtitlePreset: parsed.data.subtitlePreset as SubtitlePreset | undefined,
+      transcriptWords: parsed.data.transcriptWords,
     });
 
     revalidatePath("/dashboard");

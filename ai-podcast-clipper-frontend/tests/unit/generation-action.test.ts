@@ -145,6 +145,26 @@ describe("Generation Server Actions", () => {
   });
 
   describe("updateClip", () => {
+    it("deve retornar erro se o payload não passar na validação (subtitlePreset inválido)", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+      const result = await updateClip("clip-123", {
+        subtitlePreset: "INEXISTENTE",
+      } as any);
+
+      expect(result.success).toBe(false);
+      expect(db.clip.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("deve retornar erro se o title vier vazio", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+      const result = await updateClip("clip-123", { title: "" });
+
+      expect(result.success).toBe(false);
+      expect(db.clip.findUnique).not.toHaveBeenCalled();
+    });
+
     it("deve atualizar preset e transcrição do clipe", async () => {
       mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 
@@ -209,7 +229,28 @@ describe("Generation Server Actions", () => {
   });
 
   describe("processVideo", () => {
+    it("deve lançar erro Unauthorized se o usuário não estiver autenticado", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce(null);
+
+      await expect(processVideo("file-any")).rejects.toThrow("Unauthorized");
+      expect(db.uploadedFile.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("deve lançar UnauthorizedError se o vídeo não pertencer ao usuário autenticado (IDOR)", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce("attacker-user");
+      vi.mocked(db.uploadedFile.findUnique).mockResolvedValueOnce({
+        id: "file-of-another-user",
+        uploaded: false,
+        userId: "victim-user",
+      } as any);
+
+      await expect(processVideo("file-of-another-user")).rejects.toThrow();
+      expect(inngest.send).not.toHaveBeenCalled();
+      expect(db.uploadedFile.update).not.toHaveBeenCalled();
+    });
+
     it("não deve disparar evento se o arquivo já estiver marcado como uploaded", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
       vi.mocked(db.uploadedFile.findUnique).mockResolvedValueOnce({
         id: "file-already-uploaded",
         uploaded: true,
@@ -224,6 +265,7 @@ describe("Generation Server Actions", () => {
     });
 
     it("deve disparar evento no Inngest, atualizar status para uploaded e revalidar /dashboard", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
       vi.mocked(db.uploadedFile.findUnique).mockResolvedValueOnce({
         id: "file-new",
         uploaded: false,
@@ -255,6 +297,7 @@ describe("Generation Server Actions", () => {
     });
 
     it("deve repassar mode e manualCuts para o Inngest quando fornecidos", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
       vi.mocked(db.uploadedFile.findUnique).mockResolvedValueOnce({
         id: "file-manual",
         uploaded: false,
