@@ -35,6 +35,19 @@ describe("ImportYouTubeVideoUseCase", () => {
     expect(queueGateway.sentEvents[0]?.preset).toBe("HORMOZI");
   });
 
+  it("deve persistir a canonicalUrl validada, não a URL crua do usuário (defesa contra SSRF)", async () => {
+    const result = await useCase.execute({
+      userId: "user-1",
+      url: "https://youtu.be/dQw4w9WgXcQ?si=algum-parametro-de-tracking-nao-confiavel",
+      preset: "HORMOZI",
+    });
+
+    const file = await fileRepo.findById(result.uploadedFileId);
+    expect(file?.youtubeUrl).toBe(
+      "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    );
+  });
+
   it("deve lançar InvalidYouTubeUrlError para links inválidos", async () => {
     await expect(
       useCase.execute({

@@ -13,6 +13,7 @@ from core.schemas import DownloadYouTubeRequest, DownloadYouTubeResponse
 from core.youtube_downloader import (
     YouTubeAgeRestrictedError,
     YouTubeDownloaderError,
+    YouTubeInvalidHostError,
     YouTubeVideoUnavailableError,
     download_youtube_to_s3,
     get_youtube_video_info,
@@ -347,6 +348,63 @@ class TestDownloadYouTubeToS3:
         )
         assert call_opts["format"] == expected_format
         assert call_opts["merge_output_format"] == "mp4"
+
+
+class TestHostValidation:
+    """SSRF defense-in-depth: reject any URL whose host isn't youtube.com/youtu.be
+    before yt-dlp ever touches it (yt-dlp's generic extractor will happily fetch
+    arbitrary hosts, including internal/metadata endpoints)."""
+
+    @patch("yt_dlp.YoutubeDL")
+    def test_get_info_rejects_non_youtube_host(self, mock_ydl_cls):
+        with pytest.raises(YouTubeInvalidHostError):
+            get_youtube_video_info("https://evil.example.com/watch?v=dQw4w9WgXcQ")
+        mock_ydl_cls.assert_not_called()
+
+    @patch("yt_dlp.YoutubeDL")
+    def test_get_info_rejects_internal_metadata_host(self, mock_ydl_cls):
+        with pytest.raises(YouTubeInvalidHostError):
+            get_youtube_video_info("http://169.254.169.254/latest/meta-data/")
+        mock_ydl_cls.assert_not_called()
+
+    @patch("yt_dlp.YoutubeDL")
+    def test_get_info_rejects_lookalike_host(self, mock_ydl_cls):
+        with pytest.raises(YouTubeInvalidHostError):
+            get_youtube_video_info("https://youtube.com.evil.com/watch?v=dQw4w9WgXcQ")
+        mock_ydl_cls.assert_not_called()
+
+    @patch("yt_dlp.YoutubeDL")
+    def test_download_rejects_non_youtube_host(self, mock_ydl_cls):
+        mock_s3 = MagicMock()
+        with pytest.raises(YouTubeInvalidHostError):
+            download_youtube_to_s3(
+                url="https://attacker.example.com/video",
+                s3_bucket="bucket",
+                s3_key="key.mp4",
+                s3_client=mock_s3,
+            )
+        mock_ydl_cls.assert_not_called()
+        mock_s3.upload_file.assert_not_called()
+
+    @patch("yt_dlp.YoutubeDL")
+    def test_get_info_accepts_youtu_be_short_link(self, mock_ydl_cls, sample_video_info):
+        mock_ydl = MagicMock()
+        mock_ydl.__enter__.return_value = mock_ydl
+        mock_ydl.extract_info.return_value = sample_video_info
+        mock_ydl_cls.return_value = mock_ydl
+
+        info = get_youtube_video_info("https://youtu.be/dQw4w9WgXcQ")
+        assert info["id"] == "dQw4w9WgXcQ"
+
+    @patch("yt_dlp.YoutubeDL")
+    def test_get_info_accepts_www_subdomain(self, mock_ydl_cls, sample_video_info):
+        mock_ydl = MagicMock()
+        mock_ydl.__enter__.return_value = mock_ydl
+        mock_ydl.extract_info.return_value = sample_video_info
+        mock_ydl_cls.return_value = mock_ydl
+
+        info = get_youtube_video_info("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        assert info["id"] == "dQw4w9WgXcQ"
 
 
 class TestDownloadYouTubeEndpoint:

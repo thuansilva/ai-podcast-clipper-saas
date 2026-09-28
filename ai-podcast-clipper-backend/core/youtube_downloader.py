@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import boto3
 import yt_dlp
@@ -23,6 +24,35 @@ class YouTubeVideoUnavailableError(YouTubeDownloaderError):
 class YouTubeAgeRestrictedError(YouTubeDownloaderError):
     """Raised when a video is age-restricted and requires sign-in/bypass."""
     pass
+
+
+class YouTubeInvalidHostError(YouTubeDownloaderError):
+    """Raised when a URL's host isn't youtube.com/youtu.be.
+
+    Defense in depth against SSRF: yt-dlp's generic extractor will fetch
+    whatever host it's given (including internal/metadata endpoints), so the
+    host must be validated here even though callers upstream are expected to
+    already validate it.
+    """
+    pass
+
+
+_ALLOWED_YOUTUBE_HOSTS = ("youtube.com", "youtu.be")
+
+
+def _assert_youtube_host(url: str) -> None:
+    """Raises YouTubeInvalidHostError unless the URL's host is youtube.com/youtu.be
+    (or a subdomain of one of those, e.g. www.youtube.com, m.youtube.com)."""
+    parsed = urlparse(url if "://" in url else f"https://{url}")
+    hostname = (parsed.hostname or "").lower()
+    is_allowed = any(
+        hostname == allowed or hostname.endswith(f".{allowed}")
+        for allowed in _ALLOWED_YOUTUBE_HOSTS
+    )
+    if not is_allowed:
+        raise YouTubeInvalidHostError(
+            f"URL host is not a YouTube domain (youtube.com/youtu.be): {url}"
+        )
 
 
 def _classify_download_error(e: Exception, url: str) -> YouTubeDownloaderError:
@@ -76,6 +106,8 @@ def get_youtube_video_info(url: str) -> dict[str, Any]:
         raise YouTubeVideoUnavailableError("A YouTube URL must be provided.")
 
     clean_url = url.strip()
+    _assert_youtube_host(clean_url)
+
     ydl_opts = {
         "quiet": True,
         "no_warnings": True,
@@ -140,6 +172,8 @@ def download_youtube_to_s3(
         raise YouTubeVideoUnavailableError("A YouTube URL must be provided.")
 
     clean_url = url.strip()
+    _assert_youtube_host(clean_url)
+
     temp_dir = tempfile.mkdtemp(prefix="youtube_ingest_")
 
     try:

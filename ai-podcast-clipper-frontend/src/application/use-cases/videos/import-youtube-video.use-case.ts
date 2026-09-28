@@ -32,7 +32,7 @@ export class ImportYouTubeVideoUseCase {
       s3Key,
       displayName,
       sourceType: "YOUTUBE",
-      youtubeUrl: input.url,
+      youtubeUrl: youtubeUrl.canonicalUrl,
       uploaded: true,
       status: "queued",
       sliceStartTime: input.sliceStartTime ?? 0,
