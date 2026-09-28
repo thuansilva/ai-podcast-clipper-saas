@@ -3,6 +3,9 @@
 .AppleDouble
 .LSOverride
 
+# Claude skills — nunca versionar credenciais locais de banco
+.claude/skills/**/connections.json
+
 # Log files
 *.log
 npm-debug.log*
