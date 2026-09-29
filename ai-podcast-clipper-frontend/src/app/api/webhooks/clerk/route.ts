@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { env } from "~/env";
 import { makeSyncUserUseCase } from "~/infrastructure/factories/use-case-factories";
 import { db } from "~/server/db";
+import { logger } from "~/lib/observability/logger";
+import { withSpan } from "~/lib/observability/tracer";
 
 interface WebhookEmailAddress {
   email_address: string;
@@ -49,7 +51,7 @@ export async function POST(req: Request) {
       "svix-signature": svix_signature,
     }) as unknown as ClerkWebhookEvent;
   } catch (err) {
-    console.error("Error: Could not verify webhook:", err);
+    logger.error("Clerk webhook verification failed", { error: err });
     return new NextResponse("Error: Verification error", {
       status: 400,
     });
@@ -57,8 +59,19 @@ export async function POST(req: Request) {
 
   const eventType = evt.type;
 
+  return withSpan(
+    "clerk.webhook.handle",
+    { "clerk.event.type": eventType },
+    () => handleClerkEvent(eventType, evt.data)
+  );
+}
+
+async function handleClerkEvent(
+  eventType: string,
+  data: ClerkWebhookEvent["data"]
+): Promise<NextResponse> {
   if (eventType === "user.created" || eventType === "user.updated") {
-    const { id, email_addresses, first_name, last_name, image_url } = evt.data;
+    const { id, email_addresses, first_name, last_name, image_url } = data;
     const primaryEmail = email_addresses?.[0]?.email_address;
 
     if (!primaryEmail) {
@@ -77,17 +90,17 @@ export async function POST(req: Request) {
   }
 
   if (eventType === "user.deleted") {
-    const { id } = evt.data;
+    const { id } = data;
     if (id) {
       try {
         await db.user.delete({
           where: { id },
         });
       } catch (err) {
-        console.warn(
-          `User ${id} could not be deleted or was already removed:`,
-          err
-        );
+        logger.warn("User could not be deleted or was already removed", {
+          userId: id,
+          error: err,
+        });
       }
     }
   }

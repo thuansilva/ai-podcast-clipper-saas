@@ -6,6 +6,8 @@ import {
   dispatchStripeCheckoutEvent,
   dispatchStripeSubscriptionEvent,
 } from "~/infrastructure/queue/stripe-queue";
+import { logger } from "~/lib/observability/logger";
+import { withSpan } from "~/lib/observability/tracer";
 
 const stripe = new Stripe(env.STRIPE_SECRET_KEY, {
   apiVersion: "2025-04-30.basil",
@@ -25,17 +27,33 @@ export async function POST(req: Request) {
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
     } catch (error) {
-      console.error("Webhook signature verification failed", error);
+      logger.error("Stripe webhook signature verification failed", { error });
       return new NextResponse("Webhook signature verification failed", {
         status: 400,
       });
     }
 
+    return await withSpan(
+      "stripe.webhook.handle",
+      { "stripe.event.type": event.type, "stripe.event.id": event.id },
+      () => handleStripeEvent(event)
+    );
+  } catch (error) {
+    logger.error("Error processing Stripe webhook", { error });
+    return new NextResponse("Webhook error", { status: 500 });
+  }
+}
+
+async function handleStripeEvent(event: Stripe.Event): Promise<NextResponse> {
     const isFirstDelivery = await processedEventRepository.tryMarkProcessed(
       event.id,
       event.type
     );
     if (!isFirstDelivery) {
+      logger.info("Stripe webhook event already processed, skipping", {
+        "stripe.event.id": event.id,
+        "stripe.event.type": event.type,
+      });
       return new NextResponse(null, { status: 200 });
     }
 
@@ -56,7 +74,9 @@ export async function POST(req: Request) {
           );
           lineItems = retrievedSession.line_items;
         } catch (err) {
-          console.warn("Could not retrieve line items from Stripe API:", err);
+          logger.warn("Could not retrieve line items from Stripe API", {
+            error: err,
+          });
         }
       }
 
@@ -170,9 +190,5 @@ export async function POST(req: Request) {
       }
     }
 
-    return new NextResponse(null, { status: 200 });
-  } catch (error) {
-    console.error("Error processing webhook:", error);
-    return new NextResponse("Webhook error", { status: 500 });
-  }
+  return new NextResponse(null, { status: 200 });
 }

@@ -16,6 +16,8 @@ import { calculateManualCutsCredits } from "~/domain/services/credit-pricing.ser
 import { validateVideoDuration } from "~/domain/services/plan-policy.service";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 import { fetch as undiciFetch, Agent } from "undici";
+import { logger } from "~/lib/observability/logger";
+import { withSpan, injectTraceHeaders } from "~/lib/observability/tracer";
 
 export interface ProcessVideoEventData {
   uploadedFileId: string;
@@ -85,10 +87,10 @@ export async function downloadYouTubeVideo({
   const response = await undiciFetch(endpoint, {
     method: "POST",
     dispatcher: agent,
-    headers: {
+    headers: injectTraceHeaders({
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.PROCESS_VIDEO_ENDPOINT_AUTH}`,
-    },
+    }),
     body: JSON.stringify({
       url,
       s3_bucket: env.S3_BUCKET_NAME,
@@ -156,9 +158,14 @@ export async function processVideoHandler({
   let heldCredits = 0;
   let resolvedUserId = event.data.userId;
 
+  logger.info("process-video pipeline started", { uploadedFileId });
+
   try {
     // Step 1: validate-and-reserve-credits
-    const reservation = (await step.run(
+    const reservation = (await withSpan(
+      "inngest.step.validate-and-reserve-credits",
+      { uploadedFileId },
+      () => step.run(
       "validate-and-reserve-credits",
       async () => {
         const uploadedFile = await db.uploadedFile.findUniqueOrThrow({
@@ -222,7 +229,7 @@ export async function processVideoHandler({
           creditsCost: holdResult.heldCredits,
         };
       },
-    )) as {
+    ))) as {
       userId: string;
       s3Key: string;
       creditsCost: number;
@@ -232,17 +239,24 @@ export async function processVideoHandler({
     heldCredits = reservation.creditsCost;
 
     // Step 2: mark-processing
-    await step.run("mark-processing", async () => {
+    await withSpan(
+      "inngest.step.mark-processing",
+      { uploadedFileId, userId: resolvedUserId ?? "" },
+      () => step.run("mark-processing", async () => {
       await db.uploadedFile.update({
         where: { id: uploadedFileId },
         data: {
           status: "processing",
         },
       });
-    });
+      })
+    );
 
     // Step 3: call-modal-gpu
-    const modalResult = await step.run("call-modal-gpu", async () => {
+    const modalResult = await withSpan(
+      "inngest.step.call-modal-gpu",
+      { uploadedFileId, userId: resolvedUserId ?? "" },
+      () => step.run("call-modal-gpu", async () => {
       const video = await db.uploadedFile.findUniqueOrThrow({
         where: { id: uploadedFileId },
       });
@@ -253,10 +267,10 @@ export async function processVideoHandler({
       const response = await undiciFetch(env.PROCESS_VIDEO_ENDPOINT, {
         method: "POST",
         dispatcher: agent,
-        headers: {
+        headers: injectTraceHeaders({
           "Content-Type": "application/json",
           Authorization: `Bearer ${env.PROCESS_VIDEO_ENDPOINT_AUTH}`,
-        },
+        }),
         body: JSON.stringify({
           s3_key: video.s3Key,
           preset: video.subtitlePreset ?? preset ?? "NONE",
@@ -281,10 +295,14 @@ export async function processVideoHandler({
 
       const data = (await response.json()) as ModalProcessVideoResponse;
       return data;
-    });
+      })
+    );
 
     // Step 4: persist-clips-and-consume
-    await step.run("persist-clips-and-consume", async () => {
+    await withSpan(
+      "inngest.step.persist-clips-and-consume",
+      { uploadedFileId, userId: resolvedUserId ?? "" },
+      () => step.run("persist-clips-and-consume", async () => {
       const clips = modalResult.clips ?? [];
 
       if (clips.length > 0) {
@@ -340,6 +358,12 @@ export async function processVideoHandler({
           status: "processed",
         },
       });
+      })
+    );
+
+    logger.info("process-video pipeline completed", {
+      uploadedFileId,
+      userId: resolvedUserId ?? "",
     });
 
     return { success: true, uploadedFileId };
@@ -350,6 +374,12 @@ export async function processVideoHandler({
         : "Video processing failed unexpectedly";
 
     const friendlyErrorMessage = formatFriendlyErrorMessage(rawErrorMessage);
+
+    logger.error("process-video pipeline failed", {
+      uploadedFileId,
+      userId: resolvedUserId ?? "",
+      error,
+    });
 
     const currentFile = await db.uploadedFile.findUnique({
       where: { id: uploadedFileId },
@@ -419,6 +449,12 @@ export const processVideo = inngest.createFunction(
       const errorMessage =
         error?.message || "Inngest function failed after retries";
       const friendlyMessage = formatFriendlyErrorMessage(errorMessage);
+
+      logger.error("process-video exhausted all retries", {
+        uploadedFileId,
+        userId: userId ?? "",
+        error: errorMessage,
+      });
 
       const currentFile = await db.uploadedFile.findUnique({
         where: { id: uploadedFileId },
