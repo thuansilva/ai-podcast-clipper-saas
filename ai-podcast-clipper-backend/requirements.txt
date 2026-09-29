@@ -19,3 +19,7 @@ boto3
 fastapi[standard]
 whisperx
 yt-dlp
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-instrumentation-fastapi
+opentelemetry-exporter-otlp-proto-http

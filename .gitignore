@@ -59,6 +59,7 @@ __pycache__/
 ai-podcast-clipper-backend/.venv/
 ai-podcast-clipper-backend/venv/
 ai-podcast-clipper-backend/env/
+backend-stub/.venv/
 ai-podcast-clipper-backend/*.env
 ai-podcast-clipper-backend/.env
 ai-podcast-clipper-backend/.modal*

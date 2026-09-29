@@ -48,6 +48,12 @@ from core.youtube_downloader import (
     download_youtube_to_s3,
     get_youtube_video_info,
 )
+from core.otel_setup import setup_otel
+
+# Roda em cada cold start do container (Modal reimporta main.py do zero por
+# container). Mesma função usada pelo stub local, só muda o service_name —
+# ver core/otel_setup.py.
+setup_otel("ai-podcast-clipper-backend")
 
 
 image = (modal.Image.from_registry(
@@ -62,7 +68,12 @@ image = (modal.Image.from_registry(
 cpu_image = (
     modal.Image.debian_slim(python_version="3.12")
     .apt_install(["ffmpeg"])
-    .pip_install(["yt-dlp", "boto3", "fastapi[standard]", "pydantic"])
+    .pip_install([
+        "yt-dlp", "boto3", "fastapi[standard]", "pydantic",
+        "opentelemetry-api", "opentelemetry-sdk",
+        "opentelemetry-instrumentation-fastapi",
+        "opentelemetry-exporter-otlp-proto-http",
+    ])
 )
 
 app = modal.App("ai-podcast-clipper", image=image)
