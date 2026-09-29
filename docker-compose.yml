@@ -25,5 +25,96 @@ services:
       - ./ai-podcast-clipper-frontend:/work
     working_dir: /work
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.108.0
+    container_name: ai-podcast-otel-collector
+    restart: always
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "8889:8889" # métricas expostas para o Prometheus fazer scrape
+    depends_on:
+      - loki
+      - tempo
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: ai-podcast-prometheus
+    restart: always
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    depends_on:
+      - otel-collector
+
+  loki:
+    image: grafana/loki:2.9.6
+    container_name: ai-podcast-loki
+    restart: always
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    volumes:
+      - ./observability/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+
+  tempo:
+    image: grafana/tempo:2.5.0
+    container_name: ai-podcast-tempo
+    restart: always
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: ai-podcast-grafana
+    restart: always
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+
+  backend-stub:
+    build:
+      context: .
+      dockerfile: backend-stub/Dockerfile
+    container_name: ai-podcast-backend-stub
+    restart: always
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: ai-podcast-clipper-backend-stub
+      # Simula o backend "GPU" localmente: latência aleatória entre min/max
+      # (ms) e uma fração das requisições falhando de propósito, pra testar
+      # trace/log de erro sem precisar do Modal real.
+      STUB_LATENCY_MS_MIN: "200"
+      STUB_LATENCY_MS_MAX: "1500"
+      STUB_ERROR_RATE: "0"
+    ports:
+      - "8001:8000"
+    depends_on:
+      - otel-collector
+
 volumes:
   postgres_data:
+  prometheus_data:
+  loki_data:
+  tempo_data:
+  grafana_data:
