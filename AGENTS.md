@@ -127,6 +127,29 @@ S3.
   testes) e reporte o resultado — não afirme que uma funcionalidade está pronta sem
   ter executado os testes.
 
+## Uso dos Agentes Especializados (`.claude/agents/`)
+
+Este projeto tem subagentes configurados em `.claude/agents/` (ex.:
+`frontend-specialist`, `domain-specialist`, `security-specialist`,
+`qa-specialist`, `devops-specialist`, `accessibility-tester`,
+`docs-release-specialist`, `cto`).
+
+- **Para qualquer tarefa não-trivial, divida o trabalho entre os
+  especialistas em vez de executar tudo direto na sessão principal.**
+  "Trivial" = fix de uma linha, typo, ajuste cosmético — fora isso, quebre a
+  tarefa e acione o(s) agente(s) certo(s) via Agent tool.
+- Quando não estiver óbvio quem cuida de qual parte, acione o `cto`
+  primeiro para obter o plano de divisão (ele só planeja, não executa —
+  subagentes não conseguem acionar outros subagentes; quem executa o plano
+  é a sessão principal).
+- Pedaços independentes (sem dependência de dado entre si) devem ser
+  disparados **em paralelo** (múltiplas chamadas do Agent tool na mesma
+  mensagem), não em sequência.
+- Use `subagent_type: "fork"` em vez de um agente nomeado quando a tarefa
+  precisa continuar um estado/investigação já em andamento na conversa
+  atual — agentes nomeados começam sem memória da conversa; só o fork
+  herda o contexto já construído.
+
 ## Controle de Versão e Git
 - **NUNCA execute `git commit`, `git push` ou crie tags sem a autorização explícita do usuário.**
 - Todas as alterações de código e documentação devem ser apresentadas para revisão antes de qualquer ação de commit.
