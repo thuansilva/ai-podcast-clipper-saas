@@ -264,6 +264,47 @@ describe("Generation Server Actions", () => {
       expect(revalidatePath).not.toHaveBeenCalled();
     });
 
+    it("deve lançar erro se uploadedFileId for vazio (payload malicioso)", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+      await expect(processVideo("")).rejects.toThrow();
+      expect(db.uploadedFile.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("deve lançar erro se mode for um valor fora do enum auto|manual (payload malicioso)", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+      await expect(
+        processVideo("file-new", "HORMOZI", "sabotage" as any),
+      ).rejects.toThrow();
+      expect(db.uploadedFile.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("deve lançar erro se manualCuts tiver endTime <= startTime (payload malicioso)", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+      const manualCuts = [{ startTime: 50, endTime: 10 }];
+
+      await expect(
+        processVideo("file-new", "HORMOZI", "manual", manualCuts),
+      ).rejects.toThrow();
+      expect(db.uploadedFile.findUnique).not.toHaveBeenCalled();
+    });
+
+    it("deve lançar erro se manualCuts exceder o limite máximo de cortes (payload malicioso)", async () => {
+      mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+      const manualCuts = Array.from({ length: 51 }, (_, i) => ({
+        startTime: i * 10,
+        endTime: i * 10 + 5,
+      }));
+
+      await expect(
+        processVideo("file-new", "HORMOZI", "manual", manualCuts),
+      ).rejects.toThrow();
+      expect(db.uploadedFile.findUnique).not.toHaveBeenCalled();
+    });
+
     it("deve disparar evento no Inngest, atualizar status para uploaded e revalidar /dashboard", async () => {
       mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
       vi.mocked(db.uploadedFile.findUnique).mockResolvedValueOnce({

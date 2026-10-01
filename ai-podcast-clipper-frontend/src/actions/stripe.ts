@@ -10,6 +10,10 @@ import {
 } from "~/infrastructure/factories/use-case-factories";
 import { NotFoundError } from "~/domain/errors/not-found-error";
 import { DomainError } from "~/domain/errors/domain-error";
+import {
+  createCheckoutSessionSchema,
+  createCustomerPortalSessionSchema,
+} from "~/domain/schemas/stripe-actions.schema";
 
 export type SubscriptionPlanId = "starter" | "pro";
 export type BillingCycle = "monthly" | "annual";
@@ -56,13 +60,22 @@ export async function createCheckoutSession(
     mode = explicitMode;
   }
 
-  // All plans are subscriptions now
-  const resolvedMode: "payment" | "subscription" = mode ?? "subscription";
+  const parsed = createCheckoutSessionSchema.safeParse({
+    priceId: priceIdKey,
+    mode,
+  });
+  if (!parsed.success) {
+    throw new DomainError(
+      parsed.error.issues[0]?.message ?? "Plano inválido."
+    );
+  }
 
-  const resolvedPriceId =
-    priceIdKey in PRICE_IDS
-      ? PRICE_IDS[priceIdKey as PriceId]
-      : priceIdKey;
+  // All plans are subscriptions now
+  const resolvedMode: "payment" | "subscription" = parsed.data.mode ?? "subscription";
+
+  // parsed.data.priceId só pode ser uma das 4 chaves válidas de PRICE_IDS —
+  // nunca mais a string crua recebida do cliente (gap de segurança corrigido).
+  const resolvedPriceId = PRICE_IDS[parsed.data.priceId];
 
   const paymentGateway = makeStripePaymentGateway();
   const sessionUrl = await paymentGateway.createCheckoutSession({
@@ -91,10 +104,25 @@ export async function createCustomerPortalSession(returnUrl?: string) {
     throw new DomainError("User has no stripeCustomerId");
   }
 
+  const parsed = createCustomerPortalSessionSchema.safeParse({ returnUrl });
+  if (!parsed.success) {
+    throw new DomainError(
+      parsed.error.issues[0]?.message ?? "returnUrl inválido."
+    );
+  }
+
+  // O Stripe exige URL absoluta em return_url: o path relativo validado é
+  // ancorado no BASE_URL da aplicação (o host nunca vem do cliente).
+  const baseUrl = env.BASE_URL.replace(/\/+$/, "");
+  const returnUrlAbsolute = `${baseUrl}${parsed.data.returnUrl ?? "/dashboard/billing"}`;
+  if (new URL(returnUrlAbsolute).origin !== new URL(baseUrl).origin) {
+    throw new DomainError("returnUrl inválido.");
+  }
+
   const paymentGateway = makeStripePaymentGateway();
   const portalUrl = await paymentGateway.createBillingPortalSession({
     customerId: user.stripeCustomerId,
-    returnUrl: returnUrl ?? `${env.BASE_URL}/dashboard/billing`,
+    returnUrl: returnUrlAbsolute,
   });
 
   redirect(portalUrl);

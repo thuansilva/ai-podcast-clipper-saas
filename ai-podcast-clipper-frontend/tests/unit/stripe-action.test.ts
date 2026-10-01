@@ -129,22 +129,55 @@ describe("Stripe Server Actions", () => {
       });
     });
 
-    it("deve respeitar mode explícito quando fornecido", async () => {
+    it("deve respeitar mode explícito quando fornecido (com uma chave de plano válida)", async () => {
       mockGetUserId.mockResolvedValueOnce("user-1");
       mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
       mockCreateCheckoutSession.mockResolvedValueOnce("https://stripe.com/pay/cs_custom");
 
       await expect(
-        createCheckoutSession("price_custom_123", "subscription")
+        createCheckoutSession("pro_monthly", "payment")
       ).rejects.toThrow("NEXT_REDIRECT:https://stripe.com/pay/cs_custom");
 
       expect(mockCreateCheckoutSession).toHaveBeenCalledWith({
         customerId: "cus_user_1",
-        priceId: "price_custom_123",
-        mode: "subscription",
+        priceId: "price_pro_monthly_test",
+        mode: "payment",
         successUrl: "https://test.saas.com/dashboard?success=true",
         cancelUrl: "https://test.saas.com/dashboard/billing?canceled=true",
       });
+    });
+
+    it("NUNCA deve usar uma string arbitrária recebida do cliente como price id real (gap de segurança corrigido)", async () => {
+      mockGetUserId.mockResolvedValueOnce("user-1");
+      mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
+
+      await expect(
+        createCheckoutSession("price_custom_123", "subscription")
+      ).rejects.toThrow();
+
+      expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it("deve rejeitar priceId que não é uma das 4 chaves conhecidas, mesmo via objeto de opções", async () => {
+      mockGetUserId.mockResolvedValueOnce("user-1");
+      mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
+
+      await expect(
+        createCheckoutSession({ priceId: "../../etc/passwd" })
+      ).rejects.toThrow();
+
+      expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it("deve rejeitar mode fora do enum conhecido", async () => {
+      mockGetUserId.mockResolvedValueOnce("user-1");
+      mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
+
+      await expect(
+        createCheckoutSession({ priceId: "pro_monthly", mode: "refund" as any })
+      ).rejects.toThrow();
+
+      expect(mockCreateCheckoutSession).not.toHaveBeenCalled();
     });
   });
 
@@ -184,6 +217,58 @@ describe("Stripe Server Actions", () => {
       expect(mockRedirect).toHaveBeenCalledWith(
         "https://billing.stripe.com/portal/ses_abc"
       );
+    });
+
+    it("deve aceitar um returnUrl relativo explícito e repassá-lo ao Stripe como URL absoluta do próprio BASE_URL", async () => {
+      mockGetUserId.mockResolvedValueOnce("user-1");
+      mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
+      mockCreateBillingPortalSession.mockResolvedValueOnce(
+        "https://billing.stripe.com/portal/ses_rel"
+      );
+
+      await expect(
+        createCustomerPortalSession("/dashboard/billing")
+      ).rejects.toThrow("NEXT_REDIRECT:https://billing.stripe.com/portal/ses_rel");
+
+      expect(mockCreateBillingPortalSession).toHaveBeenCalledWith({
+        customerId: "cus_user_1",
+        // O Stripe exige URL absoluta em return_url; o path relativo validado é
+        // ancorado no BASE_URL da aplicação (nunca em host vindo do cliente).
+        returnUrl: "https://test.saas.com/dashboard/billing",
+      });
+    });
+
+    it("deve rejeitar returnUrl com barra invertida (/\\evil.com), que navegadores normalizam para //evil.com", async () => {
+      mockGetUserId.mockResolvedValueOnce("user-1");
+      mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
+
+      await expect(
+        createCustomerPortalSession("/\\evil.com/phish")
+      ).rejects.toThrow();
+
+      expect(mockCreateBillingPortalSession).not.toHaveBeenCalled();
+    });
+
+    it("deve rejeitar returnUrl absoluto para outro domínio (open redirect)", async () => {
+      mockGetUserId.mockResolvedValueOnce("user-1");
+      mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
+
+      await expect(
+        createCustomerPortalSession("https://evil.com/phish")
+      ).rejects.toThrow();
+
+      expect(mockCreateBillingPortalSession).not.toHaveBeenCalled();
+    });
+
+    it("deve rejeitar returnUrl protocol-relative (//evil.com)", async () => {
+      mockGetUserId.mockResolvedValueOnce("user-1");
+      mockFindById.mockResolvedValueOnce({ stripeCustomerId: "cus_user_1" });
+
+      await expect(
+        createCustomerPortalSession("//evil.com/phish")
+      ).rejects.toThrow();
+
+      expect(mockCreateBillingPortalSession).not.toHaveBeenCalled();
     });
   });
 

@@ -12,6 +12,7 @@ import { DomainError } from "~/domain/errors/domain-error";
 import type { SubtitlePreset } from "~/domain/entities/clip";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 import { updateClipSchema } from "~/domain/schemas/update-clip.schema";
+import { processVideoSchema } from "~/domain/schemas/process-video.schema";
 
 export async function processVideo(
   uploadedFileId: string,
@@ -24,13 +25,23 @@ export async function processVideo(
     throw new Error("Unauthorized");
   }
 
-  const useCase = makeTriggerVideoProcessingUseCase();
-  const result = await useCase.execute({
+  const parsed = processVideoSchema.safeParse({
     uploadedFileId,
-    userId,
     preset,
     mode,
     manualCuts,
+  });
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Dados inválidos.");
+  }
+
+  const useCase = makeTriggerVideoProcessingUseCase();
+  const result = await useCase.execute({
+    uploadedFileId: parsed.data.uploadedFileId,
+    userId,
+    preset: parsed.data.preset,
+    mode: parsed.data.mode,
+    manualCuts: parsed.data.manualCuts,
   });
 
   if (result.triggered) {

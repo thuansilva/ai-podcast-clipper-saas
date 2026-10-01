@@ -267,6 +267,70 @@ describe("importYouTubeVideo Server Action", () => {
     expect(db.uploadedFile.create).not.toHaveBeenCalled();
   });
 
+  it("deve retornar erro se manualCuts tiver endTime <= startTime (payload malicioso)", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    const result = await importYouTubeVideo({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      mode: "manual",
+      manualCuts: [{ startTime: 50, endTime: 10 }],
+    });
+
+    expect(result.success).toBe(false);
+    expect(db.uploadedFile.create).not.toHaveBeenCalled();
+  });
+
+  it("deve retornar erro se manualCuts exceder o limite máximo de cortes (payload malicioso)", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    const manualCuts = Array.from({ length: 51 }, (_, i) => ({
+      startTime: i * 10,
+      endTime: i * 10 + 5,
+    }));
+
+    const result = await importYouTubeVideo({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      mode: "manual",
+      manualCuts,
+    });
+
+    expect(result.success).toBe(false);
+    expect(db.uploadedFile.create).not.toHaveBeenCalled();
+  });
+
+  it("deve retornar erro se mode for um valor fora do enum auto|manual (payload malicioso)", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    const result = await importYouTubeVideo({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      mode: "sabotage" as any,
+    });
+
+    expect(result.success).toBe(false);
+    expect(db.uploadedFile.create).not.toHaveBeenCalled();
+  });
+
+  it("deve retornar erro se sliceStartTime for negativo (payload malicioso)", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    const result = await importYouTubeVideo({
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      sliceStartTime: -10,
+    });
+
+    expect(result.success).toBe(false);
+    expect(db.uploadedFile.create).not.toHaveBeenCalled();
+  });
+
+  it("deve retornar erro se url estiver ausente (payload malicioso)", async () => {
+    mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
+
+    const result = await importYouTubeVideo({} as any);
+
+    expect(result.success).toBe(false);
+    expect(db.uploadedFile.create).not.toHaveBeenCalled();
+  });
+
   it("deve passar opções válidas e autoZoom para o useCase com sucesso", async () => {
     mockAuthGateway.getUserId.mockResolvedValueOnce("user-123");
 

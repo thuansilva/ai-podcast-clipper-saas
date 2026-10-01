@@ -1,13 +1,15 @@
 "use server";
 
 import { YouTubeUrl } from "~/domain/value-objects/youtube-url.vo";
+import { fetchYouTubeVideoInfoSchema } from "~/domain/schemas/youtube-info.schema";
 
 export async function fetchYouTubeVideoInfo(url: string) {
-  if (!url || !YouTubeUrl.isValid(url)) {
+  const parsed = fetchYouTubeVideoInfoSchema.safeParse({ url });
+  if (!parsed.success || !YouTubeUrl.isValid(parsed.data.url)) {
     throw new Error("Invalid YouTube URL");
   }
 
-  const ytUrl = YouTubeUrl.tryCreate(url);
+  const ytUrl = YouTubeUrl.tryCreate(parsed.data.url);
   if (!ytUrl) {
     throw new Error("Invalid YouTube URL");
   }

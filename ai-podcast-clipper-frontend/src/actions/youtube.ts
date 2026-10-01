@@ -8,6 +8,7 @@ import { DomainError } from "~/domain/errors/domain-error";
 import { RateLimitExceededError } from "~/domain/errors/rate-limit-exceeded-error";
 import { getProcessingOptions } from "~/application/services/processing-options.service";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
+import { importYouTubeVideoSchema } from "~/domain/schemas/import-youtube-video.schema";
 
 export interface ImportYouTubeVideoInput {
   url: string;
@@ -41,6 +42,14 @@ export async function importYouTubeVideo(
     return { success: false, error: "Unauthorized" };
   }
 
+  const parsed = importYouTubeVideoSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Dados inválidos.",
+    };
+  }
+
   try {
     const allowed = await makeYouTubeImportRateLimiter().consume(userId);
     if (!allowed) {
@@ -51,33 +60,36 @@ export async function importYouTubeVideo(
 
     const options = await getProcessingOptions();
 
-    if (input.genre && !options.GENRE?.some((o) => o.value === input.genre)) {
+    if (parsed.data.genre && !options.GENRE?.some((o) => o.value === parsed.data.genre)) {
       throw new DomainError("Invalid genre");
     }
     if (
-      input.aspectRatio &&
-      !options.ASPECT_RATIO?.some((o) => o.value === input.aspectRatio)
+      parsed.data.aspectRatio &&
+      !options.ASPECT_RATIO?.some((o) => o.value === parsed.data.aspectRatio)
     ) {
       throw new DomainError("Invalid aspect ratio");
     }
-    if (input.clipModel && !options.CLIP_MODEL?.some((o) => o.value === input.clipModel)) {
+    if (
+      parsed.data.clipModel &&
+      !options.CLIP_MODEL?.some((o) => o.value === parsed.data.clipModel)
+    ) {
       throw new DomainError("Invalid clip model");
     }
 
     const useCase = makeImportYouTubeVideoUseCase();
     const result = await useCase.execute({
       userId,
-      url: input.url,
-      preset: input.preset,
-      mode: input.mode,
-      manualCuts: input.manualCuts,
-      sliceStartTime: input.sliceStartTime,
-      sliceEndTime: input.sliceEndTime,
-      genre: input.genre,
-      clipModel: input.clipModel,
-      aspectRatio: input.aspectRatio,
-      autoZoom: input.autoZoom,
-      thumbnailUrl: input.thumbnailUrl,
+      url: parsed.data.url,
+      preset: parsed.data.preset,
+      mode: parsed.data.mode,
+      manualCuts: parsed.data.manualCuts,
+      sliceStartTime: parsed.data.sliceStartTime,
+      sliceEndTime: parsed.data.sliceEndTime,
+      genre: parsed.data.genre,
+      clipModel: parsed.data.clipModel,
+      aspectRatio: parsed.data.aspectRatio,
+      autoZoom: parsed.data.autoZoom,
+      thumbnailUrl: parsed.data.thumbnailUrl,
     });
 
     revalidatePath("/dashboard");

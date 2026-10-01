@@ -57,13 +57,13 @@ Sem gaps abertos nesta categoria.
 
 | Controle | Status | Evidência |
 |---|---|---|
-| Validação de schema (Zod) nas actions/rotas | ⚠️ *(parcialmente corrigido)* | `updateClip` (`update-clip.schema.ts`) e `generateUploadUrl` (`generate-upload-url.schema.ts`) agora validam com Zod na borda. As demais actions (`projects-actions.ts`, `stripe.ts`, `youtube-info.ts`) ainda não têm schema — gap reduzido, não fechado |
+| Validação de schema (Zod) nas actions/rotas | ✅ *(corrigido)* | Além de `updateClip` (`update-clip.schema.ts`) e `generateUploadUrl` (`generate-upload-url.schema.ts`), todas as actions que faltavam agora validam com Zod na borda, antes de qualquer lógica de negócio: `projects-actions.ts` (`src/domain/schemas/projects-actions.schema.ts`), `stripe.ts` (`src/domain/schemas/stripe-actions.schema.ts`), `youtube-info.ts` (`src/domain/schemas/youtube-info.schema.ts`), `youtube.ts`/`importYouTubeVideo` (`src/domain/schemas/import-youtube-video.schema.ts`) e `generation.ts`/`processVideo` (`src/domain/schemas/process-video.schema.ts`). **Achado corrigido — `priceId` arbitrário no checkout**: `createCheckoutSession` usava a string crua recebida do cliente como price id real no Stripe quando ela não batia com nenhuma das 4 chaves (abusável chamando a Server Action diretamente); agora `priceId` é `z.enum` das 4 chaves (`starter_monthly`, `starter_annual`, `pro_monthly`, `pro_annual`) e o price id vem sempre de `PRICE_IDS[chave]`. **Achado corrigido — open redirect em `returnUrl`** do Billing Portal: só aceita path relativo iniciado por `/`, sem `//`, sem `\` e sem espaços/caracteres de controle (bloqueia `https://evil.com`, `//evil.com`, `/\evil.com`, `/<TAB>/evil.com`, `javascript:`), e a action ancora o path no `BASE_URL` com checagem de origem. Em `retryProjectAction`, `clipModel`/`aspectRatio` são validados contra `getProcessingOptions()` (fail-closed) e `subtitlePreset` contra a lista de presets da UI. Em `importYouTubeVideo`/`processVideo`, `manualCuts` agora valida forma e exige `endTime > startTime` via `manualCutSchema` compartilhado (máx. 50 cortes por importação, limite de sanidade documentado em comentário — sem requisito de produto confirmado), e `mode` é restrito a `z.enum(["auto","manual"])` |
 | Campos de tipo `unknown`/livre indo direto ao banco | ✅ *(corrigido)* | `updateClip` agora valida `transcriptWords` como array de `{word, start, end}` via `updateClipSchema` antes de persistir |
 | Upload restrito a vídeo, com limite de tamanho | ✅ *(corrigido)* | `generateUploadUrlSchema`: `contentType` num allowlist de mimetypes de vídeo, `fileSizeBytes` obrigatório e ≤ 2GB. No S3 o limite é reforçado via `ContentLength` assinado na presigned URL; no storage local o stream do `PUT` é abortado (413) e o arquivo parcial removido se exceder |
 | Validação de SSRF em input de URL externa | ✅ | Import de YouTube persiste `youtubeUrl.canonicalUrl` (não a URL crua) e o backend valida host (`youtube.com`/`youtu.be`) antes de chamar yt-dlp |
 | Prevenção de XSS (escaping de conteúdo dinâmico) | ✅ (por padrão do React/Next) | Sem uso de `dangerouslySetInnerHTML` identificado nas áreas revisadas |
 
-**Gaps abertos**: Zod ainda não cobre todas as actions (P2 agora, era P1 — as duas superfícies de maior risco, upload e edição de clipe, já estão validadas).
+Sem gaps abertos nesta categoria — todas as actions/rotas identificadas agora validam com Zod na borda.
 
 ---
 
@@ -168,6 +168,9 @@ Sem gaps abertos nesta categoria.
 - **`/api/local-storage` agora valida ownership da key contra o banco** (V4)
 - **`local_server.py` agora exige `AUTH_TOKEN`** (V2)
 - **Validação Zod em `updateClip` e `generateUploadUrl`** (V5)
+- **Validação Zod em `projects-actions.ts`, `stripe.ts`, `youtube-info.ts`, `youtube.ts` e `generation.ts`** — Zod agora cobre todas as actions identificadas no levantamento original (V5)
+- **`createCheckoutSession` não aceita mais `priceId` arbitrário** — antes repassava ao Stripe a string crua do cliente quando ela não era uma das 4 chaves; agora só as 4 chaves via `z.enum` (V5)
+- **Open redirect em `returnUrl` do Billing Portal** — só path relativo seguro, ancorado no `BASE_URL` (V5)
 - **Upload restrito a vídeo, com limite de 2GB** (V5/V12)
 - **Cabeçalhos de segurança HTTP no Next.js** (X-Content-Type-Options, X-Frame-Options, Referrer-Policy, Permissions-Policy, HSTS) (V9/V14)
 
@@ -178,7 +181,6 @@ Sem gaps abertos nesta categoria.
 | P0 | Rate limiting nos endpoints do backend Python (`process_video`, `download_youtube`) — são os que efetivamente custam GPU. *Adiado a pedido — será feito com calma, como estudo de caso de rate limiting* | V11 |
 | P1 | Content-Security-Policy — precisa testar login/checkout ao vivo antes de habilitar | V9 |
 | P1 | Rate limit ausente nas demais actions sensíveis (projetos, billing, `youtube/info`) — *idem, adiado* | V11 |
-| P2 | Zod ainda não cobre todas as actions (só `updateClip`/`generateUploadUrl`) | V5 |
 | P2 | Logging estruturado de eventos de autorização negada | V7 |
 | P2 | CORS explícito no backend FastAPI | V9 |
 | P2 | Rate limiter é por instância/processo, não é garantia global em multi-instância | V11 |
