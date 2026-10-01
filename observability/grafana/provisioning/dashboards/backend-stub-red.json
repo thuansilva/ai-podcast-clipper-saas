@@ -1,0 +1,132 @@
+{
+  "id": null,
+  "uid": "backend-stub-red",
+  "title": "Backend Stub — RED (rate/errors/duration)",
+  "description": "Métricas RED do backend-stub derivadas dos spans via conector spanmetrics do OTel Collector (sem instrumentação de métricas na aplicação). Usado para medir MTTD de alertas de disponibilidade/erro.",
+  "tags": ["ai-podcast-clipper", "observability", "red", "backend-stub"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Request rate (por rota)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (service_name, http_route) (rate(traces_spanmetrics_calls_total{span_kind=\"SPAN_KIND_SERVER\", service_name=\"ai-podcast-clipper-backend-stub\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}} {{http_route}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Taxa de erro (%)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "spanNulls": true },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.05 },
+              { "color": "red", "value": 0.2 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum by (service_name) (rate(traces_spanmetrics_calls_total{span_kind=\"SPAN_KIND_SERVER\", service_name=\"ai-podcast-clipper-backend-stub\", status_code=\"STATUS_CODE_ERROR\"}[$__rate_interval])) / sum by (service_name) (rate(traces_spanmetrics_calls_total{span_kind=\"SPAN_KIND_SERVER\", service_name=\"ai-podcast-clipper-backend-stub\"}[$__rate_interval]))",
+          "legendFormat": "{{service_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Latência p95 / p99 (ms, por rota)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.95, sum by (le, service_name, http_route) (rate(traces_spanmetrics_duration_milliseconds_bucket{span_kind=\"SPAN_KIND_SERVER\", service_name=\"ai-podcast-clipper-backend-stub\"}[$__rate_interval])))",
+          "legendFormat": "p95 {{service_name}} {{http_route}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "histogram_quantile(0.99, sum by (le, service_name, http_route) (rate(traces_spanmetrics_duration_milliseconds_bucket{span_kind=\"SPAN_KIND_SERVER\", service_name=\"ai-podcast-clipper-backend-stub\"}[$__rate_interval])))",
+          "legendFormat": "p99 {{service_name}} {{http_route}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Disponibilidade (probe HTTP via blackbox-exporter)",
+      "description": "1 = backend-stub respondeu 2xx no último probe; 0 = indisponível/timeout.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" } } },
+            { "type": "value", "options": { "1": { "text": "UP", "color": "green" } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "probe_success{job=\"blackbox-backend-stub\"}",
+          "legendFormat": "backend-stub",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

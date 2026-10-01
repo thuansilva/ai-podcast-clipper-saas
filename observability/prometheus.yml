@@ -10,3 +10,34 @@ scrape_configs:
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]
+
+  # Métricas de host (CPU, memória, disco, rede) para o dashboard oficial
+  # "Node Exporter Full" (id 1860).
+  - job_name: node-exporter
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # Métricas por container Docker para o dashboard oficial de cAdvisor
+  # (id 21743).
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
+  # Heartbeat HTTP do backend-stub via blackbox_exporter (prober externo, sem
+  # precisar expor /metrics na própria app): gera probe_success{...}=1/0 e
+  # o "up" padrão do blackbox_exporter em si. É o sinal usado pelo alerta de
+  # "serviço indisponível", já que o backend-stub não fala Prometheus nativamente.
+  - job_name: blackbox-backend-stub
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://backend-stub:8000/
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115

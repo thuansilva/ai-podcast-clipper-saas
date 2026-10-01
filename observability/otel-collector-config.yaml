@@ -16,6 +16,25 @@ processors:
         key: loki.resource.labels
         value: service.name
 
+connectors:
+  # Deriva métricas RED (rate/errors/duration) diretamente dos spans que já
+  # fluem pela pipeline de traces, sem precisar adicionar um MeterProvider em
+  # cada aplicação instrumentada. Gera, por serviço/operação:
+  #   traces_spanmetrics_calls_total{...}   -> contador de chamadas (rate/erros)
+  #   traces_spanmetrics_duration_{bucket,sum,count} -> histograma de latência
+  spanmetrics:
+    namespace: traces.spanmetrics
+    histogram:
+      explicit:
+        buckets: [10ms, 50ms, 100ms, 200ms, 400ms, 800ms, 1s, 1.5s, 2s, 5s, 10s]
+    dimensions:
+      - name: http.method
+      - name: http.status_code
+      - name: http.route
+    exemplars:
+      enabled: true
+    metrics_flush_interval: 15s
+
 exporters:
   prometheus:
     endpoint: 0.0.0.0:8889
@@ -29,7 +48,10 @@ exporters:
 service:
   pipelines:
     metrics:
-      receivers: [otlp]
+      # Recebe tanto métricas OTLP eventualmente emitidas por uma app (hoje
+      # nenhuma emite) quanto as métricas RED derivadas dos spans pelo
+      # conector spanmetrics.
+      receivers: [otlp, spanmetrics]
       processors: [batch]
       exporters: [prometheus]
     logs:
@@ -39,7 +61,9 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/tempo]
+      # O conector spanmetrics também atua como "exporter" desta pipeline:
+      # cada span processado alimenta os contadores/histogramas de métricas.
+      exporters: [otlp/tempo, spanmetrics]
 
   telemetry:
     logs:

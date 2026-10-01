@@ -1,0 +1,4 @@
+cenario,grupo,timestamp_T0,timestamp_T1_alerta,mttd_segundos,trace_encontrado,timestamp_T2_resolvido
+backend_indisponivel,com_observabilidade,2026-09-30T04:28:09Z,2026-09-30T04:29:31Z,82,nao,2026-09-30T04:30:32Z
+latencia_alta,com_observabilidade,2026-09-30T04:40:36Z,2026-09-30T04:43:36Z,180,nao,2026-09-30T04:49:37Z
+falha_webhook_stripe,com_observabilidade,2026-09-30T05:07:22Z,2026-09-30T05:10:11Z,169,sim,2026-09-30T05:15:41Z

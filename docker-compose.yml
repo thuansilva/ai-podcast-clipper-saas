@@ -104,13 +104,72 @@ services:
       # Simula o backend "GPU" localmente: latência aleatória entre min/max
       # (ms) e uma fração das requisições falhando de propósito, pra testar
       # trace/log de erro sem precisar do Modal real.
-      STUB_LATENCY_MS_MIN: "200"
-      STUB_LATENCY_MS_MAX: "1500"
+      # Parametrizado via env var do host (com default = comportamento normal)
+      # para o cenário "latencia_alta" de
+      # scripts/experimento-observabilidade.sh poder elevar a latência com
+      # `STUB_LATENCY_MS_MIN=... STUB_LATENCY_MS_MAX=... docker compose up -d
+      # --force-recreate backend-stub`, sem precisar editar este arquivo.
+      STUB_LATENCY_MS_MIN: "${STUB_LATENCY_MS_MIN:-200}"
+      STUB_LATENCY_MS_MAX: "${STUB_LATENCY_MS_MAX:-1500}"
       STUB_ERROR_RATE: "0"
     ports:
       - "8001:8000"
     depends_on:
       - otel-collector
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: ai-podcast-blackbox-exporter
+    restart: always
+    volumes:
+      - ./observability/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    ports:
+      - "9115:9115"
+    depends_on:
+      - backend-stub
+
+  # Métricas de host (CPU, memória, disco, rede) pro dashboard oficial
+  # "Node Exporter Full" (grafana.com/grafana/dashboards/1860-node-exporter-full/).
+  # Monta /proc, /sys e / (como /rootfs) somente leitura, conforme a doc oficial
+  # do node_exporter. Em WSL2 isso reflete a VM do WSL, não o hardware real do
+  # host Windows — suficiente pro experimento local.
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: ai-podcast-node-exporter
+    restart: always
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    ports:
+      - "9100:9100"
+
+  # Métricas por container Docker pro dashboard oficial de cAdvisor
+  # (grafana.com/grafana/dashboards/21743-cadvisor-exporter-docker-containers-overview/).
+  # Mounts conforme README oficial do cAdvisor (google/cadvisor): /var/run, /sys,
+  # /var/lib/docker e /dev/disk, todos somente leitura. `--privileged` e acesso a
+  # /dev/kmsg são necessários pra leitura completa de métricas de cgroup/kernel.
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6
+    container_name: ai-podcast-cadvisor
+    restart: always
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    ports:
+      - "8081:8080"
 
 volumes:
   postgres_data:

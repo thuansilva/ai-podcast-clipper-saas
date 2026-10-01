@@ -1,0 +1,177 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: backend-stub-red
+    folder: Observability
+    interval: 30s
+    rules:
+      # "Serviço indisponível": baseado no probe HTTP externo (blackbox-exporter)
+      # contra o backend-stub, não em ausência de spans/métricas de aplicação —
+      # assim o alerta detecta queda real do processo mesmo sem tráfego de
+      # requests no momento (ver observability/blackbox.yml e o job
+      # "blackbox-backend-stub" em observability/prometheus.yml).
+      - uid: backend-stub-down
+        title: "Backend stub indisponível (probe HTTP)"
+        condition: C
+        for: 1m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severity: critical
+          service: backend-stub
+        annotations:
+          summary: "O probe HTTP (blackbox-exporter) do backend-stub falhou (sem resposta 2xx)."
+          description: "probe_success{job=\"blackbox-backend-stub\"} está em 0 (ou sem dados) há pelo menos 1 minuto. Verifique se o container ai-podcast-backend-stub está rodando."
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              expr: probe_success{job="blackbox-backend-stub"}
+              instant: false
+              range: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+
+      # "Taxa de erro alta": baseado nas métricas RED derivadas dos spans pelo
+      # conector spanmetrics do OTel Collector (ver
+      # observability/otel-collector-config.yaml). status_code="STATUS_CODE_ERROR"
+      # é atribuído pela auto-instrumentação FastAPI/ASGI quando a resposta é 5xx.
+      - uid: backend-stub-high-error-rate
+        title: "Taxa de erro alta no backend-stub (5xx)"
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          service: backend-stub
+        annotations:
+          summary: "Mais de 20% das respostas do backend-stub são erro (5xx) nos últimos 5 minutos."
+          description: "sum(rate(traces_spanmetrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum(rate(traces_spanmetrics_calls_total[5m])) acima do limiar. Ajuste STUB_ERROR_RATE ou investigue erros reais."
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: false
+              range: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              expr: >-
+                sum(rate(traces_spanmetrics_calls_total{span_kind="SPAN_KIND_SERVER", service_name="ai-podcast-clipper-backend-stub", status_code="STATUS_CODE_ERROR"}[5m]))
+                /
+                sum(rate(traces_spanmetrics_calls_total{span_kind="SPAN_KIND_SERVER", service_name="ai-podcast-clipper-backend-stub"}[5m]))
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.2]
+
+      # "Latência alta": baseado no histograma de duração derivado dos spans
+      # pelo conector spanmetrics (traces_spanmetrics_duration_milliseconds_bucket).
+      # Limiar calibrado contra o range de latência simulada do backend-stub
+      # (STUB_LATENCY_MS_MIN=200 / STUB_LATENCY_MS_MAX=1500 por padrão, ver
+      # docker-compose.yml): com uma distribuição uniforme nesse range, o p95
+      # "normal" fica perto de ~1.4s — por isso o limiar de 2s (um dos
+      # buckets explícitos já configurados no histograma) dá margem segura
+      # contra falso positivo em operação normal, mas é facilmente ultrapassado
+      # quando o experimento eleva STUB_LATENCY_MS_MIN/MAX (cenário
+      # "latencia_alta" de scripts/experimento-observabilidade.sh).
+      - uid: backend-stub-high-latency-p95
+        title: "Latência alta no backend-stub (p95)"
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          service: backend-stub
+        annotations:
+          summary: "p95 de latência do backend-stub acima de 2s nos últimos 5 minutos."
+          description: "histogram_quantile(0.95, traces_spanmetrics_duration_milliseconds_bucket) acima do limiar. Verifique STUB_LATENCY_MS_MIN/STUB_LATENCY_MS_MAX ou latência real do processamento."
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: false
+              range: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              expr: >-
+                histogram_quantile(0.95, sum by (le) (rate(traces_spanmetrics_duration_milliseconds_bucket{span_kind="SPAN_KIND_SERVER", service_name="ai-podcast-clipper-backend-stub"}[5m])))
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [2000]

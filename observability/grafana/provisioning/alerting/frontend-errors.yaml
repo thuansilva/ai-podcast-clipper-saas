@@ -1,0 +1,110 @@
+apiVersion: 1
+
+# Remove a versão anterior desta regra (uid antigo, trocado depois de um
+# achado de instrumentação - ver comentário na regra abaixo): sem isso, o
+# provisionamento por arquivo do Grafana só adiciona/atualiza por uid, não
+# apaga uid removido do arquivo, e o rule órfão ficaria pra sempre "inactive"
+# no grupo.
+deleteRules:
+  - orgId: 1
+    uid: frontend-high-error-rate
+
+groups:
+  - orgId: 1
+    name: frontend-errors
+    folder: Observability
+    interval: 30s
+    rules:
+      # "Taxa de erro alta no webhook do Stripe (frontend)".
+      #
+      # Dois achados da validação prática (scripts/experimento-observabilidade.sh,
+      # cenário falha_webhook_stripe) que moldaram esta regra - nenhum dos
+      # dois era óbvio de antemão, por isso o registro:
+      #
+      # 1) Diferente do backend-stub (FastAPI, onde a auto-instrumentação
+      #    marca o span SPAN_KIND_SERVER como STATUS_CODE_ERROR num 5xx), o
+      #    route handler em src/app/api/webhooks/stripe/route.ts tem um
+      #    try/catch que absorve a exceção e retorna manualmente
+      #    `new NextResponse(..., {status: 500})` - a exceção nunca "vaza"
+      #    pro handler que o @vercel/otel instrumenta, então o span
+      #    SPAN_KIND_SERVER da rota fica com status UNSET mesmo numa
+      #    resposta 500. Quem fica com STATUS_CODE_ERROR é o span filho
+      #    SPAN_KIND_INTERNAL criado manualmente via `withSpan()`
+      #    (src/lib/observability/tracer.ts, nome do span:
+      #    "stripe.webhook.handle"), que chama `span.setStatus({code:
+      #    ERROR})` explicitamente no catch.
+      #
+      # 2) Uma primeira versão desta regra tentou contornar (1) removendo o
+      #    filtro de span_kind (só service_name + status_code=ERROR). Isso
+      #    quebrou de um jeito diferente: em dev, o Next.js/Turbopack emite
+      #    um volume grande de spans SPAN_KIND_INTERNAL próprios (telemetria
+      #    interna de build/render, sem relação com o webhook) que diluem
+      #    fortemente o denominador da razão - na prática, a taxa de erro
+      #    ficou perto de ~9% mesmo com o Postgres totalmente fora do ar e
+      #    100% das chamadas ao webhook falhando, nunca cruzando o limiar de
+      #    20%.
+      #
+      # A correção: o conector spanmetrics expõe por padrão o label
+      # `span_name` (não é preciso declará-lo em "dimensions" no
+      # otel-collector-config.yaml). Filtrando por
+      # span_name="stripe.webhook.handle" (o nome do span custom acima) em
+      # vez de span_kind, isolamos exatamente o processamento do webhook,
+      # imunes tanto ao problema (1) quanto ao (2). Validado: com Postgres
+      # caído, a razão sobe a ~100% rapidamente e ultrapassa o limiar.
+      #
+      # Trade-off aceito: esta regra cobre especificamente o processamento
+      # do webhook do Stripe (via esse span nomeado), não "qualquer 5xx do
+      # frontend" de forma genérica (ex.: não cobriria uma falha no webhook
+      # do Clerk, que não usa withSpan() hoje). O título/uid refletem esse
+      # escopo real para não sugerir uma cobertura mais ampla do que existe.
+      - uid: frontend-stripe-webhook-high-error-rate
+        title: "Taxa de erro alta no webhook do Stripe (frontend)"
+        condition: C
+        for: 2m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severity: warning
+          service: frontend
+        annotations:
+          summary: "Mais de 20% dos processamentos do webhook do Stripe (frontend) terminaram em erro nos últimos 5 minutos."
+          description: "sum(rate(traces_spanmetrics_calls_total{service_name=\"ai-podcast-clipper-frontend\", span_name=\"stripe.webhook.handle\", status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum(rate(traces_spanmetrics_calls_total{service_name=\"ai-podcast-clipper-frontend\", span_name=\"stripe.webhook.handle\"}[5m])) acima do limiar. Verifique dependências do route handler (ex.: Postgres) e os logs correlacionados no Loki."
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus
+            model:
+              refId: A
+              instant: false
+              range: true
+              intervalMs: 1000
+              maxDataPoints: 43200
+              expr: >-
+                sum(rate(traces_spanmetrics_calls_total{service_name="ai-podcast-clipper-frontend", span_name="stripe.webhook.handle", status_code="STATUS_CODE_ERROR"}[5m]))
+                /
+                sum(rate(traces_spanmetrics_calls_total{service_name="ai-podcast-clipper-frontend", span_name="stripe.webhook.handle"}[5m]))
+          - refId: B
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: B
+              type: reduce
+              expression: A
+              reducer: last
+          - refId: C
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.2]
