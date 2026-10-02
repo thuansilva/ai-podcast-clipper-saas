@@ -57,10 +57,91 @@ jobs:
       - name: Run Lint and Typecheck
         run: npm run check
 
+      # tests/integration/health-check.test.ts faz requisições HTTP reais contra
+      # http://localhost:3000/api/health, então precisamos de um servidor Next.js
+      # real de pé antes do step de testes. Usamos "next build && next start" (via
+      # npm run build/start) em vez de "next dev": é mais fiel a um ambiente real e,
+      # uma vez buildado, o start fica pronto bem mais rápido que o dev server.
+      #
+      # As env vars abaixo são valores fake/dummy só para o Next conseguir subir
+      # sem credenciais reais (este CI não tem acesso a Clerk/Stripe/AWS/S3 de
+      # verdade, e o endpoint /api/health não depende de nenhuma integração
+      # externa de fato). Os mesmos valores (exceto as chaves do Clerk) já são
+      # usados em tests/setup.ts para mockar o schema de env em `src/env.js`
+      # durante os testes unitários/integração.
+      #
+      # NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY precisa ter o formato real de uma
+      # publishable key (base64 de "<frontend-api-host>$"), porque o
+      # clerkMiddleware valida o formato na inicialização, mesmo em rotas que não
+      # chamam auth.protect() (ex.: /api/health passa pelo middleware por causa do
+      # matcher em src/middleware.ts). O valor abaixo
+      # (pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA, que decodifica para
+      # "clerk.accounts.dev$") é a chave de exemplo pública e genérica usada nos
+      # próprios templates/documentação oficiais do Clerk — não é um segredo real
+      # de nenhuma conta. CLERK_SECRET_KEY recebe um valor fake com o mesmo
+      # prefixo só para manter o formato esperado.
+      - name: Build Next.js app and start server in background
+        env:
+          SKIP_ENV_VALIDATION: "1"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper
+          BASE_URL: http://localhost:3000
+          AWS_ACCESS_KEY_ID: mock_key
+          AWS_SECRET_ACCESS_KEY: mock_secret
+          AWS_REGION: us-east-1
+          S3_BUCKET_NAME: mock-bucket
+          PROCESS_VIDEO_ENDPOINT: https://mock.modal.run/process_video
+          PROCESS_VIDEO_ENDPOINT_AUTH: mock-auth-token
+          STRIPE_SECRET_KEY: sk_test_mock
+          STRIPE_STARTER_MONTHLY_PRICE_ID: price_starter_monthly_mock
+          STRIPE_STARTER_ANNUAL_PRICE_ID: price_starter_annual_mock
+          STRIPE_PRO_MONTHLY_PRICE_ID: price_pro_monthly_mock
+          STRIPE_PRO_ANNUAL_PRICE_ID: price_pro_annual_mock
+          STRIPE_SMALL_CREDIT_PACK: price_small_123
+          STRIPE_MEDIUM_CREDIT_PACK: price_med_456
+          STRIPE_LARGE_CREDIT_PACK: price_large_789
+          STRIPE_WEBHOOK_SECRET: whsec_mock
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_mock
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA
+          CLERK_SECRET_KEY: sk_test_YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY3ODkw
+          CLERK_WEBHOOK_SECRET: whsec_mock_clerk
+        run: |
+          npm run build
+          # "npm run start" (-> "next start") gera processos filhos (sh -c, depois
+          # o processo real "next-server"). O job control desta shell não-interativa
+          # do GitHub Actions não cria um novo grupo de processos para o job em
+          # background, então todos eles compartilham o PGID da própria shell deste
+          # step ($$) — guardamos esse PGID (em vez de só o PID de "$!", que mataria
+          # só o processo "npm" e deixaria o "next-server" real órfão) para poder
+          # encerrar a árvore inteira no step de cleanup.
+          nohup npm run start > next-server.log 2>&1 &
+          echo $$ > next-server.pgid
+
+      - name: Wait for Next.js server to become healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health > /dev/null; then
+              echo "Servidor respondeu em /api/health após ${i} tentativa(s)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Servidor não respondeu em /api/health dentro do tempo esperado." >&2
+          echo "--- next-server.log ---" >&2
+          cat next-server.log >&2 || true
+          exit 1
+
       - name: Run Unit and Integration Tests
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper
         run: npm run test:all
+
+      - name: Stop Next.js server
+        if: always()
+        run: |
+          if [ -f next-server.pgid ]; then
+            kill -- "-$(cat next-server.pgid)" 2>/dev/null || true
+            rm -f next-server.pgid
+          fi
 
   backend:
     name: Backend (Pytest)
@@ -87,4 +168,31 @@ jobs:
           pip install -r requirements-test.txt
 
       - name: Run Pytest
-        run: pytest -v
+        run: pytest -v --ignore=tests/test_local_server.py
+
+  backend-local-server:
+    name: Backend (local_server.py Pytest)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ai-podcast-clipper-backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-podcast-clipper-backend/requirements.txt
+
+      - name: Install full dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Pytest (local_server.py)
+        run: pytest tests/test_local_server.py -v

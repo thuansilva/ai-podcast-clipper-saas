@@ -34,20 +34,22 @@ class TestPresetStyles:
         assert "NEON" in SUPPORTED_PRESETS
 
     def test_hormozi_style_attributes(self):
-        style, is_uppercase = get_preset_style("HORMOZI")
+        style, is_uppercase, max_words = get_preset_style("HORMOZI")
         assert is_uppercase is True
+        assert max_words == 2
         assert style.fontname == "Anton"
-        assert style.fontsize == 140
+        assert style.fontsize == 150
         assert style.bold is True
-        assert style.outline == 6.0
+        assert style.outline == 8.0
         # Yellow primary color
         assert style.primarycolor.r == 255
         assert style.primarycolor.g == 230
         assert style.primarycolor.b == 0
 
     def test_minimal_style_attributes(self):
-        style, is_uppercase = get_preset_style("MINIMAL")
+        style, is_uppercase, max_words = get_preset_style("MINIMAL")
         assert is_uppercase is False
+        assert max_words == 5
         assert style.fontname == "Arial"
         assert style.fontsize == 90
         assert style.bold is False
@@ -58,8 +60,9 @@ class TestPresetStyles:
         assert style.primarycolor.b == 255
 
     def test_neon_style_attributes(self):
-        style, is_uppercase = get_preset_style("NEON")
+        style, is_uppercase, max_words = get_preset_style("NEON")
         assert is_uppercase is True
+        assert max_words == 3
         assert style.fontname == "Anton"
         assert style.fontsize == 130
         # Cyan primary color
@@ -67,16 +70,21 @@ class TestPresetStyles:
         assert style.primarycolor.g == 255
         assert style.primarycolor.b == 255
 
-    def test_unsupported_preset_raises_error(self):
-        with pytest.raises(ValueError) as exc_info:
-            get_preset_style("UNKNOWN_STYLE")
-        assert "Unsupported preset" in str(exc_info.value)
+    def test_unsupported_preset_fallback_to_hormozi(self):
+        style, is_uppercase, max_words = get_preset_style("UNKNOWN_STYLE")
+        # Should fall back to HORMOZI preset
+        assert is_uppercase is True
+        assert max_words == 2
+        assert style.fontname == "Anton"
+        assert style.fontsize == 150
 
     def test_preset_case_insensitivity(self):
-        style_lower, _ = get_preset_style("hormozi")
-        style_upper, _ = get_preset_style("HORMOZI")
+        style_lower, is_uppercase_lower, max_words_lower = get_preset_style("hormozi")
+        style_upper, is_uppercase_upper, max_words_upper = get_preset_style("HORMOZI")
         assert style_lower.fontname == style_upper.fontname
         assert style_lower.primarycolor == style_upper.primarycolor
+        assert is_uppercase_lower == is_uppercase_upper
+        assert max_words_lower == max_words_upper
 
 
 class TestGenerateAssSubtitles:
@@ -94,11 +102,14 @@ class TestGenerateAssSubtitles:
 
             assert os.path.exists(res_path)
             subs = pysubs2.load(res_path)
-            assert len(subs.events) == 2
+            # HORMOZI preset has max_words=2, so 7 words create 4 groups: (2, 2, 2, 1)
+            assert len(subs.events) == 4
 
             # Hormozi should be all uppercase
-            assert subs.events[0].text == "WELCOME TO THE GREATEST"
-            assert subs.events[1].text == "SHOW ON EARTH"
+            assert subs.events[0].text == "WELCOME TO"
+            assert subs.events[1].text == "THE GREATEST"
+            assert subs.events[2].text == "SHOW ON"
+            assert subs.events[3].text == "EARTH"
 
             # Check style name
             assert subs.events[0].style == "HORMOZI"
