@@ -179,4 +179,10 @@ export class PrismaClipRepository implements IClipRepository {
       where: { id },
     });
   }
+
+  async deleteByUploadedFileId(uploadedFileId: string): Promise<void> {
+    await db.clip.deleteMany({
+      where: { uploadedFileId },
+    });
+  }
 }

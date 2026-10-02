@@ -46,6 +46,13 @@ export interface UpdateUploadedFileInput {
   uploaded?: boolean;
   status?: UploadedFileStatus;
   errorMessage?: string | null;
+  manualCutsJson?: unknown;
+  subtitlePreset?: string | null;
+  clipModel?: string | null;
+  aspectRatio?: string | null;
+  autoZoom?: boolean | null;
+  sliceStartTime?: number;
+  sliceEndTime?: number;
 }
 
 export interface IUploadedFileRepository {

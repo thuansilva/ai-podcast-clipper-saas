@@ -30,4 +30,5 @@ export interface IClipRepository {
   createMany(clips: CreateClipInput[]): Promise<number>;
   update(id: string, input: UpdateClipInput): Promise<ClipEntity>;
   delete(id: string): Promise<void>;
+  deleteByUploadedFileId(uploadedFileId: string): Promise<void>;
 }

@@ -97,5 +97,6 @@ describe("TriggerVideoProcessingUseCase", () => {
 
     const updated = await uploadedFileRepository.findById(file.id);
     expect(updated?.uploaded).toBe(true);
+    expect(updated?.manualCutsJson).toEqual(JSON.stringify(manualCuts));
   });
 });

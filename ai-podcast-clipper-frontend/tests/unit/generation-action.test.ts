@@ -367,7 +367,7 @@ describe("Generation Server Actions", () => {
 
       expect(db.uploadedFile.update).toHaveBeenCalledWith({
         where: { id: "file-manual" },
-        data: { uploaded: true },
+        data: { uploaded: true, manualCutsJson: JSON.stringify(manualCuts) },
       });
 
       expect(revalidatePath).toHaveBeenCalledWith("/dashboard");

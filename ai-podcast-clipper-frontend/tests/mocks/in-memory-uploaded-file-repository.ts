@@ -126,6 +126,23 @@ export class InMemoryUploadedFileRepository implements IUploadedFileRepository {
       ...(input.errorMessage !== undefined && {
         errorMessage: input.errorMessage,
       }),
+      ...(input.manualCutsJson !== undefined && {
+        manualCutsJson: input.manualCutsJson,
+      }),
+      ...(input.subtitlePreset !== undefined && {
+        subtitlePreset: input.subtitlePreset,
+      }),
+      ...(input.clipModel !== undefined && { clipModel: input.clipModel }),
+      ...(input.aspectRatio !== undefined && {
+        aspectRatio: input.aspectRatio,
+      }),
+      ...(input.autoZoom !== undefined && { autoZoom: input.autoZoom }),
+      ...(input.sliceStartTime !== undefined && {
+        sliceStartTime: input.sliceStartTime,
+      }),
+      ...(input.sliceEndTime !== undefined && {
+        sliceEndTime: input.sliceEndTime,
+      }),
       updatedAt: new Date(),
     };
 

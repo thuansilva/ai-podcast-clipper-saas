@@ -1,4 +1,5 @@
 import { db } from "~/server/db";
+import { Prisma } from "@prisma/client";
 import type {
   SourceType,
   UploadedFileEntity,
@@ -245,6 +246,24 @@ export class PrismaUploadedFileRepository implements IUploadedFileRepository {
         ...(input.errorMessage !== undefined && {
           errorMessage: input.errorMessage,
         }),
+        ...(input.manualCutsJson !== undefined && {
+          manualCutsJson: (input.manualCutsJson ??
+            Prisma.JsonNull) as Prisma.InputJsonValue,
+        }),
+        ...(input.subtitlePreset !== undefined && {
+          subtitlePreset: input.subtitlePreset,
+        }),
+        ...(input.clipModel !== undefined && { clipModel: input.clipModel }),
+        ...(input.aspectRatio !== undefined && {
+          aspectRatio: input.aspectRatio,
+        }),
+        ...(input.autoZoom !== undefined && { autoZoom: input.autoZoom }),
+        ...(input.sliceStartTime !== undefined && {
+          sliceStartTime: input.sliceStartTime,
+        }),
+        ...(input.sliceEndTime !== undefined && {
+          sliceEndTime: input.sliceEndTime,
+        }),
       },
     });
 
@@ -261,6 +280,14 @@ export class PrismaUploadedFileRepository implements IUploadedFileRepository {
       uploaded: file.uploaded,
       status: file.status as UploadedFileStatus,
       errorMessage: file.errorMessage,
+      manualCutsJson: file.manualCutsJson,
+      sliceStartTime: file.sliceStartTime,
+      sliceEndTime: file.sliceEndTime,
+      genre: file.genre,
+      clipModel: file.clipModel,
+      aspectRatio: file.aspectRatio,
+      autoZoom: file.autoZoom,
+      subtitlePreset: file.subtitlePreset,
       createdAt: file.createdAt,
       updatedAt: file.updatedAt,
     };

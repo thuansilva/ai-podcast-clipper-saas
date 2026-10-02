@@ -200,6 +200,7 @@ import { RetryProjectUseCase } from "~/application/use-cases/retry-project.use-c
 export function makeRetryProjectUseCase(): RetryProjectUseCase {
   return new RetryProjectUseCase(
     new PrismaUploadedFileRepository(),
-    new InngestQueueGateway()
+    new InngestQueueGateway(),
+    new PrismaClipRepository()
   );
 }

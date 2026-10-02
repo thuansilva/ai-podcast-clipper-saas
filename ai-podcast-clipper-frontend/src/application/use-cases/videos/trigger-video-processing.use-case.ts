@@ -42,16 +42,10 @@ export class TriggerVideoProcessingUseCase {
 
     await this.uploadedFileRepository.update(input.uploadedFileId, {
       uploaded: true,
+      ...(input.manualCuts && input.manualCuts.length > 0
+        ? { manualCutsJson: JSON.stringify(input.manualCuts) }
+        : {}),
     });
-
-    if (input.manualCuts && input.manualCuts.length > 0) {
-      const { PrismaClient } = require("@prisma/client");
-      const prisma = new PrismaClient();
-      await prisma.uploadedFile.update({
-        where: { id: input.uploadedFileId },
-        data: { manualCutsJson: JSON.stringify(input.manualCuts) }
-      });
-    }
 
     return { success: true, triggered: true };
   }

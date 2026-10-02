@@ -1,29 +1,36 @@
 import { NotFoundError } from "~/domain/errors/not-found-error";
 import { UnauthorizedError } from "~/domain/errors/unauthorized-error";
-import type { IUploadedFileRepository } from "~/domain/ports/uploaded-file-repository";
+import type {
+  IUploadedFileRepository,
+  UpdateUploadedFileInput,
+} from "~/domain/ports/uploaded-file-repository";
+import type { IClipRepository } from "~/domain/ports/clip-repository";
 import type { IQueueGateway } from "~/domain/ports/queue-gateway";
-import { PrismaClient } from "@prisma/client";
 
-const prisma = new PrismaClient();
+export interface RetryProjectInput {
+  projectId: string;
+  userId: string;
+  updates?: Partial<
+    Pick<
+      UpdateUploadedFileInput,
+      | "subtitlePreset"
+      | "clipModel"
+      | "aspectRatio"
+      | "autoZoom"
+      | "sliceStartTime"
+      | "sliceEndTime"
+    >
+  >;
+}
 
 export class RetryProjectUseCase {
   constructor(
     private readonly uploadedFileRepository: IUploadedFileRepository,
-    private readonly queueGateway: IQueueGateway
+    private readonly queueGateway: IQueueGateway,
+    private readonly clipRepository: IClipRepository
   ) {}
 
-  async execute(input: {
-    projectId: string;
-    userId: string;
-    updates?: {
-      subtitlePreset?: string;
-      clipModel?: string;
-      aspectRatio?: string;
-      autoZoom?: boolean;
-      sliceStartTime?: number;
-      sliceEndTime?: number;
-    };
-  }): Promise<void> {
+  async execute(input: RetryProjectInput): Promise<void> {
     const project = await this.uploadedFileRepository.findById(input.projectId);
 
     if (!project) {
@@ -34,39 +41,47 @@ export class RetryProjectUseCase {
       throw new UnauthorizedError("tentar reprocessar este projeto");
     }
 
-    // Prepare data to update
-    const updateData: any = {
+    const updateData: UpdateUploadedFileInput = {
       status: "queued",
       errorMessage: null,
+      ...(input.updates?.subtitlePreset !== undefined && {
+        subtitlePreset: input.updates.subtitlePreset,
+      }),
+      ...(input.updates?.clipModel !== undefined && {
+        clipModel: input.updates.clipModel,
+      }),
+      ...(input.updates?.aspectRatio !== undefined && {
+        aspectRatio: input.updates.aspectRatio,
+      }),
+      ...(input.updates?.autoZoom !== undefined && {
+        autoZoom: input.updates.autoZoom,
+      }),
+      ...(input.updates?.sliceStartTime !== undefined && {
+        sliceStartTime: input.updates.sliceStartTime,
+      }),
+      ...(input.updates?.sliceEndTime !== undefined && {
+        sliceEndTime: input.updates.sliceEndTime,
+      }),
     };
 
-    if (input.updates) {
-      if (input.updates.subtitlePreset !== undefined) updateData.subtitlePreset = input.updates.subtitlePreset;
-      if (input.updates.clipModel !== undefined) updateData.clipModel = input.updates.clipModel;
-      if (input.updates.aspectRatio !== undefined) updateData.aspectRatio = input.updates.aspectRatio;
-      if (input.updates.autoZoom !== undefined) updateData.autoZoom = input.updates.autoZoom;
-      if (input.updates.sliceStartTime !== undefined) updateData.sliceStartTime = input.updates.sliceStartTime;
-      if (input.updates.sliceEndTime !== undefined) updateData.sliceEndTime = input.updates.sliceEndTime;
-    }
-
     // Reset status to queued
-    const updatedRaw = await prisma.uploadedFile.update({
-      where: { id: input.projectId },
-      data: updateData,
-    });
+    const updated = await this.uploadedFileRepository.update(
+      input.projectId,
+      updateData
+    );
 
     // Delete any clips that might have been partially generated to avoid duplicates
-    await prisma.clip.deleteMany({
-      where: { uploadedFileId: input.projectId },
-    });
+    await this.clipRepository.deleteByUploadedFileId(input.projectId);
 
     // Send to Inngest again
     await this.queueGateway.sendProcessVideoEvent({
       uploadedFileId: project.id,
       userId: project.userId,
-      preset: updatedRaw.subtitlePreset || "HORMOZI",
-      mode: updatedRaw.clipModel === "manual" ? "manual" : "auto",
-      manualCuts: updatedRaw.manualCutsJson ? JSON.parse(updatedRaw.manualCutsJson as string) : undefined,
+      preset: updated.subtitlePreset || "HORMOZI",
+      mode: updated.clipModel === "manual" ? "manual" : "auto",
+      manualCuts: updated.manualCutsJson
+        ? JSON.parse(updated.manualCutsJson as string)
+        : undefined,
     });
   }
 }

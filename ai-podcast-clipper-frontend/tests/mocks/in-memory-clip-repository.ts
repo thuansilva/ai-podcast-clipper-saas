@@ -83,4 +83,12 @@ export class InMemoryClipRepository implements IClipRepository {
   async delete(id: string): Promise<void> {
     this.clips.delete(id);
   }
+
+  async deleteByUploadedFileId(uploadedFileId: string): Promise<void> {
+    for (const [id, clip] of this.clips.entries()) {
+      if (clip.uploadedFileId === uploadedFileId) {
+        this.clips.delete(id);
+      }
+    }
+  }
 }

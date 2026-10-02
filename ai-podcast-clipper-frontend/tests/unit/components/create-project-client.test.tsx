@@ -248,6 +248,7 @@ describe("CreateProjectClient", () => {
         clipModel: "auto",
         aspectRatio: "9:16",
         autoZoom: false,
+        thumbnailUrl: "https://img.youtube.com/vi/test/hqdefault.jpg",
       });
     });
 
