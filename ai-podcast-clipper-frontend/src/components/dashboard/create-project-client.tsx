@@ -9,15 +9,12 @@ import { Switch } from "~/components/ui/switch";
 import {
   Loader2,
   ScissorsIcon,
-  UploadCloudIcon,
   SlidersHorizontalIcon,
-  
+
   YoutubeIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { importYouTubeVideo } from "~/actions/youtube";
-import { generateUploadUrl } from "~/actions/s3";
-import { generateVideoThumbnail } from "~/lib/video-utils";
 import { Slider } from "~/components/ui/slider";
 import type { ProcessingOption } from "~/application/services/processing-options.service";
 
@@ -218,41 +215,11 @@ export function CreateProjectClient({
     }
   };
 
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0];
-    if (!selectedFile) return;
-
-    if (cost > userCredits) {
-      toast.error(`Você precisa de ${cost} créditos, mas tem apenas ${userCredits}.`);
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      toast.info("Gerando miniatura do vídeo...");
-      const thumbnailUrl = await generateVideoThumbnail(selectedFile) || undefined;
-      
-      toast.info("Preparando upload...");
-      const result = await generateUploadUrl({
-        filename: selectedFile.name,
-        contentType: selectedFile.type,
-        fileSizeBytes: selectedFile.size,
-        thumbnailUrl
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || "Erro ao preparar o upload.");
-      }
-      
-      // Here we would actually upload the file to S3 using the signedUrl
-      toast.success("Upload preparado! Upload para S3 será implementado em breve.");
-      
-    } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Falha no upload.");
-    } finally {
-      setProcessing(false);
-    }
-  };
+  // NOTA (go-live): o upload direto de arquivo de vídeo foi removido da UI de
+  // propósito. A implementação real de upload para o S3 + criação do projeto
+  // ainda não existe (ver checklist-go-live.md); exibir o controle enganaria o
+  // usuário com uma promessa de funcionalidade que não funciona de fato. O
+  // fluxo suportado hoje é somente a importação via YouTube + cortes manuais.
 
   return (
     <div className="w-full">
@@ -296,26 +263,6 @@ export function CreateProjectClient({
                       <Loader2 className="h-5 w-5 animate-spin text-[var(--ouro)]" />
                     </div>
                   )}
-                </div>
-
-                <div className="mt-6 flex items-center justify-center relative z-10">
-                  <input
-                    type="file"
-                    accept="video/*"
-                    id="video-upload"
-                    className="hidden"
-                    onChange={handleUpload}
-                    disabled={processing}
-                  />
-                  <label 
-                    htmlFor="video-upload"
-                    className={`flex items-center gap-2 text-sm text-[var(--fumaca)] hover:text-[var(--marfim)] transition-colors cursor-pointer group/btn ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <UploadCloudIcon className="h-4 w-4 group-hover/btn:-translate-y-0.5 transition-transform" />
-                    <span className="font-medium underline underline-offset-4 decoration-[var(--linha-2)] group-hover/btn:decoration-[var(--marfim)]/50">
-                      {processing ? "Processando..." : "Enviar"}
-                    </span>
-                  </label>
                 </div>
               </div>
             </div>

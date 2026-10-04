@@ -149,7 +149,7 @@ export function CustomSignInForm() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="seu@email.com"
             disabled={isLoading}
-            className="w-full rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:outline-none disabled:opacity-50"
+            className="w-full rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:ring-2 focus:ring-[var(--ouro)]/30 focus:outline-none disabled:opacity-50"
           />
         </div>
 
@@ -170,7 +170,7 @@ export function CustomSignInForm() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               disabled={isLoading}
-              className="w-full rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 pr-10 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:outline-none disabled:opacity-50"
+              className="w-full rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 pr-10 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:ring-2 focus:ring-[var(--ouro)]/30 focus:outline-none disabled:opacity-50"
             />
             <button
               type="button"

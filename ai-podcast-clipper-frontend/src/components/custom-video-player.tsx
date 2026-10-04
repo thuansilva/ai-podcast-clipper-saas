@@ -100,9 +100,10 @@ export function CustomVideoPlayer({ src, className }: CustomVideoPlayerProps) {
       </div>
 
       {/* Mute/Unmute Toggle (Moved to LEFT) */}
-      <button 
+      <button
         onClick={toggleMute}
-        className="absolute bottom-3 left-3 p-1.5 rounded-full bg-black/50 text-[var(--marfim)] hover:text-[var(--ouro)] backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        aria-label={isMuted ? "Unmute" : "Mute"}
+        className="absolute bottom-3 left-3 p-1.5 rounded-full bg-black/50 text-[var(--marfim)] hover:text-[var(--ouro)] backdrop-blur-sm opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity z-10"
       >
         {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
       </button>

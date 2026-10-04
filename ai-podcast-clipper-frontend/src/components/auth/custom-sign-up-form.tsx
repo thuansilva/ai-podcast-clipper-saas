@@ -21,6 +21,10 @@ export function CustomSignUpForm() {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [resendSuccess, setResendSuccess] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+
+  const TERMS_NOT_ACCEPTED_MESSAGE =
+    "Você precisa aceitar os Termos de Uso e a Política de Privacidade para continuar.";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +37,11 @@ export function CustomSignUpForm() {
       setErrorMessage(
         validation.error.errors[0]?.message ?? "Dados de cadastro inválidos.",
       );
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setErrorMessage(TERMS_NOT_ACCEPTED_MESSAGE);
       return;
     }
 
@@ -106,8 +115,14 @@ export function CustomSignUpForm() {
 
   const handleGoogleSignUp = async () => {
     if (!isLoaded || !signUp) return;
-    setIsGoogleLoading(true);
     setErrorMessage(null);
+
+    if (!acceptedTerms) {
+      setErrorMessage(TERMS_NOT_ACCEPTED_MESSAGE);
+      return;
+    }
+
+    setIsGoogleLoading(true);
 
     try {
       await signUp.authenticateWithRedirect({
@@ -138,14 +153,14 @@ export function CustomSignUpForm() {
         </div>
 
         {errorMessage && (
-          <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-300">
+          <div role="alert" className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-300">
             <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
             <span className="leading-relaxed">{errorMessage}</span>
           </div>
         )}
 
         {resendSuccess && (
-          <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">
+          <div aria-live="polite" role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">
             Novo código de verificação enviado para seu email!
           </div>
         )}
@@ -167,7 +182,7 @@ export function CustomSignUpForm() {
               onChange={(e) => setCode(e.target.value.trim())}
               placeholder="123456"
               disabled={isLoading}
-              className="w-full font-mono text-center tracking-widest text-lg rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:outline-none disabled:opacity-50"
+              className="w-full font-mono text-center tracking-widest text-lg rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:ring-2 focus:ring-[var(--ouro)]/30 focus:outline-none disabled:opacity-50"
             />
           </div>
 
@@ -220,11 +235,52 @@ export function CustomSignUpForm() {
       </div>
 
       {errorMessage && (
-        <div className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-300">
+        <div
+          id="signup-error"
+          role="alert"
+          className="flex items-start gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3.5 text-xs text-red-300"
+        >
           <AlertCircle className="h-4 w-4 shrink-0 text-red-400 mt-0.5" />
           <span className="leading-relaxed">{errorMessage}</span>
         </div>
       )}
+
+      {/* Aceite dos Termos de Uso / Política de Privacidade */}
+      <div className="flex items-start gap-2.5 text-left">
+        <input
+          id="accept-terms"
+          type="checkbox"
+          checked={acceptedTerms}
+          onChange={(e) => setAcceptedTerms(e.target.checked)}
+          disabled={isLoading || isGoogleLoading}
+          aria-invalid={errorMessage === TERMS_NOT_ACCEPTED_MESSAGE}
+          aria-describedby={
+            errorMessage === TERMS_NOT_ACCEPTED_MESSAGE ? "signup-error" : undefined
+          }
+          className="mt-0.5 h-4 w-4 shrink-0 rounded border border-[var(--linha)] bg-[var(--tinta)] accent-[var(--ouro)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ouro)] disabled:opacity-50"
+        />
+        <label htmlFor="accept-terms" className="text-xs leading-relaxed text-[var(--fumaca)]">
+          Li e aceito os{" "}
+          <Link
+            href="/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--ouro)] hover:underline underline-offset-4"
+          >
+            Termos de Uso
+          </Link>{" "}
+          e a{" "}
+          <Link
+            href="/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--ouro)] hover:underline underline-offset-4"
+          >
+            Política de Privacidade
+          </Link>
+          .
+        </label>
+      </div>
 
       {/* Google OAuth Button */}
       <button
@@ -284,7 +340,7 @@ export function CustomSignUpForm() {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="seu@email.com"
             disabled={isLoading}
-            className="w-full rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:outline-none disabled:opacity-50"
+            className="w-full rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:ring-2 focus:ring-[var(--ouro)]/30 focus:outline-none disabled:opacity-50"
           />
         </div>
 
@@ -306,7 +362,7 @@ export function CustomSignUpForm() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Digite sua senha"
               disabled={isLoading}
-              className="w-full rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 pr-10 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:outline-none disabled:opacity-50"
+              className="w-full rounded-lg border border-[var(--linha)] bg-[var(--tinta)] px-3 py-2 pr-10 text-sm text-[var(--marfim)] placeholder:text-[var(--fumaca)] transition-colors focus:border-[var(--ouro)] focus:ring-2 focus:ring-[var(--ouro)]/30 focus:outline-none disabled:opacity-50"
             />
             <button
               type="button"

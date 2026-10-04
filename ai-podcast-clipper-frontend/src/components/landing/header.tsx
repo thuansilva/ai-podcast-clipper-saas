@@ -1,6 +1,12 @@
 import Link from "next/link";
-import { SparklesIcon, ArrowRightIcon } from "lucide-react";
+import { SparklesIcon, ArrowRightIcon, ChevronDownIcon } from "lucide-react";
 import { ThemeToggle } from "~/components/theme-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "~/components/ui/dropdown-menu";
 
 export function Header({ isAuthenticated }: { isAuthenticated: boolean }) {
   return (
@@ -39,6 +45,48 @@ export function Header({ isAuthenticated }: { isAuthenticated: boolean }) {
 
         {/* Action Buttons & Tools */}
         <div className="flex items-center gap-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="hidden items-center gap-1 text-sm text-[var(--fumaca)] transition-colors hover:text-[var(--marfim)] md:flex"
+              >
+                Legal
+                <ChevronDownIcon className="h-3.5 w-3.5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={8}
+              className="w-56 border-[var(--linha)] bg-[var(--superficie)] p-1.5 text-[var(--marfim)] shadow-xl"
+            >
+              <DropdownMenuItem
+                asChild
+                className="cursor-pointer rounded-md px-2.5 py-2 text-xs font-medium text-[var(--marfim)] transition-colors hover:bg-[var(--superficie-2)] hover:text-[var(--ouro)] focus:bg-[var(--superficie-2)] focus:text-[var(--ouro)]"
+              >
+                <Link href="/terms">Termos de Uso</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                asChild
+                className="cursor-pointer rounded-md px-2.5 py-2 text-xs font-medium text-[var(--marfim)] transition-colors hover:bg-[var(--superficie-2)] hover:text-[var(--ouro)] focus:bg-[var(--superficie-2)] focus:text-[var(--ouro)]"
+              >
+                <Link href="/privacy">Política de Privacidade</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                asChild
+                className="cursor-pointer rounded-md px-2.5 py-2 text-xs font-medium text-[var(--marfim)] transition-colors hover:bg-[var(--superficie-2)] hover:text-[var(--ouro)] focus:bg-[var(--superficie-2)] focus:text-[var(--ouro)]"
+              >
+                <Link href="/refund">Política de Reembolso</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                asChild
+                className="cursor-pointer rounded-md px-2.5 py-2 text-xs font-medium text-[var(--marfim)] transition-colors hover:bg-[var(--superficie-2)] hover:text-[var(--ouro)] focus:bg-[var(--superficie-2)] focus:text-[var(--ouro)]"
+              >
+                <Link href="/contact">Contato</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <ThemeToggle />
 
           {isAuthenticated ? (

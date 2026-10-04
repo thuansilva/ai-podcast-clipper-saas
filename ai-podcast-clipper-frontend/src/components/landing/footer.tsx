@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SparklesIcon } from "lucide-react";
 
 export function Footer() {
@@ -25,6 +26,24 @@ export function Footer() {
             © {new Date().getFullYear()} Podcast Clipper Studio. All rights reserved.
           </p>
         </div>
+
+        <nav
+          aria-label="Links legais"
+          className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 border-t border-[var(--linha)] pt-6 text-xs text-[var(--fumaca)]"
+        >
+          <Link href="/terms" className="transition-colors hover:text-[var(--marfim)]">
+            Termos de Uso
+          </Link>
+          <Link href="/privacy" className="transition-colors hover:text-[var(--marfim)]">
+            Política de Privacidade
+          </Link>
+          <Link href="/refund" className="transition-colors hover:text-[var(--marfim)]">
+            Política de Reembolso
+          </Link>
+          <Link href="/contact" className="transition-colors hover:text-[var(--marfim)]">
+            Contato
+          </Link>
+        </nav>
       </div>
     </footer>
   );

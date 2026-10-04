@@ -28,6 +28,11 @@ vi.mock("@clerk/nextjs/legacy", () => ({
   }),
 }));
 
+/** Marca o checkbox de aceite dos Termos/Privacidade antes de submeter o form. */
+function acceptTerms() {
+  fireEvent.click(screen.getByRole("checkbox", { name: /termos de uso/i }));
+}
+
 describe("CustomSignUpForm", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -42,6 +47,59 @@ describe("CustomSignUpForm", () => {
     expect(screen.getByRole("button", { name: /cadastrar com google/i })).toBeInTheDocument();
     expect(screen.getByText(/já tem uma conta/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /entrar/i })).toBeInTheDocument();
+  });
+
+  it("deve renderizar o checkbox de aceite dos Termos de Uso e da Política de Privacidade, desmarcado por padrão", () => {
+    render(<CustomSignUpForm />);
+
+    const checkbox = screen.getByRole("checkbox", { name: /termos de uso/i }) as HTMLInputElement;
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox.checked).toBe(false);
+    expect(screen.getByRole("link", { name: /termos de uso/i })).toHaveAttribute("href", "/terms");
+    expect(screen.getByRole("link", { name: /política de privacidade/i })).toHaveAttribute("href", "/privacy");
+  });
+
+  it("deve bloquear o submit por email/senha se o checkbox de aceite não estiver marcado", async () => {
+    render(<CustomSignUpForm />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "newuser@example.com" } });
+    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
+    fireEvent.click(screen.getByRole("button", { name: /criar conta no studio/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/aceitar os termos de uso e a política de privacidade/i)).toBeInTheDocument();
+    });
+    expect(mockSignUpCreate).not.toHaveBeenCalled();
+  });
+
+  it("deve bloquear o cadastro via Google se o checkbox de aceite não estiver marcado", async () => {
+    render(<CustomSignUpForm />);
+
+    fireEvent.click(screen.getByRole("button", { name: /cadastrar com google/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/aceitar os termos de uso e a política de privacidade/i)).toBeInTheDocument();
+    });
+    expect(mockAuthenticateWithRedirect).not.toHaveBeenCalled();
+  });
+
+  it("deve permitir o submit normalmente após marcar o checkbox de aceite", async () => {
+    mockSignUpCreate.mockResolvedValueOnce({});
+    mockPrepareVerification.mockResolvedValueOnce({});
+
+    render(<CustomSignUpForm />);
+
+    fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "newuser@example.com" } });
+    fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
+    acceptTerms();
+    fireEvent.click(screen.getByRole("button", { name: /criar conta no studio/i }));
+
+    await waitFor(() => {
+      expect(mockSignUpCreate).toHaveBeenCalledWith({
+        emailAddress: "newuser@example.com",
+        password: "superSecretPassword123",
+      });
+    });
   });
 
   it("deve alternar a visibilidade da senha ao clicar no botão de revelar", () => {
@@ -66,6 +124,7 @@ describe("CustomSignUpForm", () => {
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "newuser@example.com" } });
     fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
+    acceptTerms();
     fireEvent.click(screen.getByRole("button", { name: /criar conta no studio/i }));
 
     await waitFor(() => {
@@ -93,6 +152,7 @@ describe("CustomSignUpForm", () => {
     // Avança para etapa 2
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "newuser@example.com" } });
     fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
+    acceptTerms();
     fireEvent.click(screen.getByRole("button", { name: /criar conta no studio/i }));
 
     await waitFor(() => {
@@ -118,6 +178,7 @@ describe("CustomSignUpForm", () => {
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "newuser@example.com" } });
     fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
+    acceptTerms();
     fireEvent.click(screen.getByRole("button", { name: /criar conta no studio/i }));
 
     await waitFor(() => {
@@ -141,6 +202,7 @@ describe("CustomSignUpForm", () => {
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "newuser@example.com" } });
     fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
+    acceptTerms();
     fireEvent.click(screen.getByRole("button", { name: /criar conta no studio/i }));
 
     await waitFor(() => {
@@ -156,6 +218,7 @@ describe("CustomSignUpForm", () => {
   it("deve disparar OAuth com Google no cadastro", async () => {
     render(<CustomSignUpForm />);
 
+    acceptTerms();
     fireEvent.click(screen.getByRole("button", { name: /cadastrar com google/i }));
 
     await waitFor(() => {
@@ -176,6 +239,7 @@ describe("CustomSignUpForm", () => {
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "existing@example.com" } });
     fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
+    acceptTerms();
     fireEvent.click(screen.getByRole("button", { name: /criar conta no studio/i }));
 
     await waitFor(() => {
@@ -194,6 +258,7 @@ describe("CustomSignUpForm", () => {
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "newuser@example.com" } });
     fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
+    acceptTerms();
     fireEvent.click(screen.getByRole("button", { name: /criar conta no studio/i }));
 
     await waitFor(() => {
@@ -219,6 +284,7 @@ describe("CustomSignUpForm", () => {
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "newuser@example.com" } });
     fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
+    acceptTerms();
     fireEvent.click(screen.getByRole("button", { name: /criar conta no studio/i }));
 
     await waitFor(() => {
@@ -255,6 +321,7 @@ describe("CustomSignUpForm", () => {
 
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: "newuser@example.com" } });
     fireEvent.change(screen.getByLabelText(/senha/i), { target: { value: "superSecretPassword123" } });
+    acceptTerms();
     fireEvent.click(screen.getByRole("button", { name: /criar conta no studio/i }));
 
     await waitFor(() => {

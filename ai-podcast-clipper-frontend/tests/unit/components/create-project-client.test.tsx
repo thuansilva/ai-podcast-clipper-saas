@@ -110,8 +110,21 @@ describe("CreateProjectClient", () => {
     expect(
       screen.getByPlaceholderText("Cole o link do YouTube (ex: https://youtube.com/watch?v=...)"),
     ).toBeInTheDocument();
+  });
+
+  it("does not expose the direct file upload option (go-live: YouTube import only)", () => {
+    render(<CreateProjectClient isConfigRoute={true} userCredits={10} options={mockOptions} />);
+
+    // A opção de upload direto de arquivo foi escondida: o stub não faz upload
+    // real para o S3 nem cria o projeto, e enganava o usuário com um toast de
+    // sucesso falso. Ver AGENTS.md / checklist-go-live.md.
+    expect(screen.queryByText("Enviar")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/enviar arquivo de vídeo/i)).not.toBeInTheDocument();
+    expect(document.querySelector('input[type="file"]')).not.toBeInTheDocument();
+
+    // A importação via YouTube continua funcionando normalmente.
     expect(
-      screen.getByText("Enviar"),
+      screen.getByPlaceholderText("Cole o link do YouTube (ex: https://youtube.com/watch?v=...)"),
     ).toBeInTheDocument();
   });
 

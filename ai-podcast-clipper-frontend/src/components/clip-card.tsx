@@ -124,6 +124,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
           {/* Botão de Detalhes (Info) no Canto Superior Direito */}
           <button
             onClick={() => setIsDetailsOpen(true)}
+            aria-label="Ver detalhes e transcrição"
             className="absolute top-2 right-2 p-1.5 rounded-full bg-black/50 hover:bg-black/80 text-[var(--marfim)] border border-transparent hover:border-[var(--linha)] transition-all z-10 opacity-80 hover:opacity-100 backdrop-blur-sm"
             title="Ver Detalhes e Transcrição"
           >
@@ -156,12 +157,14 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
             
             <div className="flex items-center gap-1.5">
               <button
+                aria-label="Agendar publicação"
                 className="text-[var(--fumaca)] hover:text-[var(--marfim)] transition-colors p-1"
                 title="Agendar/Calendário"
               >
                 <Calendar className="h-[18px] w-[18px]" />
               </button>
               <button
+                aria-label="Baixar clipe em MP4"
                 className="text-[var(--fumaca)] hover:text-[var(--marfim)] transition-colors p-1"
                 onClick={handleDownload}
                 disabled={!playUrl}
@@ -170,6 +173,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
                 <Download className="h-[18px] w-[18px]" />
               </button>
               <button
+                aria-label="Editar clipe e legendas"
                 className="text-[var(--fumaca)] hover:text-[var(--marfim)] transition-colors p-1"
                 onClick={() => setIsEditorOpen(true)}
                 title="Editar Clipe"
@@ -177,6 +181,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
                 <Scissors className="h-[18px] w-[18px]" />
               </button>
               <button
+                aria-label="Excluir clipe permanentemente"
                 className="text-[var(--fumaca)] hover:text-[var(--perigo)] transition-colors p-1"
                 onClick={handleDelete}
                 disabled={isDeleting}
