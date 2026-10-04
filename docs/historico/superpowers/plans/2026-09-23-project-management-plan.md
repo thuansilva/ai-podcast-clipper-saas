@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js, Prisma, React, HTML5 Canvas, TailwindCSS, Lucide Icons, Shadcn UI.
 
-**Spec:** docs/superpowers/specs/2026-09-23-project-management-design.md
+**Spec:** docs/historico/superpowers/specs/2026-09-23-project-management-design.md
 
 ## Global Constraints
 

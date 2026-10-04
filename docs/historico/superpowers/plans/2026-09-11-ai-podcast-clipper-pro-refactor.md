@@ -9,7 +9,7 @@
 
 **Tech Stack:** Next.js 15, React 19, TypeScript, Vitest, Testing Library, Prisma ORM, PostgreSQL, Inngest, AWS S3 SDK v3, Python 3.12, Pytest, Pydantic, WhisperX, Google GenAI SDK (Gemini 2.5 Flash), OpenCV, ffmpegcv, pysubs2, yt-dlp, Stripe.
 
-**Spec:** `docs/superpowers/specs/2026-09-10-ai-podcast-clipper-pro-design.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-10-ai-podcast-clipper-pro-design.md`
 
 ---
 

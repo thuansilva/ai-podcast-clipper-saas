@@ -1,5 +1,7 @@
 # Autenticação White-Label Customizada e Menu do Usuário Implementation Plan
 
+> ⚠️ **SUPERSEDED** — Esta documentação descreve uma abordagem anterior (autenticação customizada white-label). A autenticação atual usa **Clerk** (branca/white-label sobre o Clerk). Veja `docs/historico/superpowers/plans/2026-09-12-clerk-auth-clean-architecture-plan.md` para a implementação atual. Mantido apenas para referência histórica de decisões de design.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Substituir os componentes pré-fabricados do Clerk (`<SignIn />`, `<SignUp />` e `<UserButton />`) por formulários e menus 100% proprietários (*white-label*) baseados nos hooks oficiais do Clerk (`useSignIn`, `useSignUp`, `useUser`, `useClerk`), garantindo total aderência ao design system *Dark Precision Studio* e eliminando qualquer menção visual ao Clerk.
@@ -8,7 +10,7 @@
 
 **Tech Stack:** Next.js 15 App Router, React 19, TypeScript, Tailwind CSS, Radix UI (`@radix-ui/react-dropdown-menu`, `@radix-ui/react-avatar`), Lucide Icons, `@clerk/nextjs` (Hooks & Auth Callback).
 
-**Spec:** `docs/superpowers/specs/2026-09-13-custom-white-label-auth-design.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-13-custom-white-label-auth-design.md`
 
 ## Global Constraints
 

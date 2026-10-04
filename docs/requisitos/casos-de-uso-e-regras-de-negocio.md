@@ -9,7 +9,7 @@ já foi feito?" sem precisar ler todo o código toda vez.
 > `AGENTS.md` já exige TDD para toda mudança — atualizar este catálogo é
 > parte de "pronto", junto com o teste).
 >
-> **Relação com `docs/superpowers/specs/`**: aquela pasta tem o *design*
+> **Relação com `../historico/superpowers/specs/`**: aquela pasta tem o *design*
 > detalhado de cada feature no momento em que foi planejada (14 documentos,
 > um por feature). Este arquivo é o *estado atual consolidado* — quando
 > divergirem, este arquivo reflete o código como ele está agora.
@@ -24,11 +24,11 @@ ressalva · ❌ Não implementado (stub ou ausente)
 | Regra de negócio | Onde | Status |
 |---|---|---|
 | Login/cadastro via Clerk (email+senha, social) | `src/infrastructure/auth/clerk-auth.gateway.ts`, `src/middleware.ts` | ✅ |
-| Toda server action/rota sensível exige sessão válida antes de agir | Todas as actions em `src/actions/*`, rota `/api/local-storage` | ✅ (ver `docs/owasp-asvs-l2-checklist.md` para o detalhe de que o *middleware* só cobre `/dashboard`, não `/api/**` — cada handler se protege individualmente) |
+| Toda server action/rota sensível exige sessão válida antes de agir | Todas as actions em `src/actions/*`, rota `/api/local-storage` | ✅ (ver `../operacao/checklist-go-live.md` para o detalhe de que o *middleware* só cobre `/dashboard`, não `/api/**` — cada handler se protege individualmente) |
 | Sincronização de usuário Clerk → banco local (`User`) | `SyncUserUseCase` (`src/application/use-cases/users/sync-user.use-case.ts`) | ✅ testado (`tests/unit/application/users/sync-user.use-case.test.ts`) |
 | Webhook do Clerk idempotente/verificado | `src/app/api/webhooks/clerk/route.ts` | ✅ |
 
-Spec detalhado: `docs/superpowers/specs/2026-09-12-clerk-auth-clean-architecture-design.md`.
+Spec detalhado: `../historico/superpowers/specs/2026-09-12-clerk-auth-clean-architecture-spec.md`.
 
 ---
 
@@ -51,7 +51,7 @@ processamento: **hold → consume (sucesso) ou refund (falha definitiva)**.
 | Idempotência de evento de webhook Stripe (não duplicar crédito em reentrega) | `ProcessedWebhookEvent` + `PrismaProcessedEventRepository` | ✅ testado (ver histórico — commit `ea70bde`) |
 | Dados de cobrança do usuário (créditos disponíveis, plano atual) | `GetUserBillingDataUseCase` | ✅ testado |
 
-Specs: `docs/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-packs-design.md`.
+Specs: `../historico/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-packs-design.md`.
 
 ---
 
@@ -68,7 +68,7 @@ Specs: `docs/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-pac
 | Rate limit de geração de upload URL (10/min) | `generateUploadUrl` action | ✅ testado |
 | **Upload direto do arquivo pelo browser até o S3 (depois de obter a presigned URL)** | `src/components/dashboard/create-project-client.tsx::handleUpload` | ❌ **stub** — só mostra um toast ("Upload para S3 será implementado em breve") e não envia bytes nenhum. Hoje o **único fluxo de ingestão que funciona de ponta a ponta é o import por URL do YouTube** |
 
-Specs: `docs/superpowers/specs/2026-09-15-dynamic-video-options-design.md`.
+Specs: `../historico/superpowers/specs/2026-09-15-dynamic-video-options-design.md`.
 
 ---
 
@@ -91,8 +91,8 @@ Executado no backend Python (`ai-podcast-clipper-backend/`), via Modal
 | Circuit breaker / timeout nas chamadas para Modal e Gemini | — | ❌ não implementado (item da Fase 2 do roadmap de resiliência, ainda em aberto) |
 | Teste de carga/caos simulando falha do backend Modal | `load-tests/scenarios/` (k6) | ❌ não implementado — só há cenários de carga "caminho feliz" |
 
-Specs: `docs/superpowers/specs/2026-09-18-local-gpu-processing-design.md`,
-`docs/superpowers/specs/2026-09-13-manual-cuts-timestamp-design.md`.
+Specs: `../historico/superpowers/specs/2026-09-18-local-gpu-processing-design.md`,
+`../historico/superpowers/specs/2026-09-13-manual-cuts-timestamp-design.md`.
 
 ---
 
@@ -118,8 +118,8 @@ Specs: `docs/superpowers/specs/2026-09-18-local-gpu-processing-design.md`,
 | Reprocessar (retry) um projeto existente | `RetryProjectUseCase` | ✅ testado |
 | Disparar processamento de um vídeo já enviado, só se for o dono | `TriggerVideoProcessingUseCase` / `processVideo` action | ✅ testado — **corrigido nesta sessão**: não verificava dono nenhum (IDOR crítico — qualquer um que soubesse o `uploadedFileId` de outro usuário disparava o processamento dele) |
 
-Specs: `docs/superpowers/specs/2026-09-17-meus-projetos-design.md`,
-`docs/superpowers/specs/2026-09-23-project-management-design.md`.
+Specs: `../historico/superpowers/specs/2026-09-17-meus-projetos-design.md`,
+`../historico/superpowers/specs/2026-09-23-project-management-design.md`.
 
 ---
 
@@ -127,8 +127,7 @@ Specs: `docs/superpowers/specs/2026-09-17-meus-projetos-design.md`,
 
 Autenticação, autorização/IDOR, validação de entrada, rate limiting, path
 traversal e headers HTTP têm seu próprio rastreamento detalhado, item a item,
-em **`docs/owasp-asvs-l2-checklist.md`** — não duplicado aqui para não
-divergir.
+em **`../operacao/checklist-go-live.md`** (que incorpora os controles do OWASP ASVS Nível 2) — não duplicado aqui para não divergir.
 
 ---
 

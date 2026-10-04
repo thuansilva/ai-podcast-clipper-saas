@@ -1,5 +1,7 @@
 # Especificação de Design: Assinaturas Recorrentes Mensais e Anuais (Opus Model)
 
+> 📝 **NOTA DE EXECUÇÃO (2026-10-03)**: os pacotes de crédito avulsos (one-time credit packs) descritos neste documento foram **descontinuados** na correção de billing desta sessão (ver `docs/operacao/checklist-go-live.md` e `progress.md`). Apenas assinaturas recorrentes (Starter/Pro, mensal/anual) estão ativas hoje. Documento mantido para contexto histórico de decisão.
+
 - **Data:** 14 de Setembro de 2026 (Atualizado Setembro 2026 - Pivot Pricing)
 - **Status:** Aprovado
 - **Módulo:** Faturamento, Assinaturas e Gestão de Créditos (`billing`, `stripe`, `inngest`)

@@ -31,7 +31,7 @@ e copiáveis.
    para o CSV — o cronômetro é um apoio para você *perceber* o problema, mas
    quem vai para o CSV é sempre o timestamp impresso pelo terminal.
 4. Abra (ou tenha pronto para colar) o arquivo
-   `docs/experimento-observabilidade/resultados.csv`. As colunas, na ordem
+   `docs/pesquisa/experimento-observabilidade/resultados.csv`. As colunas, na ordem
    atual, são:
    ```
    cenario,grupo,timestamp_T0,timestamp_T1_alerta,mttd_segundos,trace_encontrado,timestamp_T2_resolvido
@@ -120,7 +120,7 @@ T1="COLE_O_T1_AQUI"
 echo $(( $(date -u -d "$T1" +%s) - $(date -u -d "$T0" +%s) ))
 ```
 Adicione uma linha ao final de
-`docs/experimento-observabilidade/resultados.csv` no formato:
+`docs/pesquisa/experimento-observabilidade/resultados.csv` no formato:
 ```
 backend_indisponivel,baseline,<T0>,<T1>,<mttd_segundos>,n/a,<T2>
 ```
@@ -303,7 +303,7 @@ falha_webhook_stripe,baseline,<T0>,<T1>,<mttd_segundos>,n/a,<T2>
 ## Resumo do que vai para o CSV
 
 Ao final dos 3 cenários, você terá adicionado 3 linhas a
-`docs/experimento-observabilidade/resultados.csv`, todas com `grupo=baseline`
+`docs/pesquisa/experimento-observabilidade/resultados.csv`, todas com `grupo=baseline`
 e `trace_encontrado=n/a`:
 ```
 backend_indisponivel,baseline,<T0>,<T1>,<mttd>,n/a,<T2>

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 15 (App Router, Server Actions), React 19, TypeScript, Prisma ORM, PostgreSQL, Stripe SDK, Inngest, Tailwind CSS, Lucide React, Vitest, Testing Library.
 
-**Spec:** [`docs/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-packs-design.md`](file:///home/thuan/Documentos/projetos-empresa/ai-podcast-clipper-saas/docs/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-packs-design.md)
+**Spec:** [`docs/historico/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-packs-design.md`](file:///home/thuan/Documentos/projetos-empresa/ai-podcast-clipper-saas/docs/historico/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-packs-design.md)
 
 ## Global Constraints
 

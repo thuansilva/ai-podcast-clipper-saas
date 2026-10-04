@@ -9,7 +9,7 @@
 
 **Tech Stack:** Next.js 15, TypeScript, Vitest, Prisma ORM, PostgreSQL, AWS SDK S3 v3, Stripe SDK, Inngest SDK.
 
-**Spec:** `docs/superpowers/specs/2026-09-11-frontend-clean-architecture-solid-refactor.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-11-frontend-clean-architecture-solid-refactor.md`
 
 ## Global Constraints
 - A pasta `ai-podcast-clipper-backend` (Python / Modal GPU Worker) permanece 100% inalterada.

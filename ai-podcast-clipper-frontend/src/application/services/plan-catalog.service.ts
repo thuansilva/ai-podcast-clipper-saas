@@ -75,7 +75,7 @@ export const PlanCatalogService = {
   /**
    * Preço mensal "de referência" (em centavos de dólar) de cada plano,
    * conforme a estrutura de preços documentada em
-   * `docs/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-packs-design.md`
+   * `docs/historico/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-packs-design.md`
    * (Starter: $15,00/mês; Pro: $29,00/mês). Usado apenas para calcular a
    * fração de créditos de assinatura a revogar quando o Stripe reembolsa
    * ou disputa uma cobrança (ver `CreditPricingService.calculateCreditsToRevokeForRefund`)

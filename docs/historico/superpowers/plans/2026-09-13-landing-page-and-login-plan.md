@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js 15 (App Router), React 19, Tailwind CSS, `@clerk/nextjs`, `lucide-react`, Vitest, `@testing-library/react`.
 
-**Spec:** `docs/superpowers/specs/2026-09-13-landing-page-and-login-design.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-13-landing-page-and-login-design.md`
 
 ## Global Constraints
 - Design "Dark Precision Studio" (Anti-IA): fundo fosco `zinc-950` (#09090b), bordas `zinc-800`, ausência total de gradientes fluorescentes roxos/azuis neon ou orbes `blur-3xl`.

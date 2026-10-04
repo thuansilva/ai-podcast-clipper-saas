@@ -8,7 +8,7 @@
 
 **Tech Stack:** `@clerk/nextjs`, `svix`, Next.js 15 App Router, Prisma ORM, PostgreSQL, Stripe SDK, Vitest.
 
-**Spec:** `docs/superpowers/specs/2026-09-12-clerk-auth-clean-architecture-spec.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-12-clerk-auth-clean-architecture-spec.md`
 
 ## Global Constraints
 - Respeitar estritamente a Clean Architecture e SOLID: domínio e regras de negócio não importam `@clerk/nextjs`.

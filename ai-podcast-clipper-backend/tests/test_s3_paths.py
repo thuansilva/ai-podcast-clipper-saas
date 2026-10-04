@@ -1,9 +1,9 @@
 """Unit tests for S3 key computation of rendered clip outputs.
 
 Regression guard for the BLOCKER documented in
-`docs/checklist-go-live.md` (Infraestrutura > "Regra de lifecycle do S3
+`docs/operacao/checklist-go-live.md` (Infraestrutura > "Regra de lifecycle do S3
 quebra clipes em 24h"): the final rendered clip must be stored under the
-`clips/` prefix (permanent, per `docs/aws-s3-lifecycle-rules.md`), never
+`clips/` prefix (permanent, per `docs/operacao/aws-s3-lifecycle-rules.md`), never
 under the same prefix as the original source video (`uploads/`/`youtube/`,
 which expire in 1 day).
 """

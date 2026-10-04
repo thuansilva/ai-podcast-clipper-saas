@@ -475,7 +475,7 @@ real desta simulação é o dashboard Backend Stub RED).
 
 Esta simulação reaproveita o cenário já automatizado em
 `scripts/experimento-observabilidade.sh` (e documentado manualmente em
-`docs/experimento-observabilidade/roteiro-baseline.md`, Cenário 1) — aqui
+`docs/pesquisa/experimento-observabilidade/roteiro-baseline.md`, Cenário 1) — aqui
 vamos disparar os comandos manualmente para você poder observar os 3
 dashboards em tempo real, no seu próprio ritmo, em vez de deixar o script
 rodar e reverter sozinho.
@@ -548,7 +548,7 @@ indisponível (probe HTTP)"**. O estado dela muda assim:
 - **Pending** (depois que `probe_success` vira 0, enquanto aguarda o tempo
   mínimo configurado de 1 minuto — regra `for: 1m`);
 - **Firing** (ícone vermelho) — no experimento já medido anteriormente
-  (`docs/experimento-observabilidade/resultados.csv`), esse cenário levou
+  (`docs/pesquisa/experimento-observabilidade/resultados.csv`), esse cenário levou
   **~82 segundos** do T0 até a regra entrar em "Firing" (esse tempo é o
   MTTD/"mean time to detect" registrado para o grupo
   `com_observabilidade`).

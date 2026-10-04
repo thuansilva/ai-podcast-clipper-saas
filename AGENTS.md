@@ -38,7 +38,7 @@ background), AWS S3 (armazenamento de arquivos), Zustand (estado no client), Vit
 Modelos de dados principais (`prisma/schema.prisma`): `User`, `Subscription`,
 `CreditTransaction`, `UploadedFile`, `Clip`, `ProcessingOption`,
 `ProcessedWebhookEvent` (usado para deduplicar eventos de webhook, ex.: Stripe). O
-diagrama do banco está documentado em `docs/diagrama-banco-de-dados.md`.
+diagrama do banco está documentado em `docs/arquitetura/visao-dados-modelo-er.md`.
 
 O sistema de créditos controla o consumo: usuários têm créditos de assinatura,
 avulsos (one-time) e reservados; o processamento de cada podcast debita créditos via
@@ -87,25 +87,72 @@ S3.
 - `postgres` — banco Postgres 16 usado pelo Prisma em desenvolvimento.
 - `k6` — runner de testes de carga apontando para `ai-podcast-clipper-frontend/`.
 
-### Documentação adicional
+### Documentação
 
-- `docs/diagrama-banco-de-dados.md` — modelo entidade-relacionamento do banco.
-- `docs/aws-s3-lifecycle-rules.md` — regras de ciclo de vida do bucket S3.
-- `docs/superpowers/plans/` e `docs/superpowers/specs/` — histórico de planos e specs
-  de features (autenticação com Clerk, assinaturas e pacotes de crédito,
-  reestruturação do dashboard, processamento local em GPU, cortes manuais por
-  timestamp, testes de carga com k6, gerenciamento de projetos, etc.). Consulte esses
-  arquivos para entender o contexto e as decisões de design por trás de cada feature
-  antes de propor mudanças relacionadas.
+A documentação está organizada em **cinco perspectivas** (`docs/`). Fonte de verdade completa: **`docs/README.md`** (índice com convenções para novos documentos, consultas rápidas e rastreabilidade RF→código→teste).
 
-> Nota: o `README.md` na raiz descreve a versão original/tutorial do projeto (ex.:
-> menciona Auth.js). O projeto evoluiu — a autenticação atual usa **Clerk**, e o
-> frontend foi migrado para uma arquitetura em camadas (domain/application/
-> infrastructure). Prefira o código-fonte e os arquivos em `docs/superpowers/` como
-> fonte da verdade sobre o estado atual.
+**Resumo rápido das 5 pastas:**
 
-## Testes e TDD
+1. **`docs/requisitos/`** — RFs (RF-AUTH-*, RF-BILL-*, etc.), RNFs, casos de uso, regras de negócio com status de implementação. Matriz rastreabilidade: RF → caso de uso → artefato → teste.
 
+2. **`docs/arquitetura/`** — Quatro **visões complementares** (com diagramas Mermaid obrigatórios):
+   - `visao-dados-modelo-er.md` — ER do Postgres (7 models, relacionamentos, constraints)
+   - `visao-fluxo-pagamento.md` — Webhook Stripe → idempotência → Inngest → use cases (créditos, carência 3 dias, reembolsos, chargebacks)
+   - `visao-fluxo-processamento-video.md` — Pipeline: YouTube → validação + hold créditos → Modal/GPU → transcrição → virality → detecção falante → corte → S3
+   - `visao-jornada-usuario.md` — Navegação UI (landing → onboarding → criar/processar → revisar → billing), rotas Next.js
+
+3. **`docs/operacao/`** — Produção e manutenção:
+   - `checklist-go-live.md` — 21 BLOCKERs resolvidos (100%), HIGH/NICE items, auditoria 6 especialistas
+   - `aws-s3-lifecycle-rules.md` — Config S3 lifecycle (uploads/youtube 1 dia, clips/ forever, economia 95%)
+   - `observabilidade.md` — OpenTelemetry + Prometheus + Grafana troubleshooting (delay indexação, busca trace ID vs /api/search)
+
+4. **`docs/pesquisa/`** — Experimentos em progresso (não decisões finais):
+   - `experimento-observabilidade/` — Baseline local OpenTelemetry, dashboards Grafana
+
+5. **`docs/historico/`** — Memória de design (14 plans/specs cronológicos 2026-09-11 a 2026-09-23): Clerk auth, créditos/assinaturas, dashboard, GPU local, cortes manuais, k6, project management, etc.
+
+**Consultas rápidas: qual documento ler?**
+
+| Situação | Ler |
+|----------|-----|
+| Antes de mexer em billing/Stripe | `visao-fluxo-pagamento.md` + RF-BILL-* em requisitos-funcionais |
+| Antes de mexer no pipeline de vídeo | `visao-fluxo-processamento-video.md` + RF-PIPE-*/RF-INGEST-* em requisitos-funcionais |
+| Antes de mexer em UI/fluxo usuário | `visao-jornada-usuario.md` + casos-de-uso |
+| Preparar produção | `checklist-go-live.md` (validar BLOCKERs) + `aws-s3-lifecycle-rules.md` (config S3) |
+| Investigar um bug de lógica | `casos-de-uso-e-regras-de-negocio.md` (regras esperadas) |
+| Entender decisão de design antiga | `docs/historico/superpowers/` (plans/specs cronológicos) |
+
+> **Nota:** o `README.md` na raiz descreve a versão original/tutorial do projeto (ex.: menciona Auth.js). O projeto evoluiu — a autenticação atual usa **Clerk**, e o frontend foi migrado para Clean Architecture (domain/application/infrastructure). A fonte de verdade sobre estado atual está em `AGENTS.md`, `docs/`, e código-fonte; o `README.md` será revisado depois.
+
+## Testes, TDD e Documentação
+
+- **Código e documentação evoluem sempre juntos — nenhuma tarefa está concluída só
+  porque o teste passou.** Testes garantem que o que já existia não quebrou; a
+  documentação garante que o que foi feito fica registrado e encontrável depois. Ao
+  implementar uma funcionalidade nova ou mudar comportamento existente, atualize na
+  mesma tarefa:
+  - `docs/requisitos/requisitos-funcionais-e-nao-funcionais.md` — adicione/atualize o
+    RF (e o RNF, se aplicável) correspondente, incluindo a linha na matriz de
+    rastreabilidade (RF → caso de uso → artefato de código → teste).
+  - `docs/requisitos/casos-de-uso-e-regras-de-negocio.md` — se a mudança introduzir ou
+    alterar uma regra de negócio.
+  - O documento de "visão" relevante em `docs/arquitetura/` (`visao-fluxo-pagamento.md`
+    pra billing, `visao-fluxo-processamento-video.md` pro pipeline de vídeo,
+    `visao-jornada-usuario.md` pra mudanças de UI/fluxo do usuário,
+    `visao-dados-modelo-er.md` se o schema do banco mudar) — se a mudança afetar o
+    fluxo que esses diagramas descrevem.
+  - `docs/operacao/checklist-go-live.md` — se a mudança resolver um item pendente ou
+    introduzir um gap/risco novo conhecido.
+  - `progress.md` — sempre, como entrada no histórico (ver convenção já estabelecida
+    no próprio arquivo).
+  - Ver `docs/README.md` para o índice completo de documentos e qual consultar/atualizar
+    em cada situação.
+- **Toda afirmação em documentação sobre código/teste precisa vir de leitura ou
+  execução real** (Read/Grep/rodar o teste), nunca de suposição — citar um arquivo,
+  função ou resultado de teste que não foi conferido é tão grave quanto um bug de
+  código. (Lição aprendida em 2026-10-04: uma sessão de documentação introduziu
+  referências a arquivos de teste inexistentes sem ter rodado a suíte; só foi pego
+  numa revisão técnica cruzada posterior.)
 - **Toda funcionalidade nova ou alteração de comportamento deve começar pelo teste.**
   Escreva o teste (falhando) antes de implementar o código de produção, e só então
   implemente até o teste passar (TDD: red → green → refactor).

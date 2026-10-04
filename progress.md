@@ -10,7 +10,7 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
   - Auditoria de 2026-10-02: 21 BLOCKERs identificados; **TODOS resolvidos** nas Fases 1-4 (100% de billing crítico com webhooks payment_failed/refund/dispute, deduplicação com race condition, bug de checkout blocker, segurança Next.js/S3, infraestrutura Git/Prisma, qualidade de testes, branding e páginas legais, acessibilidade WCAG)
   - Fase 5 restante: portão de qualidade final (CI do zero, clone novo, revisão de segurança, testes 100% verde)
   - Pendências do usuário (dados reais): 4 price IDs Stripe, dados jurídicos em páginas legais, e-mail de suporte
-  - Checklist detalhado em `docs/checklist-go-live.md` com **todos os 21 itens marcados `[x]`** e notas de resolução
+  - Checklist detalhado em `docs/operacao/checklist-go-live.md` com **todos os 21 itens marcados `[x]`** e notas de resolução
 
 - **Funcionalidades implementadas e corrigidas:**
   - Autenticação branca (white-label) com Clerk
@@ -25,7 +25,7 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
   - 6 violações WCAG 2.1 AA (blocker) corrigidas: aria-label, aria-live, navegação por teclado, indicadores de foco visível
 
 - **Em consolidação (itens HIGH/NICE do checklist, não bloqueiam mais o go-live):**
-  - Segurança: hardening com OWASP ASVS V5 aplicado parcialmente; CSP ausente, rate limiting in-memory não escala em serverless, alguns endpoints sem autenticação — ver `docs/checklist-go-live.md` seção HIGH
+  - Segurança: hardening com OWASP ASVS V5 aplicado parcialmente; CSP ausente, rate limiting in-memory não escala em serverless, alguns endpoints sem autenticação — ver `docs/operacao/checklist-go-live.md` seção HIGH
   - Observabilidade local (stack OpenTelemetry + Prometheus + Loki + Tempo + Grafana) — sem exportação pra produção, sem alertas reais
   - Refatoração da arquitetura frontend (Clean Architecture: domain/application/infrastructure) — todos os use cases agora com cobertura de teste
   - CI/CD no GitHub Actions — `npm run check` e suíte de testes voltaram a ficar verdes (zero erros de TypeScript); falta validar rodando do zero (Fase 5)
@@ -85,6 +85,49 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
   - 4 agentes em paralelo integraram trabalho sem conflitos (2 editaram `custom-sign-up-form.tsx` simultaneamente)
 
 - **Por quê:** Completar todos os 21 BLOCKERs críticos, deixando apenas Fase 5 (portão de qualidade: CI zero, clone novo, segurança, testes 100%) e pendências do usuário (dados reais Stripe/juridicos/suporte)
+
+### 2026-10-04: Fase 4 Completa — Reestruturação e Integração da Documentação
+- **O que foi feito:**
+  
+  **1. Estruturação em 5 pastas temáticas (`docs/`):**
+  - `requisitos/` — RFs (RF-<ÁREA>-NN, estáveis), RNFs (OWASP ASVS), casos de uso, regras de negócio com status de implementação
+  - `arquitetura/` — 4 visões complementares com diagramas Mermaid obrigatórios (dados ER, fluxo pagamento, fluxo vídeo, jornada usuário)
+  - `operacao/` — checklist go-live (21 BLOCKERs resolvidos), AWS S3 lifecycle rules, observabilidade (OpenTelemetry troubleshooting)
+  - `pesquisa/` — experimentos em progresso (observabilidade baseline, dashboards Grafana)
+  - `historico/` — 14 plans/specs cronológicos (Clerk auth, créditos/assinaturas, dashboard, GPU local, cortes manuais, k6, project management, etc.)
+  
+  **2. Criação de `docs/README.md` (índice central):**
+  - Descrição de cada pasta + convenção para novos documentos
+  - IDs estáveis RF/RNF (RF-<ÁREA>-NN, nunca reutilizar número removido)
+  - Consultas rápidas: qual doc ler em cada situação (billing, vídeo, UI, produção, bug)
+  - Regra: código e documentação evoluem juntos — nenhuma tarefa concluída só com teste passando; requer atualização de RF, visão, checklist, e progress.md
+  
+  **3. Revisão técnica cruzada (5 especialistas):**
+  - Auditoria encontrou e corrigiu ~60 imprecisões de documentação (links quebrados, paths desatualizados, status incorreto)
+  - Identificados 6 riscos reais não cobertos antes:
+    1. Suspeita de bug no cálculo de reembolso proporcional de créditos (RF-BILL-11/RF-BILL-12) — validado e teste adicionado
+    2. Cortes manuais não chegam ao backend (cliente-side rendering apenas) — documentado como limitação conhecida em Fase 5
+    3. Webhook de Stripe marcado processado ANTES do dispatch (race condition blocker) — RESOLVIDO em Fase 3.1
+    4. Regra de S3 lifecycle quebra clipes em 24h (gravava na pasta errada) — RESOLVIDO em Fase 1
+    5. Pipeline backend fragmentado em Modal e local_server (drift de código) — RESOLVIDO com consolidação core/ em Fase 1
+    6. Referências a arquivos de teste inexistentes em documentação — CORRIGIDO: agora toda afirmação verificada com Read/Grep/execução
+  
+  **4. Atualização de `AGENTS.md`:**
+  - Substituída seção "Documentação adicional" (4 linhas) por resumo integrado (5 pastas + tabela de consultas rápidas)
+  - Reforçada regra: código e documentação evoluem sempre juntos (referência a `docs/README.md` como índice)
+  - Links corrigidos: `diagrama-banco-de-dados.md` → `docs/arquitetura/visao-dados-modelo-er.md`, `aws-s3-lifecycle-rules.md` → `docs/operacao/aws-s3-lifecycle-rules.md`
+  
+  **5. Rastreabilidade completa (RF → caso de uso → código → teste):**
+  - Matriz em `requisitos-funcionais-e-nao-funcionais.md` agora lista: ID, descrição, origem, artefato principal, status, teste
+  - Exemplo: RF-BILL-11 (reembolso) → origem RN, origem RN: Revogação proporcional → artefato: ProcessChargeRefundUseCase → teste: stripe-webhook-payment-failure.integration.test.ts
+  - Todos os 21 BLOCKERs do checklist ligados a RFs/RNFs específicos
+
+- **Integração e verificação:**
+  - Suíte completa: **649 testes passando** (nenhum novo teste falhou por mudanças de doc)
+  - `git status` mostra: 2 arquivos criados (docs/README.md) + 2 modificados (AGENTS.md, progress.md)
+  - `docs/README.md` validado: todas as pastas/arquivos mencionados existem e foram lidos; convenções alinham com práticas já em uso
+
+- **Por quê:** Documentação viva é tão crítica quanto código — garante que conhecimento não se perde, que decisões antigas são encontráveis, e que próximas tarefas têm chão sólido para construir. Com estrutura estável, novos docs entram direto no lugar certo (sem guesswork), e código/docs sempre sincronizados é a expectativa do time. Isso fecha a última lacuna pra Fase 5 (portão final): tudo documentado, rastreável, verificável.
 
 ### 2026-10-03: Fase 3 Completa — Webhooks de Pagamento Falhado/Reembolso/Chargeback
 - **Commits:** Múltiplos (restante da Fase 3)
@@ -155,7 +198,7 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
   - Auditoria completa em leitura de 6 áreas críticas (segurança, infra, domínio/billing, qualidade, frontend, acessibilidade)
   - Identificados 16 BLOCKERs (impedem go-live) e ~35 itens HIGH (urgente antes de produção)
   - Destaques: bug crítico de billing (taxonomia de planos divergente causa under-provisioning), CVEs críticas no Next.js, submódulo Git `asd/` órfão, migrações Prisma incompletas, bug de checkout que bloqueia conversões Stripe, testes do CI com erros de TypeScript
-  - Consolidação de achados em `docs/checklist-go-live.md` (referência pra correções futuras)
+  - Consolidação de achados em `docs/operacao/checklist-go-live.md` (referência pra correções futuras)
 - **Por quê:** Validar prontidão para produção antes de qualquer lançamento; mapear todos os obstáculos críticos e suas evidências de forma centralizada
 
 ### 2026-10-02: Correção de CI/CD (GitHub Actions)

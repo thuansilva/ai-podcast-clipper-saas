@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3, FastAPI, Uvicorn, ffmpegcv, torch, pysubs2.
 
-**Spec:** `docs/superpowers/specs/2026-09-18-local-gpu-processing-design.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-18-local-gpu-processing-design.md`
 
 ## Global Constraints
 - **CRITICAL:** NUNCA execute `git commit`, `git push` ou crie tags sem a autorização explícita do usuário. (Deixe as alterações no working tree).

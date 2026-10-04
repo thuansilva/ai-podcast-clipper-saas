@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js App Router, React, Tailwind CSS, Prisma, TypeScript, Lucide React, ytdl-core (or fetch oembed/youtube API).
 
-**Spec:** `docs/superpowers/specs/2026-09-15-dashboard-redesign-and-slice-design.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-15-dashboard-redesign-and-slice-design.md`
 
 ## Global Constraints
 

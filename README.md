@@ -1,6 +1,6 @@
 # AI Podcast Clipper
 
-![alt text](thumbnail.png)
+> ⚠️ **Este README descreve a versão original/tutorial do projeto.** Para informações atuais sobre arquitetura, tecnologias e processos de desenvolvimento, consulte [`AGENTS.md`](./AGENTS.md) (fonte de verdade do projeto) e a [documentação completa](./docs/README.md) (em construção nesta reestruturação).
 
 [Link to video](https://youtu.be/PeFZcvWucoU)
 

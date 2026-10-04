@@ -8,7 +8,7 @@
 
 **Tech Stack:** Grafana k6 (JavaScript ES6, `k6/http`, `k6/crypto`), Next.js 15, Prisma ORM, Stripe Webhook.
 
-**Spec:** `docs/superpowers/specs/2026-09-11-load-testing-k6-spec.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-11-load-testing-k6-spec.md`
 
 ## Global Constraints
 - Scripts de teste devem ser compatíveis com a runtime do k6 (ES6 modules, imports `k6/http`, `k6/crypto`, `k6`).

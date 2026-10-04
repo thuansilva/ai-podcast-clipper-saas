@@ -12,7 +12,7 @@
 
 **Tech Stack:** Next.js 15 (App Router), TypeScript, Tailwind CSS, Lucide Icons, Prisma ORM, Inngest, Vitest, Testing Library.
 
-**Spec:** [`docs/superpowers/specs/2026-09-13-manual-cuts-timestamp-design.md`](file:///home/thuan/Documentos/projetos-empresa/ai-podcast-clipper-saas/docs/superpowers/specs/2026-09-13-manual-cuts-timestamp-design.md)
+**Spec:** [`docs/historico/superpowers/specs/2026-09-13-manual-cuts-timestamp-design.md`](file:///home/thuan/Documentos/projetos-empresa/ai-podcast-clipper-saas/docs/historico/superpowers/specs/2026-09-13-manual-cuts-timestamp-design.md)
 
 ## Global Constraints
 - Diretriz `AGENTS.md`: NUNCA execute `git commit` ou `git push` sem a autorização explícita do usuário. As alterações devem permanecer no working tree para revisão.

@@ -1,5 +1,7 @@
 # Especificação Técnica: Autenticação White-Label Customizada e Menu do Usuário
 
+> ⚠️ **SUPERSEDED** — Esta documentação descreve uma abordagem anterior (autenticação customizada white-label). A autenticação atual usa **Clerk** (branca/white-label sobre o Clerk). Veja `docs/historico/superpowers/specs/2026-09-12-clerk-auth-clean-architecture-spec.md` para a implementação atual. Mantido apenas para referência histórica de decisões de design.
+
 **Data:** 2026-09-13  
 **Status:** Aprovado  
 **Escopo:** Frontend (`ai-podcast-clipper-frontend`)  

@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * Este app só processa vídeo (a IA transcreve/corta/legenda vídeo — não faz
  * sentido aceitar outro tipo de mídia aqui). 2GB casa com o teto já
- * documentado em docs/aws-s3-lifecycle-rules.md para uploads/downloads
+ * documentado em docs/operacao/aws-s3-lifecycle-rules.md para uploads/downloads
  * brutos.
  */
 export const MAX_VIDEO_UPLOAD_SIZE_BYTES = 2 * 1024 * 1024 * 1024; // 2GB

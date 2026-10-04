@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js App Router, React Intersection Observer, Tailwind CSS, Prisma, Shadcn UI.
 
-**Spec:** `docs/superpowers/specs/2026-09-17-meus-projetos-design.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-17-meus-projetos-design.md`
 
 ## Global Constraints
 

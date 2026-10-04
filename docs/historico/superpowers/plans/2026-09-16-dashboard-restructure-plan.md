@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js (App Router), Prisma, Shadcn UI
 
-**Spec:** `docs/superpowers/specs/2026-09-16-dashboard-restructure-design.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-16-dashboard-restructure-design.md`
 
 ## Global Constraints
 

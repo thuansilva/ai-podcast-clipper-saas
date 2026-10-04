@@ -9,7 +9,7 @@ use cases that generate them):
     ``import-youtube-video.use-case.ts``)
 
 Both prefixes are covered by an S3 lifecycle rule that expires objects
-after 1 day (see ``docs/aws-s3-lifecycle-rules.md``) — the original video is
+after 1 day (see ``docs/operacao/aws-s3-lifecycle-rules.md``) — the original video is
 only needed for the few minutes it takes to process it. The rendered clips,
 however, are the actual product delivered to the user and must persist
 under the permanent ``clips/`` prefix, never under ``uploads/``/``youtube/``.

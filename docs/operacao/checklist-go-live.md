@@ -33,7 +33,7 @@ Estes itens **devem** ser corrigidos antes de qualquer release para produção.
   **Origem:** security-specialist, domain-specialist  
   **Resolvido:** `src/app/api/webhooks/stripe/route.ts` agora checa `isProcessed` → `await` o dispatch → marca como processado DEPOIS de confirmar sucesso. Se dispatch falhar, responde 503 (não 200), permitindo Stripe reenviar. `event.id` do Stripe passado como chave de idempotência nativa ao `inngest.send()`. Erro de `inngest.send` agora propaga ao chamador em vez de fallback silencioso. TDD rigoroso: primeira versão dos testes teve asserções condicionais que não ficavam vermelhas (falha de metodologia identificada e corrigida); versão final: 4 testes genuinamente vermelho→verde em `tests/integration/stripe-webhook-idempotency.integration.test.ts`. Suíte completa: 616 testes passando.
 
-- [x] **Pacotes avulsos (one-time credits) descontinuados ainda estão no código** — `AddCreditsFromStripeWebhookUseCase` (`src/application/use-cases/credits/add-credits-from-stripe.use-case.ts:31-48`) continua processando pacotes (smallPackPriceId, mediumPackPriceId, largePackPriceId) apesar da spec aprovada (`docs/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-packs-design.md:12`) descontinuar essa venda. `src/env.js:27-29` mantém defaults fake (`"price_small"`).  
+- [x] **Pacotes avulsos (one-time credits) descontinuados ainda estão no código** — `AddCreditsFromStripeWebhookUseCase` (`src/application/use-cases/credits/add-credits-from-stripe.use-case.ts:31-48`) continua processando pacotes (smallPackPriceId, mediumPackPriceId, largePackPriceId) apesar da spec aprovada (`../historico/superpowers/specs/2026-09-14-recurring-subscriptions-and-credit-packs-design.md:12`) descontinuar essa venda. `src/env.js:27-29` mantém defaults fake (`"price_small"`).  
   **Evidência:** `src/application/use-cases/credits/add-credits-from-stripe.use-case.ts`, `src/env.js:27-29`  
   **Origem:** domain-specialist  
   **Resolvido:** Pacotes avulsos removidos do código e env vars correspondentes removidas de `env.js`. Migration `20260928000000_restrict_user_subscription_plan_values` normaliza dados legados.
@@ -45,8 +45,8 @@ Estes itens **devem** ser corrigidos antes de qualquer release para produção.
   **Origem:** security-specialist  
   **Resolvido:** Next.js atualizado de 15.3.2 para 15.5.27 (went beyond minimal patch para corrigir 2 CVEs adicionais: RCE em Windows e na API de otimização de imagem AVIF, ambas só corrigidas a partir da 15.5.24). `npm audit` do pacote `next` sem mais advisories diretas. Build e testes passam. Novo item HIGH descoberto: 1 critical remanescente no AWS SDK (`fast-xml-parser` via `@aws-sdk/client-s3`), pendente de task separada para atualizar AWS SDK v3.
 
-- [x] **Regra de lifecycle do S3 quebra clipes em 24h** — `docs/aws-s3-lifecycle-rules.md:15-19` documenta expiração de `uploads/`/`youtube/` em 1 dia, manter `clips/` pra sempre. Backend grava o clipe final na MESMA pasta do vídeo original (`ai-podcast-clipper-backend/main.py:232-233`), nunca em `clips/`. Se aplicadas, regras destroem todos os clipes 24h após processamento.  
-  **Evidência:** `docs/aws-s3-lifecycle-rules.md:15-19`, `ai-podcast-clipper-backend/main.py:232-233`, `generate-upload-url.use-case.ts:20`, `import-youtube-video.use-case.ts:27`  
+- [x] **Regra de lifecycle do S3 quebra clipes em 24h** — `./aws-s3-lifecycle-rules.md:15-19` documenta expiração de `uploads/`/`youtube/` em 1 dia, manter `clips/` pra sempre. Backend grava o clipe final na MESMA pasta do vídeo original (`ai-podcast-clipper-backend/main.py:232-233`), nunca em `clips/`. Se aplicadas, regras destroem todos os clipes 24h após processamento.  
+  **Evidência:** `./aws-s3-lifecycle-rules.md:15-19`, `ai-podcast-clipper-backend/main.py:232-233`, `generate-upload-url.use-case.ts:20`, `import-youtube-video.use-case.ts:27`  
   **Origem:** security-specialist, devops-specialist  
   **Resolvido:** Pipeline backend consolidado em módulos compartilhados (`core/`), incluindo `s3_paths.py` que garante clipes finais gravados em `clips/` (em vez da mesma pasta do vídeo original). TDD: teste vermelho → implementação → verde.
 
@@ -123,21 +123,66 @@ Estes itens **devem** ser corrigidos antes de qualquer release para produção.
 
 ---
 
+## RISCOS DESCOBERTOS PELA AUDITORIA DE ESPECIALISTAS (Sessão 2026-10-04)
+
+Estes itens foram identificados por 5 especialistas durante revisão técnica dos 4 documentos de arquitetura/requisitos. Não bloqueiam lançamento imediato se forem considerados aceitáveis, mas requerem visibilidade e decisão do usuário.
+
+### Riscos Confirmados de Implementação (Gap Funcional)
+
+- **(BLOCKER — Funcionalidade Anunciada Não Funciona)** Confirmado por 3 revisores independentes (2026-10-04): O backend Python (`core/schemas.py::ProcessVideoRequest`) só aceita `s3_key` e `preset` — os campos `mode`, `manual_cuts`, `aspect_ratio`, `auto_zoom`, `genre` enviados pelo frontend (cortes manuais por timestamp, opções dinâmicas de vídeo) **são descartados silenciosamente** pelo Pydantic v2. O backend sempre roda o pipeline automático completo (detecção de momentos via IA), ignorando qualquer configuração manual do usuário — e ainda gasta uma chamada à API do Gemini desnecessariamente. 
+  - **Arquivo**: `ai-podcast-clipper-backend/core/schemas.py`, `src/inngest/functions.ts:278-282`
+  - **Severidade**: BLOCKER (funcionalidade anunciada não entrega no backend)
+  - **Requer decisão**: Implementar a recepção desses campos no backend, ou remover/avisar sobre a limitação no frontend.
+
+### Riscos Não Confirmados (Suspeitas que Requerem Teste Real)
+
+- **(HIGH — Possível Bug de Reembolso Não Confirmado)** O webhook handler em `src/app/api/webhooks/stripe/route.ts` (linhas ~332-335) calcula o valor reembolsado via `charge.refunds.data`. **Suspeita não confirmada**: O objeto `Charge` recebido no payload webhook do Stripe pode **não vir com `refunds` expandido por padrão**, fazendo `refundAmountCents` sempre ser `0`, e a revogação de créditos por reembolso **nunca acontecer de fato na prática**, apesar do código existir e os testes (com payload mockado/expandido manualmente) passarem. Isso só pode ser confirmado com um evento real do Stripe em modo teste — o usuário ainda não configurou os produtos/price IDs no Stripe, então essa verificação fica pendente. 
+  - **Ação recomendada**: Antes de confiar nesta feature em produção, disparar um reembolso de teste real no Stripe (modo teste) e confirmar no banco que o crédito foi de fato revogado.
+
+### Riscos de Configuração e Ambiente
+
+- **(HIGH)** Fila em memória de fallback do Stripe (`stripe-queue.ts`) não tem guard de `NODE_ENV` — se `INNGEST_EVENT_KEY` faltar em produção por engano, reabre o risco de perda de crédito já corrigido na Fase 3 (evento marcado como processado mesmo se a fila em memória falhar).
+  - **Arquivo**: `src/infrastructure/queue/stripe-queue.ts:86-98,107-122`
+  - **Mitigação recomendada**: Adicionar `NODE_ENV !== "development"` check ou falhar explicitamente em produção
+
+### Riscos de Segurança por Design
+
+- **(HIGH)** `local_server.py`: SSRF/injeção de argumento no yt-dlp — não valida host da URL antes de passar pro yt-dlp (`local_server.py:143-160`), diferente de `main.py` que valida via `_assert_youtube_host`.
+  - **Arquivo**: `ai-podcast-clipper-backend/local_server.py:143-160`
+
+- **(HIGH)** `download_youtube` do Modal aceita bucket E chave S3 arbitrários do chamador autenticado (`core/schemas.py:77-84`, `main.py:156-162`) — quem tiver o token pode escrever em qualquer bucket alcançável pelas credenciais AWS, inclusive sobrescrever `clips/` de outros usuários.
+  - **Arquivo**: `ai-podcast-clipper-backend/core/schemas.py:77-84`, `main.py:156-162`
+
+- **(HIGH)** `core/video_pipeline.py::resolve_input_video_path` (linhas 37-38) aceita caminho de arquivo local mesmo em produção (Modal) — não é exclusivo de dev. Se um `s3_key` coincidir com um caminho existente no container, lê local em vez de buscar do S3.
+  - **Arquivo**: `ai-podcast-clipper-backend/core/video_pipeline.py:37-38`
+
+- **(NICE/Confirmar)** Divergência de modelo Gemini: AGENTS.md e documentação citam "Gemini 2.5 Pro", código usa `gemini-2.5-flash` como default (`core/moments.py:48`). Confirmar se é intencional (decisão de custo deliberada, ou desalinhamento).
+  - **Arquivo**: `ai-podcast-clipper-backend/core/moments.py:48`
+
+- **(HIGH, Reforça Item Existente)** Endpoint de debug `/api/dev-sign-stripe-payload` ainda acessível fora de produção (middleware não cobre `/api`), permite forjar webhooks Stripe válidos. O próprio código já o marca como "TEMPORÁRIO" — ação recomendada é REMOVER diretamente, não é mais uma decisão em aberto.
+  - **Arquivo**: `src/app/api/dev-sign-stripe-payload/route.ts`
+
+---
+
 ## HIGH — Correção Urgente Antes de Produção
 
 Estes itens impactam segurança, confiabilidade ou experiência crítica; recomenda-se correção antes de go-live.
 
 ### Segurança
 
+- [ ] **Rate limiting nos endpoints do backend Python** — Endpoints `/process_video` e `/download_youtube` (`ai-podcast-clipper-backend/main.py`) não possuem throttling (slowapi/Limiter) — abusáveis para consumir GPU sem limite. Bearer token estático é único controle (sem limite de tentativas). **Prioridade P0 (custos GPU elevados).** *(Incorporado de OWASP ASVS V11)*
+
 - [ ] **Rate limiting in-memory não funciona em serverless** — `src/infrastructure/rate-limiting/in-memory-sliding-window-rate-limiter.ts:16` usa estrutura residente na memória, reiniciada a cada cold start serverless — proteção inefetiva.
 
 - [ ] **CSP (Content Security Policy) ausente** — `next.config.js:26-32` não define diretivas CSP robustas.
 
+- [ ] **Rate limit ausente em actions de projeto e billing** — `deleteProjectAction`, `renameProjectAction`, `retryProjectAction`, `createCheckoutSession`, `createCustomerPortalSession` sem rate limiting — potencial para abuse (ex: gerar sessões Stripe em loop). **Prioridade P1.** *(Incorporado de OWASP ASVS V11)*
+
 - [ ] **Fluxo de exclusão de conta incompleto** — Usuário não pode deletar conta via UI; webhook Clerk (`src/app/api/webhooks/clerk/route.ts:92-105`) não limpa S3 nem cancela Stripe subscription.
 
-- [ ] **IDOR em `DELETE /api/local-storage`** — `src/app/api/local-storage/route.ts:181-208` não valida propriedade do arquivo sendo deletado.
+- [ ] **IDOR em `DELETE /api/local-storage`** — `src/app/api/local-storage/route.ts:181-208` não valida propriedade do arquivo sendo deletado. GET/PUT possuem `isOwnedByUser()`, mas DELETE não.
 
-- [ ] **`/api/youtube/info` sem autenticação e rate limit** — `src/app/api/youtube/info/route.ts:4-75` exposto publicamente.
+- [ ] **`/api/youtube/info` sem autenticação e rate limit** — `src/app/api/youtube/info/route.ts:4-75` exposto publicamente, faz fetch outbound sem limite — abusável para flood de requisições.
 
 - [ ] **Dependências Python sem versão fixada** — `ai-podcast-clipper-backend/requirements.txt` sem pinning exato (ex.: `whisperx>=0.10.0` em vez de `whisperx==0.10.2`).
 
@@ -204,6 +249,8 @@ Estes itens melhoram confiabilidade, manutenibilidade e experiência, mas não b
 
 ### Segurança
 
+- Logging estruturado de eventos de autorização negada — Não há logger estruturado (`pino`/`winston`/etc.) para rastrear tentativas de acesso negado (IDOR bloqueado, sessão inválida). Importante para detectar exploração de vulnerabilidades corrigidas. *(Incorporado de OWASP ASVS V7 — P2)*
+- Rate limiter é por instância/processo, não é garantia global em multi-instância — `InMemorySlidingWindowRateLimiter` não é duro em ambiente serverless/multi-instância; considerar Redis/Memcached para distribuído. *(Incorporado de OWASP ASVS V11 — P2)*
 - `.gitignore` não cobre `.env*` globalmente (nenhum exposto hoje, proteger contra futuros).
 - PII em logs (Gemini responses, títulos de clip) — remover ou sanitizar.
 - Mensagens de erro do backend vazam detalhes internos (`str(e)` no detail) — genéricos pra cliente.
@@ -211,6 +258,7 @@ Estes itens melhoram confiabilidade, manutenibilidade e experiência, mas não b
 
 ### Infraestrutura
 
+- CORS explícito no backend FastAPI — `main.py` e `local_server.py` não configuram `CORSMiddleware` — comportamento padrão do FastAPI (sem CORS habilitado) bloqueia browsers cross-origin, mas política não está documentada/testada. *(Incorporado de OWASP ASVS V9 — P2)*
 - Inngest sem validação central de env vars — centralizar.
 - `ai-podcast-clipper-backend/asd/` deveria ser submódulo git real (`.gitmodules`).
 
@@ -260,5 +308,15 @@ Estes itens melhoram confiabilidade, manutenibilidade e experiência, mas não b
   2. Preencher dados jurídicos reais em páginas legais (razão social, CNPJ, endereço, e-mail, foro)
   3. Decidir e-mail de suporte real (atualmente `suporte@PREENCHER.com.br`)
 
-- **High:** ~35 itens, novo HIGH descoberto (CVE no AWS SDK `fast-xml-parser`, pendente atualização AWS SDK v3)
-- **Nice:** ~20 melhorias que podem ser planejadas pós-lançamento
+- **High:** **43 itens** (incorporados 2 itens de rate limiting do OWASP ASVS: endpoints do backend Python [P0], actions de projeto/billing [P1])
+- **Nice:** **23 melhorias** que podem ser planejadas pós-lançamento (incorporados 3 itens do OWASP ASVS: logging estruturado [P2], CORS FastAPI [P2], rate limiter global [P2])
+
+---
+
+## Nota sobre Fusão com OWASP ASVS
+
+Este checklist incorpora todos os gaps de segurança do [**OWASP ASVS Nível 2**](https://owasp.org/www-project-application-security-verification-standard/) relevantes a este projeto.
+
+**Referências cruzadas:**
+- Detalhes de implementação por feature: `../requisitos/casos-de-uso-e-regras-de-negocio.md`
+- Histórico de decisões de design e specs: `../historico/superpowers/specs/` e `../historico/superpowers/plans/`

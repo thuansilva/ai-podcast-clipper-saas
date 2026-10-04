@@ -28,7 +28,7 @@ const securityHeaders = [
  * Uma CSP mal calibrada pode quebrar o Clerk (auth) e o Stripe (checkout),
  * que carregam scripts/iframes de domínios próprios — isso exige testar ao
  * vivo o fluxo de login e de pagamento antes de habilitar, não só ler o
- * código. Ver docs/owasp-asvs-l2-checklist.md (V9) para o gap em aberto.
+ * código. Ver docs/operacao/checklist-go-live.md (V9) para o gap em aberto.
  */
 
 /** @type {import("next").NextConfig} */

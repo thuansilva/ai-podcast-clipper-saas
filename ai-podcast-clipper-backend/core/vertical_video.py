@@ -2,7 +2,7 @@
 
 Extracted from `main.py` as part of the pipeline consolidation: this is the
 single implementation used by both the Modal pipeline and the local dev
-runner (see `AGENTS.md` / `docs/superpowers/plans/` for context) — no more
+runner (see `AGENTS.md` / `docs/historico/superpowers/plans/` for context) — no more
 drift between what runs in production and what runs locally.
 """
 

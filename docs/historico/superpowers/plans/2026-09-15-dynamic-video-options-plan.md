@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js (App Router), Prisma, TailwindCSS, Shadcn/Radix UI, Vitest
 
-**Spec:** `docs/superpowers/specs/2026-09-15-dynamic-video-options-design.md`
+**Spec:** `docs/historico/superpowers/specs/2026-09-15-dynamic-video-options-design.md`
 
 ## Global Constraints
 
