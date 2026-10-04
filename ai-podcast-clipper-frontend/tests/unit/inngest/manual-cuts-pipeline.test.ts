@@ -97,34 +97,39 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
     mockUploadedFileUpdate.mockResolvedValue({});
     mockClipCreateMany.mockResolvedValue({ count: 2 });
 
-    vi.mocked(undiciFetch).mockImplementation(async (url) => {
-      if (url.toString() === env.PROCESS_VIDEO_ENDPOINT) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            file_id: "uploads/file-123/video.mp4",
-            clips: [
-              {
-                title: "Destaque 1",
-                s3_key: "uploads/file-123/clip1.mp4",
-                start: 10,
-                end: 40,
-                duration: 30,
-              },
-              {
-                title: "Destaque 2",
-                s3_key: "uploads/file-123/clip2.mp4",
-                start: 100,
-                end: 170,
-                duration: 70,
-              },
-            ],
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response("Not Found", { status: 404 });
-    });
+    // Note: undici.fetch espera uma Response específica, mas retornamos Response nativa do Node.
+    // Os tipos são incompatíveis apenas em detalhes internos de implementação (Headers.keys())
+    // mas funcionam identicamente em runtime — seguro usar `as any` aqui.
+    vi.mocked(undiciFetch).mockImplementation(
+      (async (url: RequestInfo) => {
+        if (url.toString() === env.PROCESS_VIDEO_ENDPOINT) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              file_id: "uploads/file-123/video.mp4",
+              clips: [
+                {
+                  title: "Destaque 1",
+                  s3_key: "uploads/file-123/clip1.mp4",
+                  start: 10,
+                  end: 40,
+                  duration: 30,
+                },
+                {
+                  title: "Destaque 2",
+                  s3_key: "uploads/file-123/clip2.mp4",
+                  start: 100,
+                  end: 170,
+                  duration: 70,
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          );
+        }
+        return new Response("Not Found", { status: 404 });
+      }) as any
+    );
   });
 
   afterEach(() => {

@@ -116,20 +116,25 @@ describe("Inngest Pipeline Integration Tests", () => {
     ];
 
     // Mock fetch para o endpoint de GPU do Modal
-    vi.mocked(undiciFetch).mockImplementation(async (url) => {
-      const urlStr = url.toString();
-      if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            file_id: file.s3Key,
-            clips: mockClips,
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        );
-      }
-      return new Response("Not Found", { status: 404 });
-    });
+    // Note: undici.fetch espera uma Response específica, mas retornamos Response nativa do Node.
+    // Os tipos são incompatíveis apenas em detalhes internos de implementação (Headers.keys())
+    // mas funcionam identicamente em runtime — seguro usar `as any` aqui.
+    vi.mocked(undiciFetch).mockImplementation(
+      (async (url: RequestInfo) => {
+        const urlStr = url.toString();
+        if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              file_id: file.s3Key,
+              clips: mockClips,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response("Not Found", { status: 404 });
+      }) as any
+    );
 
     const mockStep = createMockStep();
 
@@ -198,16 +203,21 @@ describe("Inngest Pipeline Integration Tests", () => {
     const file = await createTestFile(user.id, { durationSeconds: 120 });
 
     // Mock fetch simulando erro 500 no Modal GPU
-    vi.mocked(undiciFetch).mockImplementation(async (url) => {
-      const urlStr = url.toString();
-      if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
-        return new Response(
-          JSON.stringify({ detail: "CUDA out of memory in WhisperX alignment" }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
-        );
-      }
-      return new Response("Not Found", { status: 404 });
-    });
+    // Note: undici.fetch espera uma Response específica, mas retornamos Response nativa do Node.
+    // Os tipos são incompatíveis apenas em detalhes internos de implementação (Headers.keys())
+    // mas funcionam identicamente em runtime — seguro usar `as any` aqui.
+    vi.mocked(undiciFetch).mockImplementation(
+      (async (url: RequestInfo) => {
+        const urlStr = url.toString();
+        if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
+          return new Response(
+            JSON.stringify({ detail: "CUDA out of memory in WhisperX alignment" }),
+            { status: 500, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response("Not Found", { status: 404 });
+      }) as any
+    );
 
     const mockStep = createMockStep();
 
@@ -334,26 +344,31 @@ describe("Inngest Pipeline Integration Tests", () => {
       },
     ];
 
-    vi.mocked(undiciFetch).mockImplementation(async (url) => {
-      const urlStr = url.toString();
-      if (urlStr === ytEndpoint) {
-        return new Response(JSON.stringify(mockDownloadResponse), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            file_id: mockDownloadResponse.s3_key,
-            clips: mockClips,
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        );
-      }
-      return new Response("Not Found", { status: 404 });
-    });
+    // Note: undici.fetch espera uma Response específica, mas retornamos Response nativa do Node.
+    // Os tipos são incompatíveis apenas em detalhes internos de implementação (Headers.keys())
+    // mas funcionam identicamente em runtime — seguro usar `as any` aqui.
+    vi.mocked(undiciFetch).mockImplementation(
+      (async (url: RequestInfo) => {
+        const urlStr = url.toString();
+        if (urlStr === ytEndpoint) {
+          return new Response(JSON.stringify(mockDownloadResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              file_id: mockDownloadResponse.s3_key,
+              clips: mockClips,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response("Not Found", { status: 404 });
+      }) as any
+    );
 
     const mockStep = createMockStep();
 
@@ -417,16 +432,21 @@ describe("Inngest Pipeline Integration Tests", () => {
 
     const ytEndpoint = getYouTubeDownloadEndpoint();
 
-    vi.mocked(undiciFetch).mockImplementation(async (url) => {
-      const urlStr = url.toString();
-      if (urlStr === ytEndpoint) {
-        return new Response(
-          JSON.stringify({ detail: "YouTube video unavailable: Video unavailable" }),
-          { status: 404, headers: { "Content-Type": "application/json" } }
-        );
-      }
-      return new Response("Not Found", { status: 404 });
-    });
+    // Note: undici.fetch espera uma Response específica, mas retornamos Response nativa do Node.
+    // Os tipos são incompatíveis apenas em detalhes internos de implementação (Headers.keys())
+    // mas funcionam identicamente em runtime — seguro usar `as any` aqui.
+    vi.mocked(undiciFetch).mockImplementation(
+      (async (url: RequestInfo) => {
+        const urlStr = url.toString();
+        if (urlStr === ytEndpoint) {
+          return new Response(
+            JSON.stringify({ detail: "YouTube video unavailable: Video unavailable" }),
+            { status: 404, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response("Not Found", { status: 404 });
+      }) as any
+    );
 
     const mockStep = createMockStep();
 
@@ -467,27 +487,32 @@ describe("Inngest Pipeline Integration Tests", () => {
     const user = await createTestUser(10, 0);
     const file = await createTestFile(user.id, { durationSeconds: 60 });
 
-    vi.mocked(undiciFetch).mockImplementation(async (url) => {
-      const urlStr = url.toString();
-      if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            file_id: file.s3Key,
-            clips: [
-              {
-                s3_key: `uploads/${file.id}/clip_0.mp4`,
-                title: "Short Clip",
-                start: 0.0,
-                end: 30.0,
-              },
-            ],
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        );
-      }
-      return new Response("Not Found", { status: 404 });
-    });
+    // Note: undici.fetch espera uma Response específica, mas retornamos Response nativa do Node.
+    // Os tipos são incompatíveis apenas em detalhes internos de implementação (Headers.keys())
+    // mas funcionam identicamente em runtime — seguro usar `as any` aqui.
+    vi.mocked(undiciFetch).mockImplementation(
+      (async (url: RequestInfo) => {
+        const urlStr = url.toString();
+        if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              file_id: file.s3Key,
+              clips: [
+                {
+                  s3_key: `uploads/${file.id}/clip_0.mp4`,
+                  title: "Short Clip",
+                  start: 0.0,
+                  end: 30.0,
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response("Not Found", { status: 404 });
+      }) as any
+    );
 
     const mockStep = createMockStep();
 

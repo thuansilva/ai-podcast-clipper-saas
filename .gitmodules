@@ -1,0 +1,3 @@
+[submodule "ai-podcast-clipper-backend/asd"]
+	path = ai-podcast-clipper-backend/asd
+	url = https://github.com/Junhua-Liao/Light-ASD

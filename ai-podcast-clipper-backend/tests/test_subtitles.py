@@ -11,7 +11,7 @@ from core.subtitle_styles import (
     get_preset_style,
     SUPPORTED_PRESETS,
 )
-from main import create_subtitles_with_ffmpeg
+from core.subtitles import create_subtitles_with_ffmpeg
 
 
 @pytest.fixture
@@ -197,7 +197,7 @@ class TestGenerateAssSubtitles:
 
 
 class TestCreateSubtitlesWithFfmpeg:
-    @patch("main.subprocess.run")
+    @patch("core.subtitles.subprocess.run")
     def test_create_subtitles_delegates_to_ffmpeg(self, mock_run, sample_transcript):
         with tempfile.TemporaryDirectory() as tmpdir:
             clip_video = os.path.join(tmpdir, "clip.mp4")

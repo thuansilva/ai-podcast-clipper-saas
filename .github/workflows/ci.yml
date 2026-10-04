@@ -47,12 +47,12 @@ jobs:
       - name: Audit dependencies (fail on high/critical)
         run: npm audit --audit-level=high
 
-      - name: Generate Prisma Client & Push Schema
+      - name: Generate Prisma Client & Apply Migrations
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper
         run: |
           npx prisma generate
-          npx prisma db push --skip-generate
+          npx prisma migrate deploy
 
       - name: Run Lint and Typecheck
         run: npm run check

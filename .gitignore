@@ -64,4 +64,3 @@ ai-podcast-clipper-backend/*.env
 ai-podcast-clipper-backend/.env
 ai-podcast-clipper-backend/.modal*
 ai-podcast-clipper-backend/brca1_analysis_plot.png
-ai-podcast-clipper-backend/local_server.py
