@@ -17,6 +17,9 @@ vi.mock(
   "~/infrastructure/database/repositories/prisma-processed-event.repository",
   () => ({
     PrismaProcessedEventRepository: class {
+      async isProcessed(eventId: string) {
+        return processedEventIds.has(eventId);
+      }
       async tryMarkProcessed(eventId: string) {
         if (processedEventIds.has(eventId)) return false;
         processedEventIds.add(eventId);
@@ -93,10 +96,13 @@ describe("Stripe Webhook Route", () => {
 
     const res = await POST(req);
     expect(res.status).toBe(200);
-    expect(dispatchStripeCheckoutEvent).toHaveBeenCalledWith({
-      customerId: "cus_test_123",
-      priceId: "price_small_pack",
-    });
+    expect(dispatchStripeCheckoutEvent).toHaveBeenCalledWith(
+      {
+        customerId: "cus_test_123",
+        priceId: "price_small_pack",
+      },
+      "evt_test_1"
+    );
   });
 
   it("deve despachar evento para checkout.session.completed em modo subscription", async () => {
@@ -132,7 +138,8 @@ describe("Stripe Webhook Route", () => {
         customerId: "cus_sub_123",
         subscriptionId: "sub_123",
         priceId: "price_creator_monthly",
-      })
+      }),
+      "evt_test_2"
     );
   });
 
@@ -173,7 +180,8 @@ describe("Stripe Webhook Route", () => {
         customerId: "cus_test_123",
         subscriptionId: "sub_test_123",
         priceId: "price_creator_monthly",
-      })
+      }),
+      "evt_test_3"
     );
   });
 
@@ -211,7 +219,8 @@ describe("Stripe Webhook Route", () => {
         customerId: "cus_test_123",
         status: "active",
         cancelAtPeriodEnd: true,
-      })
+      }),
+      "evt_test_4"
     );
   });
 
@@ -242,7 +251,8 @@ describe("Stripe Webhook Route", () => {
         eventType: "customer.subscription.deleted",
         subscriptionId: "sub_test_123",
         customerId: "cus_test_123",
-      })
+      }),
+      "evt_test_5"
     );
   });
 

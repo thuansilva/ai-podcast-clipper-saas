@@ -25,6 +25,7 @@ export class PrismaSubscriptionRepository implements ISubscriptionRepository {
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
       plan: sub.plan,
       monthlyCredits: sub.monthlyCredits,
+      pastDueAt: sub.pastDueAt,
       createdAt: sub.createdAt,
       updatedAt: sub.updatedAt,
     };
@@ -50,6 +51,7 @@ export class PrismaSubscriptionRepository implements ISubscriptionRepository {
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
       plan: sub.plan,
       monthlyCredits: sub.monthlyCredits,
+      pastDueAt: sub.pastDueAt,
       createdAt: sub.createdAt,
       updatedAt: sub.updatedAt,
     };
@@ -93,6 +95,7 @@ export class PrismaSubscriptionRepository implements ISubscriptionRepository {
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
       plan: sub.plan,
       monthlyCredits: sub.monthlyCredits,
+      pastDueAt: sub.pastDueAt,
       createdAt: sub.createdAt,
       updatedAt: sub.updatedAt,
     };
@@ -122,6 +125,7 @@ export class PrismaSubscriptionRepository implements ISubscriptionRepository {
         ...(data.monthlyCredits !== undefined && {
           monthlyCredits: data.monthlyCredits,
         }),
+        ...(data.pastDueAt !== undefined && { pastDueAt: data.pastDueAt }),
       },
     });
 
@@ -136,8 +140,34 @@ export class PrismaSubscriptionRepository implements ISubscriptionRepository {
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
       plan: sub.plan,
       monthlyCredits: sub.monthlyCredits,
+      pastDueAt: sub.pastDueAt,
       createdAt: sub.createdAt,
       updatedAt: sub.updatedAt,
     };
+  }
+
+  async findPastDueOlderThan(cutoff: Date): Promise<SubscriptionEntity[]> {
+    const subs = await db.subscription.findMany({
+      where: {
+        status: "past_due",
+        pastDueAt: { not: null, lte: cutoff },
+      },
+    });
+
+    return subs.map((sub) => ({
+      id: sub.id,
+      userId: sub.userId,
+      stripeSubscriptionId: sub.stripeSubscriptionId,
+      stripePriceId: sub.stripePriceId,
+      status: sub.status,
+      currentPeriodStart: sub.currentPeriodStart,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      plan: sub.plan,
+      monthlyCredits: sub.monthlyCredits,
+      pastDueAt: sub.pastDueAt,
+      createdAt: sub.createdAt,
+      updatedAt: sub.updatedAt,
+    }));
   }
 }

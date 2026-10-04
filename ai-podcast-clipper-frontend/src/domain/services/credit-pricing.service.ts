@@ -37,6 +37,34 @@ export class CreditPricingService {
       return totalCredits + credits;
     }, 0);
   }
+
+  /**
+   * Calcula quantos créditos de assinatura devem ser revogados quando o
+   * Stripe reembolsa (`charge.refunded`) ou contesta (`charge.dispute.created`)
+   * uma cobrança — proporcionalmente à fração do preço mensal que foi
+   * efetivamente reembolsada/disputada.
+   *
+   * Ex.: plano Starter ($15,00/mês = 1500 centavos, 150 créditos/mês) com
+   * um reembolso parcial de 750 centavos (metade do preço) revoga 75
+   * créditos (metade da cota mensal).
+   *
+   * O resultado nunca excede `monthlyCredits` (não é possível revogar mais
+   * créditos do que a cota do próprio período) e é sempre >= 1 quando o
+   * valor reembolsado é positivo, para garantir que todo reembolso tenha
+   * efeito perceptível no saldo.
+   */
+  public static calculateCreditsToRevokeForRefund(
+    refundAmountCents: number,
+    monthlyPriceCents: number,
+    monthlyCredits: number
+  ): number {
+    if (refundAmountCents <= 0 || monthlyPriceCents <= 0 || monthlyCredits <= 0) {
+      return 0;
+    }
+
+    const proportion = Math.min(1, refundAmountCents / monthlyPriceCents);
+    return Math.min(monthlyCredits, Math.max(1, Math.round(proportion * monthlyCredits)));
+  }
 }
 
 // Funções de conveniência delegadas ao Domain Service

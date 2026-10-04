@@ -10,6 +10,7 @@ import {
   type PriceId,
   type UserBillingData,
 } from "~/actions/stripe";
+import { handleServerActionError } from "~/lib/handle-server-action-error";
 import { ActiveSubscriptionCard } from "~/components/billing/active-subscription-card";
 import {
   PricingToggleTabs,
@@ -110,8 +111,10 @@ function PricingCard({ plan }: { plan: PricingPlan }) {
   const handleCheckout = async () => {
     try {
       await createCheckoutSession(plan.priceId);
-    } catch {
-      toast.error("Erro ao iniciar sessão de checkout. Tente novamente.");
+    } catch (error) {
+      handleServerActionError(error, () => {
+        toast.error("Erro ao iniciar sessão de checkout. Tente novamente.");
+      });
     }
   };
 

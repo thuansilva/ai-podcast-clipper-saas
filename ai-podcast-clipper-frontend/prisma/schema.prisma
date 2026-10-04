@@ -26,7 +26,7 @@ model User {
   reservedCredits     Int                 @default(0)
   stripeCustomerId    String?             @unique
   image               String?
-  plan                String              @default("STARTER")
+  plan                String              @default("STARTER") // "STARTER" ou "PRO" (ver PlanCatalogService)
   subscription        Subscription?
   creditTransactions  CreditTransaction[]
 
@@ -43,8 +43,15 @@ model Subscription {
   currentPeriodStart   DateTime
   currentPeriodEnd     DateTime
   cancelAtPeriodEnd    Boolean  @default(false)
-  plan                 String // "CREATOR", "PRO_STUDIO"
-  monthlyCredits       Int // 150 ou 500
+  plan                 String // "STARTER" ou "PRO" (ver PlanCatalogService)
+  monthlyCredits       Int // Starter: 150 (mensal) / 1800 (anual, lump sum). Pro: 300 (mensal) / 3600 (anual, lump sum)
+  // Marca o instante em que a assinatura entrou em carência por falha de
+  // pagamento (webhook `invoice.payment_failed`). Nulo quando a assinatura
+  // nunca esteve em carência ou quando a carência foi resolvida (ver
+  // ProcessPaymentFailedUseCase / ProcessSubscriptionRenewalUseCase). Usado
+  // pelo cron `suspendExpiredPastDueSubscriptions` para decidir quando
+  // suspender a conta após os 3 dias de carência.
+  pastDueAt            DateTime?
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 

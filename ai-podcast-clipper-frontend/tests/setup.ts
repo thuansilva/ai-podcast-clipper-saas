@@ -4,6 +4,7 @@ process.env.SKIP_ENV_VALIDATION = "1";
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ??
   "postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper";
+process.env.STORAGE_PROVIDER = "local";
 process.env.AWS_ACCESS_KEY_ID = "mock_key";
 process.env.AWS_SECRET_ACCESS_KEY = "mock_secret";
 process.env.AWS_REGION = "us-east-1";
@@ -16,11 +17,12 @@ process.env.STRIPE_STARTER_ANNUAL_PRICE_ID = "price_starter_annual_mock";
 process.env.STRIPE_PRO_MONTHLY_PRICE_ID = "price_pro_monthly_mock";
 process.env.STRIPE_PRO_ANNUAL_PRICE_ID = "price_pro_annual_mock";
 process.env.STRIPE_SMALL_CREDIT_PACK = "price_small_123";
-process.env.STRIPE_MEDIUM_CREDIT_PACK = "price_med_456";
-process.env.STRIPE_LARGE_CREDIT_PACK = "price_large_789";
 process.env.STRIPE_WEBHOOK_SECRET = "whsec_mock";
 process.env.BASE_URL = "http://localhost:3000";
 process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY = "pk_test_mock";
 process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_mock_clerk";
 process.env.CLERK_SECRET_KEY = "sk_test_mock_clerk";
 process.env.CLERK_WEBHOOK_SECRET = "whsec_mock_clerk";
+process.env.INNGEST_EVENT_KEY = "evt_test_mock_key";
+process.env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID = "price_creator_mock";
+process.env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID = "price_pro_studio_mock";

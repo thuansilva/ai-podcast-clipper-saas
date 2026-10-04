@@ -17,6 +17,11 @@ import { AddCreditsFromStripeWebhookUseCase } from "~/application/use-cases/cred
 import { ProcessSubscriptionRenewalUseCase } from "~/application/use-cases/credits/process-subscription-renewal.use-case";
 import { ExpireSubscriptionUseCase } from "~/application/use-cases/credits/expire-subscription.use-case";
 import { ProcessSubscriptionCheckoutUseCase } from "~/application/use-cases/credits/process-subscription-checkout.use-case";
+import { ProcessPaymentFailedUseCase } from "~/application/use-cases/credits/process-payment-failed.use-case";
+import { ProcessChargeRefundUseCase } from "~/application/use-cases/credits/process-charge-refund.use-case";
+import { ProcessChargeDisputeUseCase } from "~/application/use-cases/credits/process-charge-dispute.use-case";
+import { SuspendExpiredPastDueSubscriptionsUseCase } from "~/application/use-cases/credits/suspend-expired-past-due-subscriptions.use-case";
+import { ResolvePastDueGracePeriodUseCase } from "~/application/use-cases/credits/resolve-past-due-grace-period.use-case";
 
 import { GenerateUploadUrlUseCase } from "~/application/use-cases/videos/generate-upload-url.use-case";
 import { ImportYouTubeVideoUseCase } from "~/application/use-cases/videos/import-youtube-video.use-case";
@@ -64,11 +69,7 @@ export function makeRefundCreditsUseCase(): RefundCreditsUseCase {
 }
 
 export function makeAddCreditsFromStripeWebhookUseCase(): AddCreditsFromStripeWebhookUseCase {
-  return new AddCreditsFromStripeWebhookUseCase(
-    new PrismaUserRepository(),
-    new PrismaCreditTransactionRepository(),
-    new PrismaUnitOfWork()
-  );
+  return new AddCreditsFromStripeWebhookUseCase(new PrismaUserRepository());
 }
 
 export function makeProcessSubscriptionRenewalUseCase(): ProcessSubscriptionRenewalUseCase {
@@ -93,6 +94,48 @@ export function makeProcessSubscriptionCheckoutUseCase(): ProcessSubscriptionChe
     new PrismaUserRepository(),
     new PrismaSubscriptionRepository(),
     new PrismaCreditTransactionRepository(),
+    new PrismaUnitOfWork()
+  );
+}
+
+export function makeProcessPaymentFailedUseCase(): ProcessPaymentFailedUseCase {
+  return new ProcessPaymentFailedUseCase(
+    new PrismaUserRepository(),
+    new PrismaSubscriptionRepository(),
+    new PrismaUnitOfWork()
+  );
+}
+
+export function makeProcessChargeRefundUseCase(): ProcessChargeRefundUseCase {
+  return new ProcessChargeRefundUseCase(
+    new PrismaUserRepository(),
+    new PrismaSubscriptionRepository(),
+    new PrismaCreditTransactionRepository(),
+    new PrismaUnitOfWork()
+  );
+}
+
+export function makeProcessChargeDisputeUseCase(): ProcessChargeDisputeUseCase {
+  return new ProcessChargeDisputeUseCase(
+    new PrismaUserRepository(),
+    new PrismaSubscriptionRepository(),
+    new PrismaCreditTransactionRepository(),
+    new PrismaUnitOfWork()
+  );
+}
+
+export function makeSuspendExpiredPastDueSubscriptionsUseCase(): SuspendExpiredPastDueSubscriptionsUseCase {
+  return new SuspendExpiredPastDueSubscriptionsUseCase(
+    new PrismaUserRepository(),
+    new PrismaSubscriptionRepository(),
+    new PrismaUnitOfWork()
+  );
+}
+
+export function makeResolvePastDueGracePeriodUseCase(): ResolvePastDueGracePeriodUseCase {
+  return new ResolvePastDueGracePeriodUseCase(
+    new PrismaUserRepository(),
+    new PrismaSubscriptionRepository(),
     new PrismaUnitOfWork()
   );
 }

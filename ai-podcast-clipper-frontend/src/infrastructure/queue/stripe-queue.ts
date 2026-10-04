@@ -6,7 +6,6 @@ import {
   makeExpireSubscriptionUseCase,
 } from "~/infrastructure/factories/use-case-factories";
 import { PrismaSubscriptionRepository } from "~/infrastructure/database/repositories/prisma-subscription.repository";
-import { env } from "~/env";
 
 export interface StripeCheckoutPayload {
   customerId: string;
@@ -29,52 +28,93 @@ export interface StripeSubscriptionPayload {
   billingReason?: string;
 }
 
+/**
+ * Payload de notificação "fire-and-forget" para eventos de billing que são
+ * processados SINCRONAMENTE no próprio handler do webhook (ver
+ * `src/app/api/webhooks/stripe/route.ts`): `invoice.payment_failed`,
+ * `charge.refunded` e `charge.dispute.created`.
+ *
+ * Diferente de `StripeCheckoutPayload`/`StripeSubscriptionPayload` (cujo
+ * dispatch para o Inngest é a ÚNICA execução da regra de negócio, de forma
+ * assíncrona), esses 3 eventos precisam reagir *imediatamente* — a política
+ * de negócio exige marcar `past_due`/revogar créditos no mesmo instante em
+ * que o webhook chega, não esperar um worker assíncrono (ver
+ * `ProcessPaymentFailedUseCase`/`ProcessChargeRefundUseCase`/
+ * `ProcessChargeDisputeUseCase`, chamados diretamente pela rota). O envio
+ * ao Inngest aqui é só para auditoria/observabilidade (ex.: uma função que
+ * notifique o time de ops) — por isso NENHUMA função Inngest deve reagir a
+ * `"stripe/billing-event.recorded"` repetindo a mutação, ou o crédito seria
+ * revogado em dobro em produção.
+ */
+export interface StripeBillingEventNotification {
+  eventType: "invoice.payment_failed" | "charge.refunded" | "charge.dispute.created";
+  customerId: string;
+  subscriptionId?: string;
+  chargeId?: string;
+  invoiceId?: string;
+  amountCents?: number;
+}
+
 export class StripeBackgroundQueue {
   private checkoutQueue: StripeCheckoutPayload[] = [];
   private subscriptionQueue: StripeSubscriptionPayload[] = [];
   private activeWorkers = 0;
   private readonly maxConcurrency = 10;
 
-  async enqueue(payload: StripeCheckoutPayload): Promise<void> {
-    // 1. Try sending to Inngest if Inngest Cloud or dev server is configured
+  /**
+   * @param stripeEventId id do evento do Stripe (`event.id`), usado como
+   * idempotency key nativa do Inngest (`id` no payload de `send`). Se
+   * ausente (ex.: chamadas internas sem evento de origem), o dispatch
+   * segue sem idempotency key no Inngest.
+   *
+   * Importante: quando o Inngest Cloud está configurado
+   * (`INNGEST_EVENT_KEY`), uma falha em `inngest.send` NÃO cai mais num
+   * fallback silencioso para a fila em memória — o erro é propagado pro
+   * chamador. Esse fallback escondia falhas reais de dispatch e permitia
+   * que o evento fosse marcado como processado no banco mesmo sem nunca
+   * ter sido de fato enfileirado (bug de perda silenciosa de crédito). A
+   * fila em memória continua existindo apenas para quando o Inngest não
+   * está configurado (dev local sem Inngest Cloud/dev server).
+   */
+  async enqueue(
+    payload: StripeCheckoutPayload,
+    stripeEventId?: string
+  ): Promise<void> {
+    // 1. Se o Inngest estiver configurado, o dispatch pro Inngest é a
+    // única via — falhas devem propagar pro chamador decidir o que fazer
+    // (ex.: não marcar o evento como processado e responder 5xx).
     if (process.env.INNGEST_EVENT_KEY) {
-      try {
-        await inngest.send({
-          name: "stripe/checkout.completed",
-          data: payload,
-        });
-        return;
-      } catch (err) {
-        console.warn(
-          "Failed to dispatch to Inngest Cloud, falling back to in-process queue:",
-          err
-        );
-      }
+      await inngest.send({
+        ...(stripeEventId ? { id: stripeEventId } : {}),
+        name: "stripe/checkout.completed",
+        data: payload,
+      });
+      return;
     }
 
-    // 2. In-process queue with concurrency limit
+    // 2. In-process queue com limite de concorrência (apenas quando o
+    // Inngest não está configurado nesse ambiente).
     this.checkoutQueue.push(payload);
     this.processNext();
   }
 
-  async enqueueSubscription(payload: StripeSubscriptionPayload): Promise<void> {
+  /** Ver documentação de {@link enqueue} sobre `stripeEventId` e o fim do
+   * fallback silencioso em caso de falha do dispatch pro Inngest. */
+  async enqueueSubscription(
+    payload: StripeSubscriptionPayload,
+    stripeEventId?: string
+  ): Promise<void> {
     if (process.env.INNGEST_EVENT_KEY) {
-      try {
-        await inngest.send({
-          name: "stripe/subscription.event",
-          data: {
-            ...payload,
-            currentPeriodStart: payload.currentPeriodStart?.toISOString(),
-            currentPeriodEnd: payload.currentPeriodEnd?.toISOString(),
-          },
-        });
-        return;
-      } catch (err) {
-        console.warn(
-          "Failed to dispatch to Inngest Cloud, falling back to in-process queue:",
-          err
-        );
-      }
+      await inngest.send({
+        ...(stripeEventId ? { id: stripeEventId } : {}),
+        name: "stripe/subscription.event",
+        data: {
+          ...payload,
+          currentPeriodStart: payload.currentPeriodStart?.toISOString(),
+          currentPeriodEnd: payload.currentPeriodEnd?.toISOString(),
+        },
+      });
+      return;
     }
 
     this.subscriptionQueue.push(payload);
@@ -101,9 +141,6 @@ export class StripeBackgroundQueue {
           await useCase.execute({
             stripeCustomerId: payload.customerId,
             priceId: payload.priceId,
-            smallPackPriceId: env.STRIPE_SMALL_CREDIT_PACK,
-            mediumPackPriceId: env.STRIPE_MEDIUM_CREDIT_PACK,
-            largePackPriceId: env.STRIPE_LARGE_CREDIT_PACK,
           });
         } catch (err) {
           console.error(
@@ -144,8 +181,6 @@ export class StripeBackgroundQueue {
               stripeCustomerId: payload.customerId,
               stripeSubscriptionId: payload.subscriptionId,
               stripePriceId: payload.priceId,
-              creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
-              proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
               currentPeriodStart: payload.currentPeriodStart,
               currentPeriodEnd: payload.currentPeriodEnd,
             });
@@ -200,14 +235,52 @@ export class StripeBackgroundQueue {
 
 export const stripeBackgroundQueue = new StripeBackgroundQueue();
 
+/**
+ * Dispara o evento de checkout pra fila/processamento assíncrono.
+ *
+ * Retorna a Promise do dispatch (não é mais fire-and-forget): o chamador
+ * deve aguardar e tratar falha antes de marcar o evento de origem como
+ * processado (ver `src/app/api/webhooks/stripe/route.ts`).
+ */
 export function dispatchStripeCheckoutEvent(
-  payload: StripeCheckoutPayload
-): void {
-  void stripeBackgroundQueue.enqueue(payload);
+  payload: StripeCheckoutPayload,
+  stripeEventId?: string
+): Promise<void> {
+  return stripeBackgroundQueue.enqueue(payload, stripeEventId);
 }
 
+/** Ver documentação de {@link dispatchStripeCheckoutEvent}. */
 export function dispatchStripeSubscriptionEvent(
-  payload: StripeSubscriptionPayload
-): void {
-  void stripeBackgroundQueue.enqueueSubscription(payload);
+  payload: StripeSubscriptionPayload,
+  stripeEventId?: string
+): Promise<void> {
+  return stripeBackgroundQueue.enqueueSubscription(payload, stripeEventId);
+}
+
+/**
+ * Notifica o Inngest (fire-and-forget, com `event.id` como idempotency
+ * key) sobre um evento de billing de reembolso/disputa/falha de pagamento
+ * cuja regra de negócio já foi executada SINCRONAMENTE pela rota do
+ * webhook antes desta chamada (ver {@link StripeBillingEventNotification}
+ * para a explicação de por que esses 3 eventos não seguem o padrão
+ * assíncrono de {@link dispatchStripeSubscriptionEvent}).
+ *
+ * Quando o Inngest não está configurado (`INNGEST_EVENT_KEY` ausente), a
+ * notificação é simplesmente um no-op — ela é puramente observacional,
+ * nunca a via de execução da regra de negócio, então não há nada para
+ * "cair" em fallback.
+ */
+export async function notifyStripeBillingEvent(
+  payload: StripeBillingEventNotification,
+  stripeEventId?: string
+): Promise<void> {
+  if (!process.env.INNGEST_EVENT_KEY) {
+    return;
+  }
+
+  await inngest.send({
+    ...(stripeEventId ? { id: stripeEventId } : {}),
+    name: "stripe/billing-event.recorded",
+    data: payload,
+  });
 }

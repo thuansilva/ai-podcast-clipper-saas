@@ -4,10 +4,16 @@ import {
   processVideo,
   processStripeWebhook,
   processSubscriptionEvent,
+  suspendExpiredPastDueSubscriptions,
 } from "~/inngest/functions";
 
 // Create an API that serves functions
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [processVideo, processStripeWebhook, processSubscriptionEvent],
+  functions: [
+    processVideo,
+    processStripeWebhook,
+    processSubscriptionEvent,
+    suspendExpiredPastDueSubscriptions,
+  ],
 });

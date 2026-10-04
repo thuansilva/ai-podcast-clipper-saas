@@ -4,9 +4,33 @@ import { useState } from "react";
 import { CheckCircle2, ExternalLink, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { createCustomerPortalSession } from "~/actions/stripe";
+import { handleServerActionError } from "~/lib/handle-server-action-error";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
 import { cn } from "~/lib/utils";
+import { PlanCatalogService } from "~/application/services/plan-catalog.service";
+import type { UserPlan } from "~/domain/entities/user";
+
+const PLAN_LABELS: Record<UserPlan, string> = {
+  STARTER: "Starter",
+  PRO: "Pro",
+};
+
+function resolvePlanName(plan: string): string {
+  return PLAN_LABELS[plan as UserPlan] ?? plan;
+}
+
+function resolveMonthlyCredits(
+  plan: string,
+  monthlyCredits: number | undefined,
+): number {
+  if (monthlyCredits !== undefined) {
+    return monthlyCredits;
+  }
+  return PlanCatalogService.getDefaultMonthlyCreditsForPlan(
+    plan === "PRO" ? "PRO" : "STARTER",
+  );
+}
 
 export interface ActiveSubscriptionData {
   id?: string;
@@ -31,16 +55,12 @@ export function ActiveSubscriptionCard({
 }: ActiveSubscriptionCardProps) {
   const [loading, setLoading] = useState(false);
 
-  const planName =
-    subscription.plan === "PRO_STUDIO"
-      ? "Pro Studio"
-      : subscription.plan === "CREATOR"
-        ? "Creator"
-        : subscription.plan;
+  const planName = resolvePlanName(subscription.plan);
 
-  const monthlyCredits =
-    subscription.monthlyCredits ??
-    (subscription.plan === "PRO_STUDIO" ? 500 : 150);
+  const monthlyCredits = resolveMonthlyCredits(
+    subscription.plan,
+    subscription.monthlyCredits,
+  );
 
   const formattedPeriodEnd = subscription.currentPeriodEnd
     ? new Intl.DateTimeFormat("pt-BR", {
@@ -58,9 +78,11 @@ export function ActiveSubscriptionCard({
       } else {
         await createCustomerPortalSession();
       }
-    } catch {
+    } catch (error) {
       setLoading(false);
-      toast.error("Erro ao acessar o portal de faturamento. Tente novamente.");
+      handleServerActionError(error, () => {
+        toast.error("Erro ao acessar o portal de faturamento. Tente novamente.");
+      });
     }
   };
 

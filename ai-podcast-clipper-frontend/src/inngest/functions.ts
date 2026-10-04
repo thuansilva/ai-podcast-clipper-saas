@@ -9,6 +9,7 @@ import {
   makeProcessSubscriptionRenewalUseCase,
   makeExpireSubscriptionUseCase,
   makeProcessSubscriptionCheckoutUseCase,
+  makeSuspendExpiredPastDueSubscriptionsUseCase,
 } from "~/infrastructure/factories/use-case-factories";
 import { PrismaSubscriptionRepository } from "~/infrastructure/database/repositories/prisma-subscription.repository";
 import { Prisma } from "@prisma/client";
@@ -528,9 +529,6 @@ export const processStripeWebhook = inngest.createFunction(
     await useCase.execute({
       stripeCustomerId: data.customerId,
       priceId: data.priceId,
-      smallPackPriceId: env.STRIPE_SMALL_CREDIT_PACK,
-      mediumPackPriceId: env.STRIPE_MEDIUM_CREDIT_PACK,
-      largePackPriceId: env.STRIPE_LARGE_CREDIT_PACK,
     });
   },
 );
@@ -547,6 +545,20 @@ export interface StripeSubscriptionEventData {
   billingReason?: string;
 }
 
+/**
+ * NOTA: `invoice.payment_failed`, `charge.refunded` e `charge.dispute.created`
+ * NÃO são tratados aqui de propósito. A política de negócio exige reagir
+ * imediatamente a esses 3 eventos (marcar `past_due`/revogar créditos no
+ * mesmo instante em que o webhook chega — ver `AGENTS.md`), então
+ * `ProcessPaymentFailedUseCase`/`ProcessChargeRefundUseCase`/
+ * `ProcessChargeDisputeUseCase` são chamados SINCRONAMENTE dentro de
+ * `src/app/api/webhooks/stripe/route.ts`, não por este worker assíncrono.
+ * Adicionar um `case` para eles aqui faria essas mutações (em especial a
+ * revogação de créditos) rodarem EM DOBRO em produção — a rota só envia a
+ * notificação `"stripe/billing-event.recorded"` (ver
+ * `notifyStripeBillingEvent`) para auditoria, e nenhuma função deve
+ * reagir a ela repetindo a regra de negócio.
+ */
 export const processSubscriptionEvent = inngest.createFunction(
   {
     id: "process-subscription-event",
@@ -572,8 +584,6 @@ export const processSubscriptionEvent = inngest.createFunction(
           stripeCustomerId: data.customerId,
           stripeSubscriptionId: data.subscriptionId,
           stripePriceId: data.priceId,
-          creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
-          proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
           currentPeriodStart: data.currentPeriodStart
             ? new Date(data.currentPeriodStart)
             : undefined,
@@ -613,6 +623,27 @@ export const processSubscriptionEvent = inngest.createFunction(
         });
       }
     }
+  },
+);
+
+/**
+ * Cron agendado: verifica periodicamente assinaturas "past_due" cuja
+ * carência (3 dias desde `invoice.payment_failed`, ver
+ * `SuspendExpiredPastDueSubscriptionsUseCase`) já expirou sem resolução
+ * (`invoice.payment_succeeded`) e suspende o acesso (revoga créditos,
+ * cancela a assinatura). Roda a cada hora — reagir em até ~1h após o fim
+ * da carência é suficiente para esta política de negócio e evita
+ * depender exclusivamente do dunning assíncrono do próprio Stripe.
+ */
+export const suspendExpiredPastDueSubscriptions = inngest.createFunction(
+  {
+    id: "suspend-expired-past-due-subscriptions",
+    triggers: [{ cron: "0 * * * *" }],
+    retries: 1,
+  },
+  async () => {
+    const useCase = makeSuspendExpiredPastDueSubscriptionsUseCase();
+    return useCase.execute();
   },
 );
 
