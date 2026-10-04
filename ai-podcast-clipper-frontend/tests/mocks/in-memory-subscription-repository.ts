@@ -40,6 +40,7 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
       cancelAtPeriodEnd: data.cancelAtPeriodEnd ?? false,
       plan: data.plan,
       monthlyCredits: data.monthlyCredits,
+      pastDueAt: existing?.pastDueAt ?? null,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     };
@@ -76,10 +77,20 @@ export class InMemorySubscriptionRepository implements ISubscriptionRepository {
       ...(data.monthlyCredits !== undefined && {
         monthlyCredits: data.monthlyCredits,
       }),
+      ...(data.pastDueAt !== undefined && { pastDueAt: data.pastDueAt }),
       updatedAt: new Date(),
     };
 
     this.subscriptions.set(stripeSubscriptionId, updated);
     return updated;
+  }
+
+  async findPastDueOlderThan(cutoff: Date): Promise<SubscriptionEntity[]> {
+    return Array.from(this.subscriptions.values()).filter(
+      (sub) =>
+        sub.status === "past_due" &&
+        sub.pastDueAt != null &&
+        sub.pastDueAt.getTime() <= cutoff.getTime()
+    );
   }
 }

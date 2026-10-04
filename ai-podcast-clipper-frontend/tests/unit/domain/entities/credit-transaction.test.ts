@@ -57,6 +57,29 @@ describe("CreditTransaction Domain Entity", () => {
     }).toThrow(DomainError);
   });
 
+  it("deve lançar DomainError se amount for zero, mesmo para o tipo REFUND", () => {
+    expect(() => {
+      CreditTransaction.create({
+        userId: "user-1",
+        amount: 0,
+        type: "REFUND",
+        description: "Revogação inválida",
+      });
+    }).toThrow(DomainError);
+  });
+
+  it("deve permitir amount negativo apenas para o tipo REFUND (revogação de créditos no ledger)", () => {
+    const tx = CreditTransaction.create({
+      userId: "user-1",
+      amount: -30,
+      type: "REFUND",
+      description: "Revogação de 30 créditos de assinatura por reembolso no Stripe",
+    });
+
+    expect(tx.amount).toBe(-30);
+    expect(tx.type).toBe("REFUND");
+  });
+
   it("deve lançar DomainError se a descrição for vazia", () => {
     expect(() => {
       CreditTransaction.create({

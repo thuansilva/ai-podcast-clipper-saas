@@ -15,7 +15,7 @@ describe("PlanPolicyService (Domain Service)", () => {
       expect(NORMAL_MAX_DURATION_SECONDS).toBe(7200);
     });
 
-    it("deve definir 3 horas (10800s) para o plano studio", () => {
+    it("deve definir 3 horas (10800s) para o plano Pro", () => {
       expect(STUDIO_MAX_DURATION_SECONDS).toBe(10800);
     });
 
@@ -34,13 +34,11 @@ describe("PlanPolicyService (Domain Service)", () => {
       expect(PlanPolicyService.getMaxDurationForPlan("STARTER")).toBe(7200);
     });
 
-    it("deve retornar 10800s (3h) para plano STUDIO (case insensitive)", () => {
-      expect(getMaxDurationForPlan("STUDIO")).toBe(10800);
-      expect(getMaxDurationForPlan("studio")).toBe(10800);
-      expect(getMaxDurationForPlan("Studio")).toBe(10800);
-      expect(getMaxDurationForPlan("PRO_STUDIO")).toBe(10800);
-      expect(getMaxDurationForPlan("pro_studio")).toBe(10800);
-      expect(PlanPolicyService.getMaxDurationForPlan("PRO_STUDIO")).toBe(10800);
+    it("deve retornar 10800s (3h) para plano PRO (case insensitive)", () => {
+      expect(getMaxDurationForPlan("PRO")).toBe(10800);
+      expect(getMaxDurationForPlan("pro")).toBe(10800);
+      expect(getMaxDurationForPlan("Pro")).toBe(10800);
+      expect(PlanPolicyService.getMaxDurationForPlan("PRO")).toBe(10800);
     });
   });
 
@@ -59,19 +57,19 @@ describe("PlanPolicyService (Domain Service)", () => {
       expect(res.valid).toBe(false);
       expect(res.maxAllowedSeconds).toBe(7200);
       expect(res.error).toContain("excede o limite de 2h");
-      expect(res.error).toContain("Studio");
+      expect(res.error).toContain("Pro");
     });
 
-    it("deve aceitar vídeos de até 3h (10800s) para o plano STUDIO", () => {
-      const res1 = validateVideoDuration(9000, "STUDIO");
+    it("deve aceitar vídeos de até 3h (10800s) para o plano PRO", () => {
+      const res1 = validateVideoDuration(9000, "PRO");
       expect(res1.valid).toBe(true);
 
-      const resEdge = validateVideoDuration(10800, "STUDIO");
+      const resEdge = validateVideoDuration(10800, "PRO");
       expect(resEdge.valid).toBe(true);
     });
 
-    it("deve rejeitar vídeos acima de 3h para o plano STUDIO", () => {
-      const res = validateVideoDuration(10801, "STUDIO");
+    it("deve rejeitar vídeos acima de 3h para o plano PRO", () => {
+      const res = validateVideoDuration(10801, "PRO");
       expect(res.valid).toBe(false);
       expect(res.maxAllowedSeconds).toBe(10800);
       expect(res.error).toContain("excede o limite máximo permitido de 3h");

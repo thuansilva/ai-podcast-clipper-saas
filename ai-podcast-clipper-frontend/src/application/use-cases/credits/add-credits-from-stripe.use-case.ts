@@ -1,19 +1,22 @@
 import { NotFoundError } from "~/domain/errors/not-found-error";
-import { User } from "~/domain/entities/user";
 import type { IUserRepository } from "~/domain/ports/user-repository";
-import type { ICreditTransactionRepository } from "~/domain/ports/credit-transaction-repository";
-import type { IUnitOfWork } from "~/domain/ports/unit-of-work";
 import type {
   AddCreditsFromStripeInput,
   AddCreditsFromStripeOutput,
 } from "~/application/dtos/credits-dtos";
 
+/**
+ * Pacotes avulsos de créditos (small/medium/large) foram descontinuados
+ * como produto (decisão de negócio: apenas assinaturas Starter/Pro
+ * continuam sendo vendidas — ver `PlanCatalogService`). Este use case é
+ * mantido apenas porque a infraestrutura de fila/Inngest ainda despacha o
+ * evento legado "stripe/checkout.completed" para sessões de checkout que
+ * não são de assinatura; ele nunca mais adiciona créditos, só garante que
+ * o cliente Stripe exista (evitando erro silencioso) e retorna
+ * `success: false`.
+ */
 export class AddCreditsFromStripeWebhookUseCase {
-  constructor(
-    private readonly userRepository: IUserRepository,
-    private readonly creditTransactionRepository: ICreditTransactionRepository,
-    private readonly unitOfWork: IUnitOfWork
-  ) {}
+  constructor(private readonly userRepository: IUserRepository) {}
 
   async execute(
     input: AddCreditsFromStripeInput
@@ -28,46 +31,6 @@ export class AddCreditsFromStripeWebhookUseCase {
       );
     }
 
-    let creditsToAdd = 0;
-    if (input.priceId === input.smallPackPriceId) {
-      creditsToAdd = 50;
-    } else if (input.priceId === input.mediumPackPriceId) {
-      creditsToAdd = 150;
-    } else if (input.priceId === input.largePackPriceId) {
-      creditsToAdd = 500;
-    }
-
-    if (creditsToAdd === 0) {
-      return { success: false, addedCredits: 0, userId: userRecord.id };
-    }
-
-    const user = User.restore(userRecord);
-    user.addCredits(creditsToAdd);
-    if (input.priceId === input.largePackPriceId) {
-      user.upgradePlan("STUDIO");
-    }
-
-    await this.unitOfWork.execute(async () => {
-      await this.userRepository.updateCredits(user.id, {
-        creditsIncrement: creditsToAdd,
-      });
-
-      if (input.priceId === input.largePackPriceId) {
-        await this.userRepository.update(user.id, { plan: user.plan });
-      }
-
-      await this.creditTransactionRepository.create({
-        userId: user.id,
-        amount: creditsToAdd,
-        type: "PURCHASE",
-        description: `Compra de pacote de ${creditsToAdd} créditos via Stripe`,
-      });
-    });
-
-    return {
-      success: true,
-      addedCredits: creditsToAdd,
-      userId: user.id,
-    };
+    return { success: false, addedCredits: 0, userId: userRecord.id };
   }
 }

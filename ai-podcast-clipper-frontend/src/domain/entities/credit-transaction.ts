@@ -45,7 +45,22 @@ export class CreditTransaction {
     description: string,
     createdAt: Date
   ) {
-    if (amount <= 0) {
+    // Regra geral do livro-razão: o valor não pode ser zero (toda
+    // transação representa um movimento real de créditos). Para a maioria
+    // dos tipos, o valor também deve ser estritamente positivo — o sentido
+    // do movimento é dado pelo `type` (ex.: "CONSUME" sempre debita),
+    // não pelo sinal do `amount`.
+    //
+    // Exceção: "REFUND" é usado tanto para devolver créditos retidos ao
+    // usuário (valor positivo, ver RefundCreditsUseCase) quanto para
+    // revogar créditos de assinatura após reembolso/disputa no Stripe
+    // (valor negativo, ver ProcessChargeRefundUseCase/ProcessChargeDisputeUseCase)
+    // — nesse segundo caso o sinal negativo é o que distingue uma
+    // devolução de uma revogação no ledger.
+    if (amount === 0) {
+      throw new DomainError("O valor da transação não pode ser zero.");
+    }
+    if (type !== "REFUND" && amount < 0) {
       throw new DomainError("O valor da transação deve ser positivo.");
     }
     if (!description || description.trim() === "") {

@@ -23,18 +23,18 @@ describe("User Rich Domain Entity", () => {
   it("deve reconstituir um usuário existente do banco via User.restore", () => {
     const user = User.restore({
       id: "user-2",
-      email: "studio@example.com",
+      email: "pro@example.com",
       credits: 100,
       reservedCredits: 20,
-      plan: "STUDIO",
-      name: "Studio User",
+      plan: "PRO",
+      name: "Pro User",
       image: "https://avatar.com/u2.png",
       stripeCustomerId: "cus_123",
     });
 
     expect(user.id).toBe("user-2");
-    expect(user.email).toBe("studio@example.com");
-    expect(user.plan).toBe("STUDIO");
+    expect(user.email).toBe("pro@example.com");
+    expect(user.plan).toBe("PRO");
     expect(user.credits).toBe(100);
     expect(user.reservedCredits).toBe(20);
     expect(user.image).toBe("https://avatar.com/u2.png");
@@ -169,7 +169,7 @@ describe("User Rich Domain Entity", () => {
         oneTimeCredits: 20,
         credits: 70,
         reservedCredits: 30,
-        plan: "CREATOR",
+        plan: "STARTER",
       });
 
       // Estorna 25 créditos com breakdown: 20 da assinatura e 5 avulsos
@@ -189,20 +189,20 @@ describe("User Rich Domain Entity", () => {
       const user = User.restore({
         id: "user-1",
         email: "user@test.com",
-        subscriptionCredits: 140, // cota CREATOR é 150, então headroom = 10
+        subscriptionCredits: 290, // cota PRO é 300, então headroom = 10
         oneTimeCredits: 20,
-        credits: 160,
+        credits: 310,
         reservedCredits: 25,
-        plan: "CREATOR",
+        plan: "PRO",
       });
 
       // Estorna 20 créditos sem breakdown: 10 vão para subscription (headroom) e 10 para oneTime
       const result = user.refundCredits(20);
 
       expect(result).toEqual({ refundedSubscription: 10, refundedOneTime: 10 });
-      expect(user.subscriptionCredits).toBe(150);
+      expect(user.subscriptionCredits).toBe(300);
       expect(user.oneTimeCredits).toBe(30);
-      expect(user.credits).toBe(180);
+      expect(user.credits).toBe(330);
       expect(user.reservedCredits).toBe(5);
     });
 
@@ -241,7 +241,7 @@ describe("User Rich Domain Entity", () => {
         subscriptionCredits: 150,
         oneTimeCredits: 20,
         reservedCredits: 0,
-        plan: "CREATOR",
+        plan: "STARTER",
       });
 
       // Consome 160 créditos (deve tirar 150 da assinatura e 10 do avulso)
@@ -263,7 +263,7 @@ describe("User Rich Domain Entity", () => {
         subscriptionCredits: 150,
         oneTimeCredits: 20,
         reservedCredits: 0,
-        plan: "CREATOR",
+        plan: "STARTER",
       });
 
       const { debitedSubscription, debitedOneTime } = user.deductCreditsPrioritized(50);
@@ -284,7 +284,7 @@ describe("User Rich Domain Entity", () => {
         subscriptionCredits: 150,
         oneTimeCredits: 20,
         reservedCredits: 0,
-        plan: "CREATOR",
+        plan: "STARTER",
       });
 
       expect(() => user.deductCreditsPrioritized(200)).toThrow(InsufficientCreditsError);
@@ -299,7 +299,7 @@ describe("User Rich Domain Entity", () => {
         subscriptionCredits: 150,
         oneTimeCredits: 20,
         reservedCredits: 0,
-        plan: "CREATOR",
+        plan: "STARTER",
       });
 
       expect(() => user.deductCreditsPrioritized(0)).toThrow(DomainError);
@@ -320,16 +320,16 @@ describe("User Rich Domain Entity", () => {
       expect(starter.canProcessDuration(7200)).toBe(true);
       expect(starter.canProcessDuration(7201)).toBe(false);
 
-      const studio = User.restore({
+      const pro = User.restore({
         id: "u2",
         email: "u2@test.com",
         credits: 10,
         reservedCredits: 0,
-        plan: "STUDIO",
+        plan: "PRO",
       });
-      expect(studio.maxVideoDurationAllowed()).toBe(10800);
-      expect(studio.canProcessDuration(10800)).toBe(true);
-      expect(studio.canProcessDuration(10801)).toBe(false);
+      expect(pro.maxVideoDurationAllowed()).toBe(10800);
+      expect(pro.canProcessDuration(10800)).toBe(true);
+      expect(pro.canProcessDuration(10801)).toBe(false);
     });
 
     it("deve atualizar o plano através de upgradePlan", () => {
@@ -339,8 +339,8 @@ describe("User Rich Domain Entity", () => {
       });
       expect(user.plan).toBe("STARTER");
 
-      user.upgradePlan("STUDIO");
-      expect(user.plan).toBe("STUDIO");
+      user.upgradePlan("PRO");
+      expect(user.plan).toBe("PRO");
       expect(user.maxVideoDurationAllowed()).toBe(10800);
     });
   });
@@ -352,7 +352,7 @@ describe("User Rich Domain Entity", () => {
         email: "test@test.com",
         credits: 40,
         reservedCredits: 10,
-        plan: "STUDIO",
+        plan: "PRO",
         name: "Nome",
         image: "img.png",
         stripeCustomerId: "cus_1",
@@ -366,7 +366,7 @@ describe("User Rich Domain Entity", () => {
         subscriptionCredits: 0,
         oneTimeCredits: 40,
         reservedCredits: 10,
-        plan: "STUDIO",
+        plan: "PRO",
         name: "Nome",
         image: "img.png",
         stripeCustomerId: "cus_1",
@@ -376,9 +376,9 @@ describe("User Rich Domain Entity", () => {
 
   describe("Cálculos de Duração e Orçamento no Domínio", () => {
     it("User.createTransient deve criar entidade transiente para uso no frontend", () => {
-      const transient = User.createTransient({ credits: 25, plan: "PRO_STUDIO" });
+      const transient = User.createTransient({ credits: 25, plan: "PRO" });
       expect(transient.credits).toBe(25);
-      expect(transient.plan).toBe("PRO_STUDIO");
+      expect(transient.plan).toBe("PRO");
       expect(transient.maxVideoDurationAllowed()).toBe(10800);
       expect(transient.hasSufficientCredits(20)).toBe(true);
       expect(transient.hasSufficientCredits(30)).toBe(false);
@@ -405,11 +405,11 @@ describe("User Rich Domain Entity", () => {
       expect(starterInvalid.valid).toBe(false);
       expect(starterInvalid.error).toContain("excede o limite de 2h");
 
-      const studioUser = User.createTransient({ credits: 10, plan: "STUDIO" });
-      expect(studioUser.canProcessDuration(10800)).toBe(true);
-      expect(studioUser.canProcessDuration(10801)).toBe(false);
+      const proUser = User.createTransient({ credits: 10, plan: "PRO" });
+      expect(proUser.canProcessDuration(10800)).toBe(true);
+      expect(proUser.canProcessDuration(10801)).toBe(false);
 
-      const studioInvalid = studioUser.validateVideoDuration(10801);
+      const studioInvalid = proUser.validateVideoDuration(10801);
       expect(studioInvalid.valid).toBe(false);
       expect(studioInvalid.error).toContain("excede o limite máximo permitido de 3h");
     });

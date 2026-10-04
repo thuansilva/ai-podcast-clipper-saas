@@ -18,18 +18,36 @@ export const env = createEnv({
     PROCESS_VIDEO_ENDPOINT_AUTH: z.string(),
     YOUTUBE_DOWNLOAD_ENDPOINT: z.string().optional(),
     STRIPE_SECRET_KEY: z.string(),
-    
-    // New Pricing Plans
-    STRIPE_STARTER_MONTHLY_PRICE_ID: z.string().default("price_starter_monthly"),
-    STRIPE_STARTER_ANNUAL_PRICE_ID: z.string().default("price_starter_annual"),
-    STRIPE_PRO_MONTHLY_PRICE_ID: z.string().default("price_pro_monthly"),
-    STRIPE_PRO_ANNUAL_PRICE_ID: z.string().default("price_pro_annual"),
-    STRIPE_SMALL_CREDIT_PACK: z.string().default("price_small"),
-    STRIPE_MEDIUM_CREDIT_PACK: z.string().default("price_medium"),
-    STRIPE_LARGE_CREDIT_PACK: z.string().default("price_large"),
-    STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID: z.string().default("price_creator"),
-    STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID: z.string().default("price_pro_studio"),
-    
+
+    // Planos de assinatura reais (únicos produtos vendidos hoje: Starter e
+    // Pro, mensal ou anual — ver PlanCatalogService). Obrigatórios e sem
+    // default "falso": um price ID incorreto/ausente deve falhar alto e
+    // cedo, nunca cair num valor placeholder silencioso.
+    STRIPE_STARTER_MONTHLY_PRICE_ID: z.string().min(1),
+    STRIPE_STARTER_ANNUAL_PRICE_ID: z.string().min(1),
+    STRIPE_PRO_MONTHLY_PRICE_ID: z.string().min(1),
+    STRIPE_PRO_ANNUAL_PRICE_ID: z.string().min(1),
+
+    /**
+     * @deprecated Taxonomia legada de planos ("Creator"/"Pro Studio"),
+     * substituída por Starter/Pro (ver PlanCatalogService). Não é mais
+     * usada para resolver plano/créditos em nenhum fluxo de produção;
+     * mantida apenas porque ainda é referenciada por testes legados que
+     * documentam o comportamento antigo. Pode ser removida quando esses
+     * testes forem desativados.
+     */
+    STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID: z.string().default("price_creator_deprecated"),
+    /** @deprecated Ver `STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID`. */
+    STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID: z.string().default("price_pro_studio_deprecated"),
+
+    /**
+     * @deprecated Pacotes avulsos de créditos foram descontinuados como
+     * produto — apenas assinaturas Starter/Pro são vendidas. Mantida só
+     * para compatibilidade com testes que verificam a rejeição explícita
+     * de price IDs de produtos descontinuados.
+     */
+    STRIPE_SMALL_CREDIT_PACK: z.string().default("price_small_deprecated"),
+
     BASE_URL: z.string(),
     STRIPE_WEBHOOK_SECRET: z.string(),
   },
@@ -59,18 +77,18 @@ export const env = createEnv({
     YOUTUBE_DOWNLOAD_ENDPOINT: process.env.YOUTUBE_DOWNLOAD_ENDPOINT,
     NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
-    
-    // New Pricing Plans mapping
+
+    // Planos de assinatura reais (Starter/Pro)
     STRIPE_STARTER_MONTHLY_PRICE_ID: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID,
     STRIPE_STARTER_ANNUAL_PRICE_ID: process.env.STRIPE_STARTER_ANNUAL_PRICE_ID,
     STRIPE_PRO_MONTHLY_PRICE_ID: process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
     STRIPE_PRO_ANNUAL_PRICE_ID: process.env.STRIPE_PRO_ANNUAL_PRICE_ID,
-    STRIPE_SMALL_CREDIT_PACK: process.env.STRIPE_SMALL_CREDIT_PACK,
-    STRIPE_MEDIUM_CREDIT_PACK: process.env.STRIPE_MEDIUM_CREDIT_PACK,
-    STRIPE_LARGE_CREDIT_PACK: process.env.STRIPE_LARGE_CREDIT_PACK,
+
+    // Deprecados (ver comentários acima, na seção `server`)
     STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID: process.env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
     STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID: process.env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
-    
+    STRIPE_SMALL_CREDIT_PACK: process.env.STRIPE_SMALL_CREDIT_PACK,
+
     BASE_URL: process.env.BASE_URL,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
   },

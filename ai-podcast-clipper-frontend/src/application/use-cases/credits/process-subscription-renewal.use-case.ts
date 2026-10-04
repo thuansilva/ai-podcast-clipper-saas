@@ -4,6 +4,7 @@ import type { IUserRepository } from "~/domain/ports/user-repository";
 import type { ICreditTransactionRepository } from "~/domain/ports/credit-transaction-repository";
 import type { ISubscriptionRepository } from "~/domain/ports/subscription-repository";
 import type { IUnitOfWork } from "~/domain/ports/unit-of-work";
+import { PlanCatalogService } from "~/application/services/plan-catalog.service";
 
 export interface ProcessSubscriptionRenewalInput {
   userId?: string;
@@ -83,12 +84,14 @@ export class ProcessSubscriptionRenewalUseCase {
       if (subRecord?.monthlyCredits) {
         monthlyCredits = subRecord.monthlyCredits;
       } else {
-        const upperPlan = plan?.toUpperCase();
-        if (upperPlan === "PRO_STUDIO" || upperPlan === "STUDIO") {
-          monthlyCredits = 500;
-        } else {
-          monthlyCredits = 150;
-        }
+        // Fallback de última instância: sem Subscription persistida para
+        // ler o monthlyCredits correto (cenário anômalo — em produção toda
+        // assinatura ativa deveria ter um registro criado no checkout).
+        // Usa a cota mensal de referência do PlanCatalog (não contempla
+        // lump sum anual, que só é conhecido via priceId no checkout).
+        const upperPlan = plan?.toUpperCase() === "PRO" ? "PRO" : "STARTER";
+        monthlyCredits =
+          PlanCatalogService.getDefaultMonthlyCreditsForPlan(upperPlan);
       }
     }
 
@@ -120,6 +123,11 @@ export class ProcessSubscriptionRenewalUseCase {
       if (this.subscriptionRepository && activeSubId) {
         await this.subscriptionRepository.update(activeSubId, {
           status: "active",
+          // Qualquer renovação bem-sucedida (`invoice.payment_succeeded`)
+          // resolve uma eventual carência em andamento — mesmo que o
+          // pagamento tenha falhado antes (`invoice.payment_failed`), a
+          // carência é cancelada e a assinatura volta a "active".
+          pastDueAt: null,
           ...(input.currentPeriodStart && {
             currentPeriodStart: input.currentPeriodStart,
           }),

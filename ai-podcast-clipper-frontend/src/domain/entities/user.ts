@@ -19,7 +19,19 @@ export interface UserEntity {
   plan?: string;
 }
 
-export type UserPlan = "STARTER" | "STUDIO" | "CREATOR" | "PRO_STUDIO";
+export type UserPlan = "STARTER" | "PRO";
+
+/**
+ * Normaliza qualquer valor de plano (ex.: vindo do banco de dados ou de um
+ * payload externo) para a taxonomia atual de planos de assinatura.
+ * Qualquer valor não reconhecido (incluindo taxonomias legadas como
+ * "CREATOR", "STUDIO" ou "PRO_STUDIO") é tratado como "STARTER" — o plano
+ * básico/gratuito — nunca lança erro aqui, pois esta normalização serve a
+ * leitura de dados já persistidos, não a validação de borda.
+ */
+function normalizePlan(plan?: string | null): UserPlan {
+  return plan?.trim().toUpperCase() === "PRO" ? "PRO" : "STARTER";
+}
 
 export interface CreateUserInput {
   id: string;
@@ -82,12 +94,7 @@ export class User {
       throw new DomainError("O saldo de créditos não pode ser negativo.");
     }
 
-    const upperPlan = plan?.trim().toUpperCase();
-    if (upperPlan === "STUDIO" || upperPlan === "PRO_STUDIO" || upperPlan === "CREATOR") {
-      this._plan = upperPlan as UserPlan;
-    } else {
-      this._plan = "STARTER";
-    }
+    this._plan = normalizePlan(plan);
 
     this._reservedCredits = reservedCredits;
     this._name = name;
@@ -153,7 +160,7 @@ export class User {
     plan?: string;
   }): User {
     const credits = Math.max(0, input.credits ?? 0);
-    const normalizedPlan = (input.plan?.trim().toUpperCase() as UserPlan) || "STARTER";
+    const normalizedPlan = normalizePlan(input.plan);
     return new User(
       "transient-user",
       "transient@preview.local",
@@ -282,12 +289,13 @@ export class User {
       refundedSubscription = Math.min(actualRefund, breakdown.subscriptionCredits ?? 0);
       refundedOneTime = actualRefund - refundedSubscription;
     } else {
-      const monthlyQuota =
-        this._plan === "PRO_STUDIO" || this._plan === "STUDIO"
-          ? 500
-          : this._plan === "CREATOR"
-            ? 150
-            : 0;
+      // Nota: "STARTER" é tanto o plano pago básico quanto o valor padrão de
+      // quem nunca assinou nada (não existe um plano "FREE"/"NONE" separado
+      // no modelo atual) — por isso, para não presumir cota de assinatura
+      // para quem nunca pagou nada, só o plano "PRO" tem headroom != 0
+      // aqui. Isso preserva o comportamento histórico desta heurística
+      // (usada apenas quando o estorno não vem com breakdown explícito).
+      const monthlyQuota = this._plan === "PRO" ? 300 : 0;
       const headroom = Math.max(0, monthlyQuota - this._subscriptionCredits);
       refundedSubscription = Math.min(actualRefund, headroom);
       refundedOneTime = actualRefund - refundedSubscription;
@@ -298,6 +306,44 @@ export class User {
     this._credits = this._subscriptionCredits + this._oneTimeCredits;
 
     return { refundedSubscription, refundedOneTime };
+  }
+
+  /**
+   * Invariante de negócio: Revogar créditos de assinatura (ex.: Stripe
+   * reembolsou ou abriu disputa sobre a cobrança de um período). Debita
+   * exclusivamente do bucket `subscriptionCredits` — créditos avulsos
+   * (`oneTimeCredits`), comprados separadamente, não são afetados — e nunca
+   * deixa o saldo negativo: se o usuário já consumiu mais do que o valor
+   * revogado, satura em zero. Retorna a quantidade efetivamente revogada
+   * (pode ser menor que `amount` quando o saldo disponível é insuficiente).
+   */
+  public revokeSubscriptionCredits(amount: number): number {
+    if (amount <= 0) {
+      throw new DomainError("A quantidade de créditos a revogar deve ser maior que zero.");
+    }
+    const actualRevoked = Math.min(amount, this._subscriptionCredits);
+    this._subscriptionCredits -= actualRevoked;
+    // Recalcula a partir dos buckets (mesmo padrão de `resetSubscriptionCredits`/
+    // `addCredits`/`refundCredits`), em vez de decrementar `_credits`
+    // diretamente — garante consistência mesmo quando o `credits` restaurado
+    // do repositório não era a soma exata dos buckets.
+    this._credits = this._subscriptionCredits + this._oneTimeCredits;
+    return actualRevoked;
+  }
+
+  /**
+   * Invariante de negócio: Suspensão total da conta por falta de pagamento
+   * (carência de `invoice.payment_failed` expirada sem resolução). Revoga
+   * TODOS os créditos (assinatura e avulsos) e rebaixa o plano para o
+   * básico — diferente de `expireSubscription()` (cancelamento normal, que
+   * preserva créditos avulsos), pois aqui o acesso é bloqueado por
+   * inadimplência, não por decisão do usuário de cancelar.
+   */
+  public suspendForNonPayment(): void {
+    this._subscriptionCredits = 0;
+    this._oneTimeCredits = 0;
+    this._credits = 0;
+    this._plan = "STARTER";
   }
 
   /**
@@ -326,12 +372,7 @@ export class User {
    * Atualização de plano
    */
   public upgradePlan(newPlan: string): void {
-    const upperPlan = newPlan?.trim().toUpperCase();
-    if (upperPlan === "STUDIO" || upperPlan === "PRO_STUDIO" || upperPlan === "CREATOR") {
-      this._plan = upperPlan as UserPlan;
-    } else {
-      this._plan = "STARTER";
-    }
+    this._plan = normalizePlan(newPlan);
   }
 
   /**

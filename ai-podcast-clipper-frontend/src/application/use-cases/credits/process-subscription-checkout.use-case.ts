@@ -4,12 +4,22 @@ import type { IUserRepository } from "~/domain/ports/user-repository";
 import type { ISubscriptionRepository } from "~/domain/ports/subscription-repository";
 import type { ICreditTransactionRepository } from "~/domain/ports/credit-transaction-repository";
 import type { IUnitOfWork } from "~/domain/ports/unit-of-work";
+import { PlanCatalogService } from "~/application/services/plan-catalog.service";
 
 export interface ProcessSubscriptionCheckoutInput {
   stripeCustomerId: string;
   stripeSubscriptionId: string;
   stripePriceId: string;
+  /**
+   * @deprecated Taxonomia legada (plano "CREATOR"/"PRO_STUDIO"). Não é mais
+   * usada para resolver plano/créditos — o `PlanCatalogService` resolve
+   * isso a partir de `stripePriceId` sozinho, usando os 4 price IDs reais
+   * declarados em `src/env.js`. Mantido apenas por compatibilidade de
+   * assinatura com chamadores legados; qualquer valor passado aqui é
+   * ignorado.
+   */
   creatorPriceId?: string;
+  /** @deprecated Ver `creatorPriceId`. */
   proStudioPriceId?: string;
   currentPeriodStart?: Date;
   currentPeriodEnd?: Date;
@@ -45,16 +55,9 @@ export class ProcessSubscriptionCheckoutUseCase {
       );
     }
 
-    let plan = "CREATOR";
-    let monthlyCredits = 150;
-
-    if (
-      input.stripePriceId === input.proStudioPriceId ||
-      input.stripePriceId.toLowerCase().includes("pro_studio")
-    ) {
-      plan = "PRO_STUDIO";
-      monthlyCredits = 500;
-    }
+    const { plan, credits: monthlyCredits } = PlanCatalogService.resolveByPriceId(
+      input.stripePriceId
+    );
 
     const user = User.restore(userRecord);
     user.resetSubscriptionCredits(monthlyCredits);

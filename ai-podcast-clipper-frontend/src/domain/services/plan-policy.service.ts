@@ -27,7 +27,7 @@ export class PlanPolicyService {
   public static getMaxDurationForPlan(plan?: string | null): number {
     if (!plan) return NORMAL_MAX_DURATION_SECONDS;
     const normalized = plan.trim().toUpperCase();
-    if (normalized === "STUDIO" || normalized === "PRO_STUDIO") {
+    if (normalized === "PRO") {
       return STUDIO_MAX_DURATION_SECONDS;
     }
     return NORMAL_MAX_DURATION_SECONDS;
@@ -50,8 +50,8 @@ export class PlanPolicyService {
         hours > 0 ? `${hours}h ${minutes}m` : `${minutes} minutos`;
 
       const errorMessage = isStudio
-        ? `O vídeo possui ${durationFormatted} e excede o limite máximo permitido de 3h para o plano Studio.`
-        : `O vídeo possui ${durationFormatted} e excede o limite de 2h do seu plano. Faça upgrade para o plano Studio para vídeos de até 3h.`;
+        ? `O vídeo possui ${durationFormatted} e excede o limite máximo permitido de 3h para o plano Pro.`
+        : `O vídeo possui ${durationFormatted} e excede o limite de 2h do seu plano. Faça upgrade para o plano Pro para vídeos de até 3h.`;
 
       return {
         valid: false,
