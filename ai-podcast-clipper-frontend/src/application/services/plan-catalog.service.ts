@@ -28,19 +28,19 @@ export interface PlanCatalogEntry {
 function buildPlanCatalog(): Map<string, PlanCatalogEntry> {
   return new Map<string, PlanCatalogEntry>([
     [
-      env.STRIPE_STARTER_MONTHLY_PRICE_ID,
+      env.STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY,
       { plan: "STARTER", billingPeriod: "monthly", credits: 150 },
     ],
     [
-      env.STRIPE_STARTER_ANNUAL_PRICE_ID,
+      env.STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL,
       { plan: "STARTER", billingPeriod: "annual", credits: 1800 },
     ],
     [
-      env.STRIPE_PRO_MONTHLY_PRICE_ID,
+      env.STRIPE_PRICE_ID_PLAN_PRO_MONTHLY,
       { plan: "PRO", billingPeriod: "monthly", credits: 300 },
     ],
     [
-      env.STRIPE_PRO_ANNUAL_PRICE_ID,
+      env.STRIPE_PRICE_ID_PLAN_PRO_ANNUAL,
       { plan: "PRO", billingPeriod: "annual", credits: 3600 },
     ],
   ]);

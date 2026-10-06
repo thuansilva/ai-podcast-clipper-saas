@@ -103,7 +103,7 @@ describe("Stripe Server Actions - Integração (schema real + Prisma real + Stri
         expect.objectContaining({
           customer: stripeCustomerId,
           line_items: [
-            expect.objectContaining({ price: env.STRIPE_PRO_MONTHLY_PRICE_ID }),
+            expect.objectContaining({ price: env.STRIPE_PRICE_ID_PLAN_PRO_MONTHLY }),
           ],
         })
       );

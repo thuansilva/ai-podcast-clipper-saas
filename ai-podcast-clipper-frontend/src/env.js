@@ -23,10 +23,10 @@ export const env = createEnv({
     // Pro, mensal ou anual — ver PlanCatalogService). Obrigatórios e sem
     // default "falso": um price ID incorreto/ausente deve falhar alto e
     // cedo, nunca cair num valor placeholder silencioso.
-    STRIPE_STARTER_MONTHLY_PRICE_ID: z.string().min(1),
-    STRIPE_STARTER_ANNUAL_PRICE_ID: z.string().min(1),
-    STRIPE_PRO_MONTHLY_PRICE_ID: z.string().min(1),
-    STRIPE_PRO_ANNUAL_PRICE_ID: z.string().min(1),
+    STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY: z.string().min(1),
+    STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL: z.string().min(1),
+    STRIPE_PRICE_ID_PLAN_PRO_MONTHLY: z.string().min(1),
+    STRIPE_PRICE_ID_PLAN_PRO_ANNUAL: z.string().min(1),
 
     /**
      * @deprecated Taxonomia legada de planos ("Creator"/"Pro Studio"),
@@ -79,10 +79,10 @@ export const env = createEnv({
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
 
     // Planos de assinatura reais (Starter/Pro)
-    STRIPE_STARTER_MONTHLY_PRICE_ID: process.env.STRIPE_STARTER_MONTHLY_PRICE_ID,
-    STRIPE_STARTER_ANNUAL_PRICE_ID: process.env.STRIPE_STARTER_ANNUAL_PRICE_ID,
-    STRIPE_PRO_MONTHLY_PRICE_ID: process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
-    STRIPE_PRO_ANNUAL_PRICE_ID: process.env.STRIPE_PRO_ANNUAL_PRICE_ID,
+    STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY: process.env.STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY,
+    STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL: process.env.STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL,
+    STRIPE_PRICE_ID_PLAN_PRO_MONTHLY: process.env.STRIPE_PRICE_ID_PLAN_PRO_MONTHLY,
+    STRIPE_PRICE_ID_PLAN_PRO_ANNUAL: process.env.STRIPE_PRICE_ID_PLAN_PRO_ANNUAL,
 
     // Deprecados (ver comentários acima, na seção `server`)
     STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID: process.env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,

@@ -305,7 +305,13 @@ async function dispatchStripeEventForProcessing(
         id?: string;
         customer?: string | { id: string } | null;
         invoice?: string | { id: string } | null;
-        refunds?: { data?: Array<{ amount?: number }> };
+        // `amount_refunded` é o campo real enviado pelo Stripe no payload
+        // padrão do webhook (sem expansão): numérico, em centavos,
+        // **cumulativo** — soma de todos os reembolsos já aplicados a este
+        // charge, incluindo parciais anteriores. `refunds.data` só existe se
+        // a chamada à API expandir explicitamente esse campo, o que nunca
+        // acontece em webhooks — por isso nunca deve ser usado como fonte.
+        amount_refunded?: number;
       };
 
       const customerId =
@@ -318,10 +324,7 @@ async function dispatchStripeEventForProcessing(
           ? charge.invoice
           : charge.invoice?.id;
 
-      const refundAmountCents = (charge.refunds?.data ?? []).reduce(
-        (total, refund) => total + (refund.amount ?? 0),
-        0
-      );
+      const refundAmountCents = charge.amount_refunded ?? 0;
 
       if (customerId) {
         // Síncrono de propósito — ver comentário em "invoice.payment_failed"

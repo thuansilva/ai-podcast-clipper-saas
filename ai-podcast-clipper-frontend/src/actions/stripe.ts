@@ -20,10 +20,10 @@ export type BillingCycle = "monthly" | "annual";
 export type PriceId = `${SubscriptionPlanId}_${BillingCycle}`;
 
 const PRICE_IDS: Record<PriceId, string> = {
-  starter_monthly: env.STRIPE_STARTER_MONTHLY_PRICE_ID,
-  starter_annual: env.STRIPE_STARTER_ANNUAL_PRICE_ID,
-  pro_monthly: env.STRIPE_PRO_MONTHLY_PRICE_ID,
-  pro_annual: env.STRIPE_PRO_ANNUAL_PRICE_ID,
+  starter_monthly: env.STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY,
+  starter_annual: env.STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL,
+  pro_monthly: env.STRIPE_PRICE_ID_PLAN_PRO_MONTHLY,
+  pro_annual: env.STRIPE_PRICE_ID_PLAN_PRO_ANNUAL,
 };
 
 export interface CreateCheckoutSessionOptions {

@@ -43,10 +43,10 @@ vi.mock("~/infrastructure/factories/use-case-factories", () => ({
 
 vi.mock("~/env", () => ({
   env: {
-    STRIPE_STARTER_MONTHLY_PRICE_ID: "price_starter_monthly_test",
-    STRIPE_STARTER_ANNUAL_PRICE_ID: "price_starter_annual_test",
-    STRIPE_PRO_MONTHLY_PRICE_ID: "price_pro_monthly_test",
-    STRIPE_PRO_ANNUAL_PRICE_ID: "price_pro_annual_test",
+    STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY: "price_starter_monthly_test",
+    STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL: "price_starter_annual_test",
+    STRIPE_PRICE_ID_PLAN_PRO_MONTHLY: "price_pro_monthly_test",
+    STRIPE_PRICE_ID_PLAN_PRO_ANNUAL: "price_pro_annual_test",
     BASE_URL: "https://test.saas.com",
   },
 }));

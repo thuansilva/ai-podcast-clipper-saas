@@ -28,7 +28,7 @@ describe("ProcessSubscriptionCheckoutUseCase", () => {
   });
 
   describe("Plans with Real Stripe Price IDs from env.js", () => {
-    it("deve ativar plano Starter mensal com 150 créditos quando receber STRIPE_STARTER_MONTHLY_PRICE_ID", async () => {
+    it("deve ativar plano Starter mensal com 150 créditos quando receber STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY", async () => {
       const userId = "user_starter_monthly_1";
       const stripeCusId = "cus_starter_monthly_1";
 
@@ -45,7 +45,7 @@ describe("ProcessSubscriptionCheckoutUseCase", () => {
       const result = await useCase.execute({
         stripeCustomerId: stripeCusId,
         stripeSubscriptionId: "sub_starter_monthly_1",
-        stripePriceId: env.STRIPE_STARTER_MONTHLY_PRICE_ID,
+        stripePriceId: env.STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY,
         creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
         proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
       });
@@ -69,7 +69,7 @@ describe("ProcessSubscriptionCheckoutUseCase", () => {
       expect(txs[0]?.amount).toBe(150);
     });
 
-    it("deve ativar plano Starter anual com 1800 créditos (lump sum) quando receber STRIPE_STARTER_ANNUAL_PRICE_ID", async () => {
+    it("deve ativar plano Starter anual com 1800 créditos (lump sum) quando receber STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL", async () => {
       const userId = "user_starter_annual_1";
       const stripeCusId = "cus_starter_annual_1";
 
@@ -86,7 +86,7 @@ describe("ProcessSubscriptionCheckoutUseCase", () => {
       const result = await useCase.execute({
         stripeCustomerId: stripeCusId,
         stripeSubscriptionId: "sub_starter_annual_1",
-        stripePriceId: env.STRIPE_STARTER_ANNUAL_PRICE_ID,
+        stripePriceId: env.STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL,
         creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
         proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
       });
@@ -110,7 +110,7 @@ describe("ProcessSubscriptionCheckoutUseCase", () => {
       expect(txs[0]?.amount).toBe(1800);
     });
 
-    it("deve ativar plano Pro mensal com 300 créditos quando receber STRIPE_PRO_MONTHLY_PRICE_ID", async () => {
+    it("deve ativar plano Pro mensal com 300 créditos quando receber STRIPE_PRICE_ID_PLAN_PRO_MONTHLY", async () => {
       const userId = "user_pro_monthly_1";
       const stripeCusId = "cus_pro_monthly_1";
 
@@ -127,7 +127,7 @@ describe("ProcessSubscriptionCheckoutUseCase", () => {
       const result = await useCase.execute({
         stripeCustomerId: stripeCusId,
         stripeSubscriptionId: "sub_pro_monthly_1",
-        stripePriceId: env.STRIPE_PRO_MONTHLY_PRICE_ID,
+        stripePriceId: env.STRIPE_PRICE_ID_PLAN_PRO_MONTHLY,
         creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
         proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
       });
@@ -151,7 +151,7 @@ describe("ProcessSubscriptionCheckoutUseCase", () => {
       expect(txs[0]?.amount).toBe(300);
     });
 
-    it("deve ativar plano Pro anual com 3600 créditos (lump sum) quando receber STRIPE_PRO_ANNUAL_PRICE_ID", async () => {
+    it("deve ativar plano Pro anual com 3600 créditos (lump sum) quando receber STRIPE_PRICE_ID_PLAN_PRO_ANNUAL", async () => {
       const userId = "user_pro_annual_1";
       const stripeCusId = "cus_pro_annual_1";
 
@@ -168,7 +168,7 @@ describe("ProcessSubscriptionCheckoutUseCase", () => {
       const result = await useCase.execute({
         stripeCustomerId: stripeCusId,
         stripeSubscriptionId: "sub_pro_annual_1",
-        stripePriceId: env.STRIPE_PRO_ANNUAL_PRICE_ID,
+        stripePriceId: env.STRIPE_PRICE_ID_PLAN_PRO_ANNUAL,
         creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
         proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
       });
@@ -229,7 +229,7 @@ describe("ProcessSubscriptionCheckoutUseCase", () => {
         useCase.execute({
           stripeCustomerId: "cus_unknown",
           stripeSubscriptionId: "sub_3",
-          stripePriceId: env.STRIPE_STARTER_MONTHLY_PRICE_ID,
+          stripePriceId: env.STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY,
         })
       ).rejects.toThrow(NotFoundError);
     });

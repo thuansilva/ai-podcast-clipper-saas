@@ -44,6 +44,18 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 
 ## Histórico
 
+### 2026-10-05: Fix Confirmado — Reembolso Stripe Não Revogava Créditos
+- **Commit(s):** (alterações pendentes de commit — ver `git status`)
+- **O que foi feito:**
+  - Bug CONFIRMADO em teste manual real pelo usuário: reembolso real disparado no Stripe (modo sandbox/teste) não revogou créditos de assinatura — a suspeita HIGH registrada em `docs/operacao/checklist-go-live.md` na auditoria de 2026-10-04 deixou de ser hipótese.
+  - Causa raiz: `src/app/api/webhooks/stripe/route.ts` lia `refundAmountCents` somando `charge.refunds?.data ?? []`, mas `refunds.data` só vem preenchido se a API do Stripe expandir explicitamente esse campo — nunca ocorre no payload padrão de webhook. `charge.refunds` chegava `undefined`, o `.reduce` sobre `[]` dava `0`, e a revogação era pulada silenciosamente (sem erro, sem log).
+  - Fix (TDD, 3 testes vermelhos pré-existentes em `tests/integration/stripe-webhook-payment-failure.integration.test.ts`, Cenário 3): troca da leitura para `charge.amount_refunded` — campo numérico cumulativo (em centavos), sempre presente no `Charge` sem expansão. Tipo inline do `charge` atualizado (`amount_refunded?: number` no lugar de `refunds?: {...}`).
+  - Confirmado que `ProcessChargeRefundUseCase`/`revokeSubscriptionCreditsForChargeEvent` tratam o valor como total único (sem somar array por conta própria) — natureza cumulativa de `amount_refunded` não introduz dupla contagem.
+  - Resultado dos testes: 2 dos 3 testes do Cenário 3 ficaram verdes. O terceiro ("reembolso parcial... revoga créditos proporcionais") permanece vermelho por um problema de dados **pré-existente e não relacionado** ao bug confirmado: usa `refundAmount: 1500` centavos como "parcial", mas o preço de referência do STARTER (`PlanCatalogService.getMonthlyPriceCentsForPlan`) também é 1500 centavos ($15/mês) — ou seja, o valor do teste é matematicamente um reembolso de 100%, não parcial, e `CreditPricingService.calculateCreditsToRevokeForRefund` revoga 100% corretamente nesse caso (comportamento documentado no próprio domain service). Esse teste não foi alterado (fora do escopo desta tarefa — instrução explícita de não editar testes para forçar passagem); precisa de decisão de quem mantém a suíte sobre corrigir o valor de teste (ex. 750 centavos) para exercitar genuinamente revogação parcial.
+  - Suíte completa rodada: `npm run test` (576 passed, 8 skipped), `npm run test:integration` (86 passed, 1 failed — o teste descrito acima), `SKIP_ENV_VALIDATION=1 npx tsc --noEmit` (sem erros).
+  - `docs/operacao/checklist-go-live.md` atualizado: item "Possível Bug de Reembolso Não Confirmado" marcado `[x]` RESOLVIDO, com nota de confirmação real + causa raiz + fix, texto original preservado em `<details>` para histórico.
+- **Por quê:** Créditos de assinatura não revogados após reembolso real representa perda financeira direta (usuário é reembolsado pelo Stripe mas mantém os créditos/acesso pagos) — bug silencioso porque o código e os testes anteriores (com payload mockado com `refunds.data` expandido manualmente) davam falsa sensação de cobertura, mascarando que o payload real do Stripe nunca inclui esse campo.
+
 ### 2026-10-04: Fase 4 Completa — Branding, Páginas Legais e Acessibilidade WCAG
 - **O que foi feito:**
   

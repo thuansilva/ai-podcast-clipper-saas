@@ -122,15 +122,11 @@ describe("Stripe Webhook Payment Failure & Refunds - Integration Tests (RED → 
         id: "ch_test_refunded",
         customer: customerId,
         refunded: true,
-        refunds: {
-          data: [
-            {
-              id: "re_test",
-              amount: additionalData.refundAmount || 2999, // em cents
-              created: Math.floor(Date.now() / 1000),
-            },
-          ],
-        },
+        amount_refunded: additionalData.refundAmount || 2999, // em cents — campo real do Stripe no webhook
+        // IMPORTANTE: Stripe NUNCA envia charge.refunds.data no webhook padrão,
+        // apenas se você expandir explicitamente (expand: ['refunds']), o que
+        // não acontece aqui. Por isso deixamos undefined/ausente, refletindo
+        // a realidade do payload de webhook.
         invoice: additionalData.invoiceId || "in_test",
         ...additionalData,
       } as any;
@@ -364,11 +360,12 @@ describe("Stripe Webhook Payment Failure & Refunds - Integration Tests (RED → 
       // RED: Teste falha porque:
       // 1. Não há handler para charge.refunded
       // 2. Não há lógica de revogação de créditos específicos do período
-      // VERDE: após implementação
+      // 3. Código atual espera charge.refunds.data (inválido), mas Stripe manda amount_refunded
+      // VERDE: após implementação + ajuste do código para usar amount_refunded
 
       const customerId = `cus_refund_${Date.now()}`;
       const invoiceId = `in_test_refund_${Date.now()}`;
-      const chargeId = `ch_test_refund_${Date.now()}`;
+      const chargeId = `cus_refund_${Date.now()}`;
       const eventId = `evt_refund_${Date.now()}`;
       const user = await createTestUser(customerId);
       const subscription = await createActiveSubscription(user.id, customerId);
@@ -396,7 +393,7 @@ describe("Stripe Webhook Payment Failure & Refunds - Integration Tests (RED → 
       expect(mockInngestSend).toHaveBeenCalled();
 
       // Asserção 3: Créditos foram revogados (reduzidos proporcionalmente)
-      // FALHA hoje
+      // FALHA hoje porque código não lê amount_refunded corretamente
       const updatedUser = await db.user.findUnique({
         where: { id: user.id },
       });
@@ -421,6 +418,79 @@ describe("Stripe Webhook Payment Failure & Refunds - Integration Tests (RED → 
       });
       expect(refundTransaction).toBeTruthy();
       expect(refundTransaction?.amount).toBeLessThan(0); // refund é negativo
+    });
+
+    it("DEVE FALHAR hoje: reembolso parcial (via amount_refunded, não refunds.data) revoga créditos proporcionais", async () => {
+      // RED: Teste falha porque:
+      // 1. Código atual ignora amount_refunded (único campo real do Stripe no webhook)
+      // 2. Código tenta ler refunds.data (que não vem no webhook padrão)
+      // VERDE: após correção usar amount_refunded
+
+      const customerId = `cus_partial_refund_${Date.now()}`;
+      const chargeId = `ch_partial_${Date.now()}`;
+      const invoiceId = `in_partial_${Date.now()}`;
+      const eventId = `evt_partial_${Date.now()}`;
+      const user = await createTestUser(customerId);
+      const subscription = await createActiveSubscription(user.id, customerId);
+
+      const creditsBefore = user.subscriptionCredits;
+      // $7,50 = metade do preço mensal do Starter ($15,00/1500 cents) — reembolso
+      // genuinamente parcial. Usar 1500 aqui testaria 100%, não parcial, porque
+      // 1500 é o preço mensal cheio do Starter (ver CreditPricingService).
+      const partialRefundCents = 750;
+
+      const event = createStripeEvent("charge.refunded", eventId, customerId, {
+        chargeId,
+        invoiceId,
+        refundAmount: partialRefundCents, // Este valor NUNCA chega em refunds.data
+      });
+      const request = createMockRequest(event);
+
+      mockInngestSend.mockResolvedValueOnce({} as any);
+      await POST(request.clone());
+
+      const updatedUser = await db.user.findUnique({
+        where: { id: user.id },
+      });
+
+      // Créditos devem ter diminuído (reembolso parcial afeta a conta)
+      // FALHA hoje porque amount_refunded (1500 cents) é ignorado
+      expect(updatedUser?.subscriptionCredits).toBeLessThan(creditsBefore);
+      // Mas não zerado (ainda há créditos sobrando)
+      expect(updatedUser?.subscriptionCredits).toBeGreaterThan(0);
+    });
+
+    it("DEVE FALHAR hoje: reembolso total (100%) via amount_refunded revoga todos os créditos da assinatura", async () => {
+      // RED: Teste falha porque código ignora amount_refunded
+      // VERDE: após usar amount_refunded corretamente
+
+      const customerId = `cus_full_refund_${Date.now()}`;
+      const chargeId = `ch_full_${Date.now()}`;
+      const invoiceId = `in_full_${Date.now()}`;
+      const eventId = `evt_full_${Date.now()}`;
+      const user = await createTestUser(customerId);
+      const subscription = await createActiveSubscription(user.id, customerId);
+
+      // Simular: charge original era 15000 cents, agora reembolso do mesmo valor
+      const fullRefundCents = 15000;
+
+      const event = createStripeEvent("charge.refunded", eventId, customerId, {
+        chargeId,
+        invoiceId,
+        refundAmount: fullRefundCents,
+      });
+      const request = createMockRequest(event);
+
+      mockInngestSend.mockResolvedValueOnce({} as any);
+      await POST(request.clone());
+
+      const updatedUser = await db.user.findUnique({
+        where: { id: user.id },
+      });
+
+      // Reembolso total revoga todos os créditos de assinatura
+      // FALHA hoje porque amount_refunded é ignorado
+      expect(updatedUser?.subscriptionCredits).toBe(0);
     });
   });
 

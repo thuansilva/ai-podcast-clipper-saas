@@ -59,7 +59,7 @@ describe("Webhook Subscription Plans - Integration (Banco Postgres real)", () =>
       const result = await checkoutUseCase.execute({
         stripeCustomerId: user.stripeCustomerId!,
         stripeSubscriptionId: `sub_starter_monthly_${Date.now()}`,
-        stripePriceId: env.STRIPE_STARTER_MONTHLY_PRICE_ID,
+        stripePriceId: env.STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY,
         creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
         proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
       });
@@ -99,7 +99,7 @@ describe("Webhook Subscription Plans - Integration (Banco Postgres real)", () =>
       const result = await checkoutUseCase.execute({
         stripeCustomerId: user.stripeCustomerId!,
         stripeSubscriptionId: `sub_starter_annual_${Date.now()}`,
-        stripePriceId: env.STRIPE_STARTER_ANNUAL_PRICE_ID,
+        stripePriceId: env.STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL,
         creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
         proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
       });
@@ -130,7 +130,7 @@ describe("Webhook Subscription Plans - Integration (Banco Postgres real)", () =>
       const result = await checkoutUseCase.execute({
         stripeCustomerId: user.stripeCustomerId!,
         stripeSubscriptionId: `sub_pro_monthly_${Date.now()}`,
-        stripePriceId: env.STRIPE_PRO_MONTHLY_PRICE_ID,
+        stripePriceId: env.STRIPE_PRICE_ID_PLAN_PRO_MONTHLY,
         creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
         proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
       });
@@ -160,7 +160,7 @@ describe("Webhook Subscription Plans - Integration (Banco Postgres real)", () =>
       const result = await checkoutUseCase.execute({
         stripeCustomerId: user.stripeCustomerId!,
         stripeSubscriptionId: `sub_pro_annual_${Date.now()}`,
-        stripePriceId: env.STRIPE_PRO_ANNUAL_PRICE_ID,
+        stripePriceId: env.STRIPE_PRICE_ID_PLAN_PRO_ANNUAL,
         creatorPriceId: env.STRIPE_CREATOR_SUBSCRIPTION_PRICE_ID,
         proStudioPriceId: env.STRIPE_PRO_STUDIO_SUBSCRIPTION_PRICE_ID,
       });
@@ -244,7 +244,7 @@ describe("Webhook Subscription Plans - Integration (Banco Postgres real)", () =>
         data: {
           userId: user.id,
           stripeSubscriptionId: `sub_existing_pro_annual_${Date.now()}`,
-          stripePriceId: env.STRIPE_PRO_ANNUAL_PRICE_ID,
+          stripePriceId: env.STRIPE_PRICE_ID_PLAN_PRO_ANNUAL,
           plan: "PRO",
           monthlyCredits: 3600,
           status: "active",
