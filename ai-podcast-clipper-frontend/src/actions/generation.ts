@@ -9,7 +9,6 @@ import {
   makeTriggerVideoProcessingUseCase,
 } from "~/infrastructure/factories/use-case-factories";
 import { DomainError } from "~/domain/errors/domain-error";
-import type { SubtitlePreset } from "~/domain/entities/clip";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 import { updateClipSchema } from "~/domain/schemas/update-clip.schema";
 import { processVideoSchema } from "~/domain/schemas/process-video.schema";
@@ -130,7 +129,7 @@ export async function updateClip(
       clipId,
       userId,
       title: parsed.data.title,
-      subtitlePreset: parsed.data.subtitlePreset as SubtitlePreset | undefined,
+      subtitlePreset: parsed.data.subtitlePreset,
       transcriptWords: parsed.data.transcriptWords,
     });
 

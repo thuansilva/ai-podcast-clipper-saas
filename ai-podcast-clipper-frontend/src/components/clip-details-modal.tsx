@@ -89,7 +89,9 @@ export function ClipDetailsModal({
               {isLoadingUrl ? (
                 <Loader2 className="h-8 w-8 animate-spin text-[var(--fumaca)]" />
               ) : playUrl ? (
-                <CustomVideoPlayer src={playUrl} />
+                // key={playUrl} força remontagem quando o vídeo muda,
+                // resetando o player — ver custom-video-player.tsx.
+                <CustomVideoPlayer key={playUrl} src={playUrl} />
               ) : (
                 <div className="flex flex-col items-center justify-center text-[var(--fumaca)]">
                   <Play className="h-10 w-10 opacity-40 text-[var(--ouro)]" />

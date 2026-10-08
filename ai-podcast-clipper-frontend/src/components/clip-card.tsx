@@ -113,7 +113,9 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
               <Loader2 className="h-8 w-8 animate-spin text-[var(--fumaca)]" />
             </div>
           ) : playUrl ? (
-            <CustomVideoPlayer src={playUrl} />
+            // key={playUrl} força remontagem quando o vídeo muda, resetando
+            // o player (play/pause/progresso) — ver custom-video-player.tsx.
+            <CustomVideoPlayer key={playUrl} src={playUrl} />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center text-[var(--fumaca)]">
               <Play className="h-10 w-10 opacity-40 text-[var(--ouro)]" />
@@ -203,7 +205,12 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
       </div>
 
       {/* Modal de Edição */}
+      {/* `key` força uma nova instância sempre que o modal é reaberto (ver
+          clip-editor-modal.tsx), garantindo que o formulário inicialize com
+          os dados atuais do clipe em vez de arrastar edições descartadas de
+          uma abertura anterior. */}
       <ClipEditorModal
+        key={isEditorOpen ? `editor-open-${clip.id}` : "editor-closed"}
         clip={clip}
         isOpen={isEditorOpen}
         onClose={() => setIsEditorOpen(false)}

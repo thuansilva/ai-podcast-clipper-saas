@@ -133,7 +133,7 @@ export class PrismaClipRepository implements IClipRepository {
         durationSeconds: clip.durationSeconds,
         subtitlePreset: clip.subtitlePreset ?? "HORMOZI",
         layoutMode: clip.layoutMode ?? "SMART_CROP",
-        transcriptWords: (clip.transcriptWords ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+        transcriptWords: clip.transcriptWords ?? Prisma.JsonNull,
       })),
     });
 

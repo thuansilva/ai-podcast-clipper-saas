@@ -1,7 +1,7 @@
 "use client";
 
 import type { Clip } from "@prisma/client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Loader2, Sparkles, Subtitles, X } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "~/components/ui/badge";
@@ -97,21 +97,22 @@ export function ClipEditorModal({
   onClose,
   onSave,
 }: ClipEditorModalProps) {
+  // O estado do formulário é inicializado diretamente a partir de `clip`
+  // (cálculo derivado durante a renderização, sem useEffect). Para que o
+  // formulário seja reinicializado com os dados atuais do clipe a cada vez
+  // que o modal é reaberto — descartando edições não salvas de uma sessão
+  // anterior —, o componente pai (`clip-card.tsx`) monta uma instância nova
+  // via `key` sempre que `isOpen` passa de fechado para aberto. Ver
+  // https://react.dev/reference/eslint-plugin-react-hooks/rules/set-state-in-effect
+  const initialWords = parseTranscriptWords(clip.transcriptWords);
   const [selectedPreset, setSelectedPreset] = useState<SubtitlePreset>(
     (clip.subtitlePreset as SubtitlePreset) || "HORMOZI",
   );
-  const [words, setWords] = useState<TranscriptWordItem[]>([]);
-  const [transcriptText, setTranscriptText] = useState("");
+  const [words, setWords] = useState<TranscriptWordItem[]>(initialWords);
+  const [transcriptText, setTranscriptText] = useState(
+    initialWords.map((w) => w.word).join(" "),
+  );
   const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      const initialWords = parseTranscriptWords(clip.transcriptWords);
-      setWords(initialWords);
-      setTranscriptText(initialWords.map((w) => w.word).join(" "));
-      setSelectedPreset((clip.subtitlePreset as SubtitlePreset) || "HORMOZI");
-    }
-  }, [isOpen, clip]);
 
   if (!isOpen) return null;
 

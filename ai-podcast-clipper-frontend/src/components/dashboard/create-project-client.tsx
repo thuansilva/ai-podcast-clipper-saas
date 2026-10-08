@@ -79,32 +79,33 @@ export function CreateProjectClient({
     return [0, 5];
   });
   const [preset, setPreset] = useState(initialSettings?.preset || "HORMOZI");
-  const [genre, setGenre] = useState(() =>
-    initialSettings?.genre || getDefaultOptionValue(options.GENRE),
+  // `genre`/`clipModel`/`aspectRatio` guardam apenas a escolha explícita do
+  // usuário ("override"); o valor efetivamente usado é derivado durante a
+  // renderização, caindo para o default de `options` quando não há escolha
+  // própria ainda. Isso substitui o antigo useEffect que fazia a mesma coisa
+  // de forma síncrona após a montagem (o que causava uma renderização extra
+  // e é desencorajado por `react-hooks/set-state-in-effect`) — e também
+  // continua correto se `options` só ficar disponível depois do primeiro
+  // render.
+  const [genreOverride, setGenreOverride] = useState(
+    () => initialSettings?.genre || "",
   );
-  const [clipModel, setClipModel] = useState(() =>
-    initialSettings?.clipModel || getDefaultOptionValue(options.CLIP_MODEL),
+  const [clipModelOverride, setClipModelOverride] = useState(
+    () => initialSettings?.clipModel || "",
   );
-  const [aspectRatio, setAspectRatio] = useState(() =>
-    initialSettings?.aspectRatio || getDefaultOptionValue(options.ASPECT_RATIO),
+  const [aspectRatioOverride, setAspectRatioOverride] = useState(
+    () => initialSettings?.aspectRatio || "",
   );
+  const genre = genreOverride || getDefaultOptionValue(options.GENRE);
+  const clipModel =
+    clipModelOverride || getDefaultOptionValue(options.CLIP_MODEL);
+  const aspectRatio =
+    aspectRatioOverride || getDefaultOptionValue(options.ASPECT_RATIO);
   const [autoZoom, setAutoZoom] = useState(initialSettings?.autoZoom ?? true);
 
   const [processing, setProcessing] = useState(false);
 
   const router = useRouter();
-
-  useEffect(() => {
-    if (options.GENRE?.length && !genre) {
-      setGenre(getDefaultOptionValue(options.GENRE));
-    }
-    if (options.CLIP_MODEL?.length && !clipModel) {
-      setClipModel(getDefaultOptionValue(options.CLIP_MODEL));
-    }
-    if (options.ASPECT_RATIO?.length && !aspectRatio) {
-      setAspectRatio(getDefaultOptionValue(options.ASPECT_RATIO));
-    }
-  }, [options, genre, clipModel, aspectRatio]);
 
   const handleFetchMeta = async (targetUrl: string) => {
     if (!targetUrl) return;
@@ -387,7 +388,7 @@ export function CreateProjectClient({
                         id="select-genre"
                         aria-label="Gênero do Conteúdo"
                         value={genre}
-                        onChange={(e) => setGenre(e.target.value)}
+                        onChange={(e) => setGenreOverride(e.target.value)}
                       >
                         {options.GENRE && options.GENRE.length > 0 ? (
                           options.GENRE.map((opt) => (
@@ -422,7 +423,7 @@ export function CreateProjectClient({
                         id="select-clip-model"
                         aria-label="Modelo do Clipe"
                         value={clipModel}
-                        onChange={(e) => setClipModel(e.target.value)}
+                        onChange={(e) => setClipModelOverride(e.target.value)}
                       >
                         {options.CLIP_MODEL && options.CLIP_MODEL.length > 0 ? (
                           options.CLIP_MODEL.map((opt) => (
@@ -465,7 +466,7 @@ export function CreateProjectClient({
                         id="select-aspect-ratio"
                         aria-label="Proporção"
                         value={aspectRatio}
-                        onChange={(e) => setAspectRatio(e.target.value)}
+                        onChange={(e) => setAspectRatioOverride(e.target.value)}
                       >
                         {options.ASPECT_RATIO &&
                         options.ASPECT_RATIO.length > 0 ? (

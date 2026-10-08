@@ -247,8 +247,7 @@ export class PrismaUploadedFileRepository implements IUploadedFileRepository {
           errorMessage: input.errorMessage,
         }),
         ...(input.manualCutsJson !== undefined && {
-          manualCutsJson: (input.manualCutsJson ??
-            Prisma.JsonNull) as Prisma.InputJsonValue,
+          manualCutsJson: input.manualCutsJson ?? Prisma.JsonNull,
         }),
         ...(input.subtitlePreset !== undefined && {
           subtitlePreset: input.subtitlePreset,

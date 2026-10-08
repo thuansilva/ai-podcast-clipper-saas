@@ -44,8 +44,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Audit dependencies (fail on high/critical)
-        run: npm audit --audit-level=high
+      - name: Audit dependencies (fail on high/critical, production deps only)
+        run: npm audit --audit-level=high --omit=dev
 
       - name: Generate Prisma Client & Apply Migrations
         env:

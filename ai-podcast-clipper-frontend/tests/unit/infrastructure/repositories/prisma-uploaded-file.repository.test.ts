@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { PrismaUploadedFileRepository } from "~/infrastructure/database/repositories/prisma-uploaded-file.repository";
 import { db } from "~/server/db";
+import { Prisma } from "@prisma/client";
+import type { UpdateUploadedFileInput } from "~/domain/ports/uploaded-file-repository";
 
 vi.mock("~/server/db", () => ({
   db: {
@@ -145,5 +147,69 @@ describe("PrismaUploadedFileRepository - findPaginatedByUserId", () => {
     );
 
     expect(result.currentPage).toBe(1);
+  });
+});
+
+describe("PrismaUploadedFileRepository - update (manualCutsJson)", () => {
+  let repository: PrismaUploadedFileRepository;
+
+  beforeEach(() => {
+    repository = new PrismaUploadedFileRepository();
+    vi.clearAllMocks();
+    vi.mocked(db.uploadedFile.update).mockResolvedValue({
+      id: "file-1",
+      userId: "user-1",
+      s3Key: "uploads/file-1.mp4",
+      displayName: "video.mp4",
+      sourceType: "UPLOAD",
+      youtubeUrl: null,
+      durationSeconds: 120,
+      creditsCost: 2,
+      uploaded: true,
+      status: "processed",
+      errorMessage: null,
+      sliceStartTime: 0,
+      sliceEndTime: null,
+      subtitlePreset: null,
+      createdAt: new Date("2026-10-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-10-01T00:00:00.000Z"),
+    } as never);
+  });
+
+  it("deve gravar manualCutsJson como recebido quando informado com lista de cortes", async () => {
+    const cuts: Array<{ title: string; startTime: number; endTime: number }> = [
+      { title: "Momento 1", startTime: 10, endTime: 40 },
+    ];
+    const input: UpdateUploadedFileInput = { manualCutsJson: cuts };
+
+    await repository.update("file-1", input);
+
+    const call = vi.mocked(db.uploadedFile.update).mock.calls[0]![0] as {
+      data: Record<string, unknown>;
+    };
+    expect(call.data.manualCutsJson).toEqual(cuts);
+  });
+
+  it("deve gravar Prisma.JsonNull quando manualCutsJson é null (limpa os cortes manuais)", async () => {
+    const input: UpdateUploadedFileInput = { manualCutsJson: null };
+
+    await repository.update("file-1", input);
+
+    const call = vi.mocked(db.uploadedFile.update).mock.calls[0]![0] as {
+      data: Record<string, unknown>;
+    };
+    expect(call.data.manualCutsJson).toBe(Prisma.JsonNull);
+  });
+
+  it("não deve incluir manualCutsJson no payload quando o campo não é informado (undefined)", async () => {
+    const input: UpdateUploadedFileInput = { status: "processing" };
+
+    await repository.update("file-1", input);
+
+    const call = vi.mocked(db.uploadedFile.update).mock.calls[0]![0] as {
+      data: Record<string, unknown>;
+    };
+    expect(call.data).not.toHaveProperty("manualCutsJson");
+    expect(call.data.status).toBe("processing");
   });
 });

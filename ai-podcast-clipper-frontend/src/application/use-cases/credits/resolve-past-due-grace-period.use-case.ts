@@ -49,7 +49,7 @@ export class ResolvePastDueGracePeriodUseCase {
         )
       : await this.subscriptionRepository.findByUserId(userRecord.id);
 
-    if (!subRecord || subRecord.status !== "past_due") {
+    if (subRecord?.status !== "past_due") {
       return { resolved: false };
     }
 

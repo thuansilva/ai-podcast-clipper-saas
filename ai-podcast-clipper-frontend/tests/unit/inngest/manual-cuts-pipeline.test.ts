@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { processVideoHandler, type PipelineStep } from "~/inngest/functions";
 import { env } from "~/env";
+import { Prisma } from "@prisma/client";
 
 
 import { fetch as undiciFetch } from "undici";
@@ -202,6 +203,60 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
       where: { id: "file-123" },
       data: { status: "processed" },
     });
+  });
+
+  it("deve persistir transcriptWords do Modal quando o clip traz palavras e Prisma.JsonNull quando não traz", async () => {
+    const words: Array<{ word: string; start: number; end: number }> = [
+      { word: "Olá", start: 10, end: 10.4 },
+    ];
+    vi.mocked(undiciFetch).mockImplementationOnce(
+      (async () =>
+        new Response(
+          JSON.stringify({
+            success: true,
+            file_id: "uploads/file-123/video.mp4",
+            clips: [
+              {
+                title: "Com palavras",
+                s3_key: "uploads/file-123/clip1.mp4",
+                start: 10,
+                end: 40,
+                duration: 30,
+                words,
+              },
+              {
+                title: "Sem palavras",
+                s3_key: "uploads/file-123/clip2.mp4",
+                start: 100,
+                end: 170,
+                duration: 70,
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        )) as any,
+    );
+
+    const result = await processVideoHandler({
+      event: {
+        data: {
+          uploadedFileId: "file-123",
+          userId: "user-456",
+          preset: "HORMOZI",
+          mode: "manual",
+          manualCuts: [{ title: "Momento 1", startTime: 10, endTime: 40 }],
+        },
+      },
+      step: createMockStep(),
+    });
+
+    expect(result.success).toBe(true);
+    expect(mockClipCreateMany).toHaveBeenCalledTimes(1);
+    const payload = mockClipCreateMany.mock.calls[0]![0] as {
+      data: Array<Record<string, unknown>>;
+    };
+    expect(payload.data[0]!.transcriptWords).toEqual(words);
+    expect(payload.data[1]!.transcriptWords).toBe(Prisma.JsonNull);
   });
 
   it("deve usar modo auto e não passar amount quando mode for auto ou omitido", async () => {

@@ -163,7 +163,7 @@ export async function processVideoHandler({
 
   try {
     // Step 1: validate-and-reserve-credits
-    const reservation = (await withSpan(
+    const reservation = await withSpan(
       "inngest.step.validate-and-reserve-credits",
       { uploadedFileId },
       () => step.run(
@@ -230,11 +230,7 @@ export async function processVideoHandler({
           creditsCost: holdResult.heldCredits,
         };
       },
-    ))) as {
-      userId: string;
-      s3Key: string;
-      creditsCost: number;
-    };
+    ));
 
     resolvedUserId = reservation.userId;
     heldCredits = reservation.creditsCost;
@@ -337,7 +333,7 @@ export async function processVideoHandler({
                 clip.preset ?? clip.subtitlePreset ?? preset ?? "HORMOZI",
               layoutMode:
                 clip.layout_mode ?? clip.layoutMode ?? "SMART_CROP",
-              transcriptWords: (words ?? Prisma.JsonNull) as Prisma.InputJsonValue,
+              transcriptWords: words ?? Prisma.JsonNull,
               uploadedFileId,
               userId: resolvedUserId!,
             };

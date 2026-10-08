@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 import { Play, Pause, Volume2, VolumeX } from "lucide-react";
 import { cn } from "~/lib/utils";
 
@@ -63,10 +63,11 @@ export function CustomVideoPlayer({ src, className }: CustomVideoPlayerProps) {
     }
   };
 
-  useEffect(() => {
-    setIsPlaying(false);
-    setProgress(0);
-  }, [src]);
+  // O estado de reprodução/progresso não é resetado via useEffect quando
+  // `src` muda: o componente pai deve passar `key={src}` (ver clip-card.tsx
+  // e clip-details-modal.tsx), forçando uma nova instância sempre que o
+  // vídeo trocar — o próprio useState já inicializa isPlaying/progress
+  // zerados para essa nova instância, sem precisar de um efeito síncrono.
 
   return (
     <div 

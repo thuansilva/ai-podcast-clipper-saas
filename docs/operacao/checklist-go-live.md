@@ -43,7 +43,7 @@ Estes itens **devem** ser corrigidos antes de qualquer release para produção.
 - [x] **Next.js 15.3.2 com CVEs críticas não patcheadas** — `npm audit` reporta 2 critical (RCE no protocolo React Flight, exposição de código-fonte de Server Actions), 5 high, 22 moderate. App usa intensamente App Router + Server Actions (superfície de ataque direta).  
   **Evidência:** `npm audit` output, `package.json`  
   **Origem:** security-specialist  
-  **Resolvido:** Next.js atualizado de 15.3.2 para 15.5.27 (went beyond minimal patch para corrigir 2 CVEs adicionais: RCE em Windows e na API de otimização de imagem AVIF, ambas só corrigidas a partir da 15.5.24). `npm audit` do pacote `next` sem mais advisories diretas. Build e testes passam. Novo item HIGH descoberto: 1 critical remanescente no AWS SDK (`fast-xml-parser` via `@aws-sdk/client-s3`), pendente de task separada para atualizar AWS SDK v3.
+  **Resolvido:** Next.js atualizado de 15.3.2 para 15.5.27 (went beyond minimal patch para corrigir 2 CVEs adicionais: RCE em Windows e na API de otimização de imagem AVIF, ambas só corrigidas a partir da 15.5.24). `npm audit` do pacote `next` sem mais advisories diretas. Build e testes passam. Novo item HIGH descoberto: 1 critical remanescente no AWS SDK (`fast-xml-parser` via `@aws-sdk/client-s3`), pendente de task separada para atualizar AWS SDK v3. **Atualização (2026-10-08):** Next.js evoluído de 15.5.27 para 16.4.0 (com `eslint-config-next` no mesmo major) para eliminar a cadeia de vulnerabilidades do `npm audit` — ver item de dependências npm em HIGH → Segurança.
 
 - [x] **Regra de lifecycle do S3 quebra clipes em 24h** — `./aws-s3-lifecycle-rules.md:15-19` documenta expiração de `uploads/`/`youtube/` em 1 dia, manter `clips/` pra sempre. Backend grava o clipe final na MESMA pasta do vídeo original (`ai-podcast-clipper-backend/main.py:232-233`), nunca em `clips/`. Se aplicadas, regras destroem todos os clipes 24h após processamento.  
   **Evidência:** `./aws-s3-lifecycle-rules.md:15-19`, `ai-podcast-clipper-backend/main.py:232-233`, `generate-upload-url.use-case.ts:20`, `import-youtube-video.use-case.ts:27`  
@@ -73,6 +73,17 @@ Estes itens **devem** ser corrigidos antes de qualquer release para produção.
   **Evidência:** Output de `npm run check` (erros de compilação)  
   **Origem:** qa-specialist  
   **Resolvido:** Os 9 erros originais mais 3 novos (introduzidos pelos testes das use cases) foram corrigidos. `npm run check` 100% verde. Suíte completa: 541 testes unitários passando.
+
+- [x] **REGRESSÃO (descoberta em 2026-10-08): `npm run check` e `next build` voltaram a falhar — 5 erros de ESLint bloqueando lint/build** — Descoberto durante verificação pós-fix de uma tarefa de `npm audit` (não causado por ela: reproduzido também com as versões antigas de `eslint`/`@typescript-eslint/*` fixadas no `package-lock.json` anterior, via downgrade temporário `eslint@9.26.0` + `@typescript-eslint/*@8.32.0`). `next build` falha com `Failed to compile` pelos mesmos 5 erros, o que bloquearia o deploy real, não só o CI.
+  **Evidência:** `SKIP_ENV_VALIDATION=1 npm run check` e `SKIP_ENV_VALIDATION=1 npm run build` (2026-10-08), ambos com saída idêntica:
+  - `src/actions/generation.ts:133` — `@typescript-eslint/no-unnecessary-type-assertion` (linha introduzida no commit `e0e6d82`, 2026-09-28)
+  - `src/application/use-cases/credits/resolve-past-due-grace-period.use-case.ts:52` — `@typescript-eslint/prefer-optional-chain` (commit `d432383`, 2026-10-04)
+  - `src/infrastructure/database/repositories/prisma-clip.repository.ts:136` — `@typescript-eslint/no-unnecessary-type-assertion` (commit `7af1062`, 2026-09-11)
+  - `src/infrastructure/database/repositories/prisma-uploaded-file.repository.ts:250` — `@typescript-eslint/no-unnecessary-type-assertion` (commit `829ebb9`, 2026-10-02)
+  - `src/inngest/functions.ts:166` e `:340` — `@typescript-eslint/no-unnecessary-type-assertion` (commits `80efb90` 2026-09-29 e `cc616bd` 2026-09-11)
+  **Origem:** devops-specialist (achado colateral ao investigar o CI de `npm audit`)
+  **Resolvido (2026-10-08):** 13 erros de lint pré-existentes corrigidos (6 ocorrências de `no-unnecessary-type-assertion`/`prefer-optional-chain` nos arquivos listados acima, cobertas por 21 testes novos escritos antes da correção, e 7 erros `react-hooks/set-state-in-effect` introduzidos pelo `eslint-plugin-react-hooks@7.1.1` trazido pelo `eslint-config-next@16.4.0`, refatorados para padrões recomendados pelo React, com 8 testes novos). Estado verificado: `npm run check` (`eslint . && tsc --noEmit`) exit 0 com 0 erros e 7 warnings pré-existentes; `npm run build` exit 0 (23 rotas). Revisão de segurança confirmou nenhum vazamento de estado entre usuários/sessões nas refatorações.
+  **Observação:** o item acima ("TypeScript: 9 erros... `npm run check` 100% verde") foi marcado resolvido em 2026-10-04, mas pelo menos 3 das linhas acima já existiam antes ou nessa mesma data — ou seja, o `npm run check` relatado como "100% verde" nessa sessão não cobriu (ou não detectou) esses 5 erros, que hoje bloqueiam `next lint` e `next build`. Não investigado a fundo o motivo da divergência (fora do escopo desta tarefa de `npm audit`); requer correção por quem tem contexto do código (ex.: `frontend-specialist`/`qa-specialist`), pois envolve lógica de billing (`resolve-past-due-grace-period.use-case.ts`) e de persistência (repositórios Prisma), não apenas estilo.
 
 - [x] **Duas use cases sem testes unitários** — `src/application/use-cases/delete-project.use-case.ts` e `src/application/use-cases/rename-project.use-case.ts` sem cobertura, violando regra TDD obrigatória do `AGENTS.md`.  
   **Evidência:** Ausência de `*.test.ts` correspondentes  
@@ -196,13 +207,24 @@ Estes itens impactam segurança, confiabilidade ou experiência crítica; recome
 
 - [ ] **Dependências Python sem versão fixada** — `ai-podcast-clipper-backend/requirements.txt` sem pinning exato (ex.: `whisperx>=0.10.0` em vez de `whisperx==0.10.2`).
 
-- [ ] **Dependências npm com vulnerabilidades críticas/high** — `fast-xml-parser`, `sharp`, `path-to-regexp`, `@grpc/grpc-js` reportados por npm audit.
+- [x] **Dependências npm com vulnerabilidades críticas/high (resolvido no gate de CI — 0 em produção; resíduo de 5 high em devDependencies aceito, ver abaixo)** — `fast-xml-parser`, `sharp`, `path-to-regexp`, `@grpc/grpc-js` reportados por npm audit.
+  **Evidência:** `npm audit` antes (2026-10-08): 50 vulnerabilidades (3 low, 25 moderate, 20 high, 2 critical). Depois de `npm audit fix` (sem `--force`): 7 (1 moderate, 6 high, **0 critical**). Depois do upgrade para Next 16.4.0 e da migração do lint (2026-10-08): `npm audit --audit-level=high --omit=dev` retorna **0 vulnerabilidades** (exit 0) e é o comando agora usado no CI (`.github/workflows/ci.yml`, step "Audit dependencies (fail on high/critical, production deps only)"). `npm audit` completo (inclui devDependencies) retorna 5 high, todas na cadeia `eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch` → `braces`.
+  **Origem:** devops-specialist
+  **Resolvido (parte segura):**
+  - As 2 vulnerabilidades **critical** (`fast-xml-parser` via `@aws-sdk/client-s3`/`@aws-sdk/s3-request-presigner`, e `proxy-addr` transitiva) e todas as **high** de devDependencies (`ajv`, `qs`, `uuid`, `flatted`, `source-map-js`, `@eslint/plugin-kit`, `@humanfs/node`, `@smithy/config-resolver`, `@grpc/grpc-js`, `@modelcontextprotocol/sdk`, `brace-expansion`, `js-yaml`, `minimatch`, `path-to-regexp`, `@typescript-eslint/*`) foram resolvidas só com `npm audit fix`, sem `--force` — o AWS SDK v3 resolveu para `3.1148.0` dentro do range já declarado em `package.json` (`^3.806.0`/`^3.808.0`, sem bump manual nem mudança de API), que não depende mais de `fast-xml-parser` (passou a usar `@aws-sdk/xml-builder`). Só `package-lock.json` mudou (`package.json` intacto). Confirmado: `npm ls fast-xml-parser` vazio, `npm ls @aws-sdk/client-s3` → `3.1148.0`.
+  - Testes relacionados a storage/S3 (`tests/unit/s3-action.test.ts`, `tests/unit/actions/s3-upload-rate-limit.test.ts`, suíte unitária completa) passam sem alteração de código em `src/infrastructure/storage/s3-storage.gateway.ts` (único arquivo de produção que importa `@aws-sdk/*`).
+  **Decisão e mitigação (2026-10-08):**
+  - `postcss` (high) deixou de aparecer: foi resolvido pelo upgrade de `next` 15.5.27 → **16.4.0** (com `eslint-config-next` 16.4.0 no mesmo major).
+  - Resíduo de 5 high, 100% devDependency: `braces` (GHSA-vfj7-8cjw-p6xm, sem versão corrigida publicada até a data da verificação) e a cadeia que depende dele (`micromatch`, `fast-glob`, `@next/eslint-plugin-next`, `eslint-config-next`). `npm ls --omit=dev` não retorna nada para essa cadeia, e `package.json` só a lista em `devDependencies`. Por decisão do usuário, o CI audita só dependências de produção (`npm audit --audit-level=high --omit=dev`). Verificado por `security-specialist`: não há exposição em produção.
+  - Não foi aplicado `npm audit fix --force` (que faria downgrade de `eslint-config-next` para 14.2.35). Reabrir este item assim que existir patch para `braces`, ou se a cadeia passar a ser dependência de produção.
 
 - [ ] **Verificação de assinatura Inngest sem validação central** — Depende de env vars não validadas em schema Zod; pode cair pra default insegura.
 
 - [ ] **Endpoint de debug Stripe ainda em produção** — `/api/dev-sign-stripe-payload` (`src/app/api/dev-sign-stripe-payload/route.ts:22-40`) protegido só por `NODE_ENV === "production"` — insuficiente.
 
 ### Infraestrutura
+
+- [ ] **Chave Clerk de produção não configurada** — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` local é placeholder inválido (`.env.production`), o que faz falhar `test:integration` (`health-check.test.ts`, `legal-pages.test.ts`: 12 falhas, problema de ambiente local pré-existente). Configurar `pk_live_...` (e a chave secreta correspondente) no ambiente de deploy antes do go-live.
 
 - [ ] **Sem `vercel.json` — configuração de deploy não versionada** — Domínio, redirects, headers, regions não documentados/reproduzíveis.
 
@@ -238,7 +260,7 @@ Estes itens impactam segurança, confiabilidade ou experiência crítica; recome
 
 - [ ] **Testes de carga com k6 nunca executados** — Sem baseline de performance; script existe mas não roda em CI.
 
-- [ ] **6 warnings ESLint não resolvidos** — Variáveis não usadas em código.
+- [ ] **7 warnings ESLint não resolvidos** — 6 `@typescript-eslint/no-unused-vars` (variáveis/imports não usados em `src/`) e 1 `react-hooks/exhaustive-deps`. Verificado em 2026-10-08: `npm run check` exit 0 (0 erros, 7 warnings). Não bloqueiam o CI.
 
 ### Acessibilidade (WCAG 2.1 AA) — 16 Violações HIGH Adicionais
 
@@ -271,11 +293,14 @@ Estes itens melhoram confiabilidade, manutenibilidade e experiência, mas não b
 - CORS explícito no backend FastAPI — `main.py` e `local_server.py` não configuram `CORSMiddleware` — comportamento padrão do FastAPI (sem CORS habilitado) bloqueia browsers cross-origin, mas política não está documentada/testada. *(Incorporado de OWASP ASVS V9 — P2)*
 - Inngest sem validação central de env vars — centralizar.
 - `ai-podcast-clipper-backend/asd/` deveria ser submódulo git real (`.gitmodules`).
+- Renomear `ai-podcast-clipper-frontend/src/middleware.ts` para `proxy.ts` (mesma pasta) — no Next 16 a convenção é `proxy.ts`; `middleware.ts` gera apenas warning de deprecação no `next build`, não é removido nem obrigatório hoje. Mantido sem alteração no upgrade para 16.4.0 (decisão deliberada, 2026-10-08).
+- Definir `turbopack.root` / `outputFileTracingRoot` em `ai-podcast-clipper-frontend/next.config.js` — o build reporta warning de múltiplos lockfiles (monorepo, `package-lock.json` na raiz e no frontend). Só cosmético, baixa prioridade.
 
 ### Qualidade
 
 - Testes e2e não existem (mas terreno já preparado via testes de integração estruturados).
 - Backend Python não testado nesta auditoria (ambiente sem Python 3.12).
+- **Lint de `tests/`, `load-tests/` e configs de raiz do frontend fora de escopo (decisão deliberada, 2026-10-08)** — Após a migração de `next lint` para `eslint .` direto (Next 16.4.0 removeu `next lint`), o novo comando varre o repositório inteiro, enquanto o antigo só cobria por padrão `app/`, `pages/`, `components/`, `lib/`, `src/` (neste projeto, na prática, só `src/`). Isso expôs ~366 erros de dívida técnica pré-existente nunca lintada antes, majoritariamente `@typescript-eslint/no-explicit-any` e `@typescript-eslint/unbound-method` em mocks de `tests/unit/**`, além de warnings em `load-tests/*.js`, `postcss.config.js` e `prettier.config.js`. Pra não travar o CI com essa dívida agora, `ai-podcast-clipper-frontend/eslint.config.js` ganhou um bloco `ignores` restaurando o escopo pra `src/` (excluindo `tests/**`, `load-tests/**`, `next.config.js`, `postcss.config.js`, `prettier.config.js`) — nenhum arquivo dentro de `src/` foi excluído, a cobertura de lint que já existia lá foi 100% preservada. Pendência: limpar os ~366 problemas de `tests/`/`load-tests/` e reincluir esses caminhos no escopo do lint numa tarefa futura dedicada.
 
 ### Produto
 
@@ -318,6 +343,7 @@ Estes itens melhoram confiabilidade, manutenibilidade e experiência, mas não b
   2. Preencher dados jurídicos reais em páginas legais (razão social, CNPJ, endereço, e-mail, foro)
   3. Decidir e-mail de suporte real (atualmente `suporte@PREENCHER.com.br`)
 
+- **Atualização (2026-10-08):** upgrade Next.js 15.5.27 → 16.4.0, migração de `next lint` para `eslint .` direto e correção de 13 erros de lint pré-existentes. Verificado: `npm run check` exit 0 (7 warnings pré-existentes), `npm run build` exit 0, `npm run test` 605 passed | 8 skipped, `npm audit --audit-level=high --omit=dev` 0 vulnerabilidades. `test:integration` com servidor rodando: 75/87 (12 falhas de ambiente, ver item Chave Clerk em HIGH → Infraestrutura). Detalhes nos itens BLOCKER "REGRESSÃO" (Qualidade e CI) e HIGH de dependências npm.
 - **High:** **43 itens** (incorporados 2 itens de rate limiting do OWASP ASVS: endpoints do backend Python [P0], actions de projeto/billing [P1])
 - **Nice:** **23 melhorias** que podem ser planejadas pós-lançamento (incorporados 3 itens do OWASP ASVS: logging estruturado [P2], CORS FastAPI [P2], rate limiter global [P2])
 

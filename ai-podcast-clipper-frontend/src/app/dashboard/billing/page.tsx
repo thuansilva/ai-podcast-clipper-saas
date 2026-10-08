@@ -203,22 +203,26 @@ export interface BillingPageProps {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export default function BillingPage(props: any) {
   const initialUser = (props as BillingPageProps | undefined)?.user;
-  const [user, setUser] = useState<UserBillingData | null>(initialUser ?? null);
+  // Quando `initialUser` já vem definido (via props, ex.: SSR), ele é a fonte
+  // da verdade e é usado diretamente durante a renderização — não precisa de
+  // estado nem de efeito para "sincronizar" um valor que já está disponível.
+  // `fetchedUser` só é necessário no fallback assíncrono (quando a página é
+  // renderizada sem a prop e os dados precisam ser buscados no client).
+  const [fetchedUser, setFetchedUser] = useState<UserBillingData | null>(null);
   const [activeTab, setActiveTab] = useState<PricingTab>("monthly");
 
   useEffect(() => {
-    if (initialUser !== undefined) {
-      setUser(initialUser);
-      return;
-    }
+    if (initialUser !== undefined) return;
     void getUserBillingData()
       .then((data) => {
-        if (data) setUser(data);
+        if (data) setFetchedUser(data);
       })
       .catch((err: unknown) => {
         console.error("Erro ao carregar dados de faturamento:", err);
       });
   }, [initialUser]);
+
+  const user = initialUser !== undefined ? initialUser : fetchedUser;
 
   const totalCredits = user?.credits ?? 0;
   const subscriptionCredits = user?.subscriptionCredits ?? 0;

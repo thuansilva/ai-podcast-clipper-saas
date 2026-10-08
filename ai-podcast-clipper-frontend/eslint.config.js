@@ -1,15 +1,26 @@
-import { FlatCompat } from "@eslint/eslintrc";
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import tseslint from "typescript-eslint";
-
-const compat = new FlatCompat({
-  baseDirectory: import.meta.dirname,
-});
 
 export default tseslint.config(
   {
+    // Escopo restrito de volta ao que `next lint` (comando antigo, removido no Next
+    // 16.4.0) cobria por padrão: app/, pages/, components/, lib/, src/ — na prática,
+    // neste projeto, só `src/`. `eslint .` (comando novo) varre o repo inteiro, então
+    // excluímos aqui o que nunca foi coberto antes (tests/, load-tests/, configs de
+    // raiz) pra não travar o CI com dívida técnica pré-existente fora de `src/`. Ver
+    // docs/operacao/checklist-go-live.md (item de limpeza de lint em tests/load-tests).
+    ignores: [
+      "tests/**",
+      "load-tests/**",
+      "next.config.js",
+      "postcss.config.js",
+      "prettier.config.js",
+    ],
+  },
+  {
     ignores: [".next", "src/components/ui/**/*", "src/stores/**/*", "src/hooks/**/*", "src/config/**/*", "src/server-actions/**/*", "src/navigation/**/*", "src/data/**/*", "src/lib/**/*", "src/components/billing/**/*", "src/components/dashboard/sidebar/**/*", "src/components/dashboard/header/**/*"],
   },
-  ...compat.extends("next/core-web-vitals"),
+  ...nextCoreWebVitals,
   {
     files: ["**/*.ts", "**/*.tsx"],
     extends: [

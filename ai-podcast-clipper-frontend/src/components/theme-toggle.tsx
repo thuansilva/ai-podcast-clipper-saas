@@ -1,62 +1,84 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 
-export function ThemeToggle({ className = "" }: { className?: string }) {
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [mounted, setMounted] = useState(false);
+type Theme = "dark" | "light";
 
+function applyThemeToDocument(theme: Theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+  if (theme === "dark") {
+    document.documentElement.classList.add("dark");
+    document.documentElement.classList.remove("light");
+  } else {
+    document.documentElement.classList.remove("dark");
+    document.documentElement.classList.add("light");
+  }
+}
+
+// Lê o tema atualmente aplicado no <html> — a fonte da verdade é o DOM (um
+// sistema externo ao React), não um estado React duplicado.
+function getSnapshot(): Theme {
+  if (typeof document === "undefined") return "dark";
+  return document.documentElement.getAttribute("data-theme") === "light"
+    ? "light"
+    : "dark";
+}
+
+// No servidor não há `document`; assume-se escuro (mesmo default que antes,
+// quando `mounted` era `false`).
+function getServerSnapshot(): Theme {
+  return "dark";
+}
+
+function subscribeToThemeChange(onStoreChange: () => void) {
+  window.addEventListener("theme-change", onStoreChange);
+  return () => window.removeEventListener("theme-change", onStoreChange);
+}
+
+export function ThemeToggle({ className = "" }: { className?: string }) {
+  // `useSyncExternalStore` é o hook feito para sincronizar com um sistema
+  // externo mutável (aqui, o atributo `data-theme` do <html>, compartilhado
+  // entre múltiplas instâncias deste componente via o evento
+  // "theme-change"). Substitui o antigo par `useState(theme)` +
+  // `useState(mounted)` sincronizados via useEffect com `setState` síncrono
+  // no corpo do efeito — desencorajado por
+  // https://react.dev/reference/eslint-plugin-react-hooks/rules/set-state-in-effect.
+  const theme = useSyncExternalStore(
+    subscribeToThemeChange,
+    getSnapshot,
+    getServerSnapshot,
+  );
+
+  // Efeito legítimo: na primeira montagem no client, lê a preferência
+  // persistida (localStorage) e aplica no documento. Isso é uma
+  // sincronização genuína com sistemas externos ao React (DOM + storage do
+  // navegador) — não há nenhum `setState` síncrono aqui; a UI é atualizada
+  // através do evento "theme-change", que o `useSyncExternalStore` acima já
+  // está inscrito para ouvir.
   useEffect(() => {
-    setMounted(true);
-    // Verificar tema atual aplicado no documento ou salvo no localStorage
-    const saved = typeof window !== "undefined" ? localStorage.getItem("theme") : null;
+    const saved =
+      typeof window !== "undefined" ? localStorage.getItem("theme") : null;
     const currentAttr = document.documentElement.getAttribute("data-theme");
-    const initialTheme: "dark" | "light" =
+    const initialTheme: Theme =
       saved === "light" || currentAttr === "light" ? "light" : "dark";
 
-    setTheme(initialTheme);
-    document.documentElement.setAttribute("data-theme", initialTheme);
-    if (initialTheme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.classList.remove("light");
-    } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.classList.add("light");
-    }
-
-    const handleThemeChange = () => {
-      const activeAttr = document.documentElement.getAttribute("data-theme");
-      if (activeAttr === "light" || activeAttr === "dark") {
-        setTheme(activeAttr);
-      }
-    };
-
-    window.addEventListener("theme-change", handleThemeChange);
-    return () => window.removeEventListener("theme-change", handleThemeChange);
+    applyThemeToDocument(initialTheme);
+    window.dispatchEvent(new Event("theme-change"));
   }, []);
 
   const toggleTheme = () => {
-    const nextTheme = theme === "dark" ? "light" : "dark";
-    setTheme(nextTheme);
+    const nextTheme: Theme = theme === "dark" ? "light" : "dark";
 
     try {
       localStorage.setItem("theme", nextTheme);
     } catch {}
 
-    document.documentElement.setAttribute("data-theme", nextTheme);
-    if (nextTheme === "dark") {
-      document.documentElement.classList.add("dark");
-      document.documentElement.classList.remove("light");
-    } else {
-      document.documentElement.classList.remove("dark");
-      document.documentElement.classList.add("light");
-    }
-
+    applyThemeToDocument(nextTheme);
     window.dispatchEvent(new Event("theme-change"));
   };
 
-  const isDark = mounted ? theme === "dark" : true;
+  const isDark = theme === "dark";
 
   return (
     <button

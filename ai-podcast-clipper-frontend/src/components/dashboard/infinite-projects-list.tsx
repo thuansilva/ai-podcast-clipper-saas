@@ -33,15 +33,43 @@ export function InfiniteProjectsList({
   const requestIdRef = useRef(0);
   const isLoadingRef = useRef(false);
 
-  // Reset when filters change
-  useEffect(() => {
-    requestIdRef.current++;
-    isLoadingRef.current = false;
+  // Reset when filters change. Em vez de um useEffect (que dispararia um
+  // setState síncrono incondicional a cada mudança, causando uma
+  // renderização em cascata extra), guardamos os últimos filtros vistos e
+  // ajustamos o estado diretamente durante a renderização — o padrão
+  // "Adjusting some state when a prop changes" documentado em
+  // https://react.dev/learn/you-might-not-need-an-effect. A comparação por
+  // referência contra `prevFilters` garante que o ajuste só rode uma vez
+  // por mudança real (sem loop).
+  const [prevFilters, setPrevFilters] = useState({
+    initialData,
+    search,
+    sort,
+    initialTotalPages,
+  });
+  if (
+    prevFilters.initialData !== initialData ||
+    prevFilters.search !== search ||
+    prevFilters.sort !== sort ||
+    prevFilters.initialTotalPages !== initialTotalPages
+  ) {
+    setPrevFilters({ initialData, search, sort, initialTotalPages });
     setProjects(initialData);
     setPage(1);
     setHasMore(initialTotalPages > 1);
     setHasError(false);
     setIsLoading(false);
+  }
+
+  // Refs não são lidos/mutados durante a renderização (ver
+  // react-hooks/refs) — o cancelamento de requisições em andamento e a
+  // liberação do "lock" de carregamento continuam presos a um efeito, que é
+  // o lugar correto para mutar refs. O array de dependências aqui é só
+  // sobre essas mesmas props de filtro, então este efeito dispara exatamente
+  // nos mesmos commits em que o ajuste de estado acima acontece.
+  useEffect(() => {
+    requestIdRef.current++;
+    isLoadingRef.current = false;
   }, [initialData, search, sort, initialTotalPages]);
 
   const handleRetry = useCallback(() => {

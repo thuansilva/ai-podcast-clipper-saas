@@ -22,11 +22,17 @@ export function VideosToolbar() {
   const currentSortParam = searchParams.get("sort") ?? "desc";
 
   const [searchTerm, setSearchTerm] = useState(currentSearchParam);
-
-  // Sync internal search input state if URL search param changes
-  useEffect(() => {
+  // Guarda o último valor de `currentSearchParam` já refletido em
+  // `searchTerm`, para ajustar o input local quando a URL muda por fora
+  // (ex.: navegação direta ou botão voltar do navegador) sem precisar de um
+  // useEffect — cálculo/ajuste feito durante a própria renderização, como
+  // recomendado em https://react.dev/learn/you-might-not-need-an-effect
+  // ("Adjusting some state when a prop changes").
+  const [syncedSearchParam, setSyncedSearchParam] = useState(currentSearchParam);
+  if (currentSearchParam !== syncedSearchParam) {
+    setSyncedSearchParam(currentSearchParam);
     setSearchTerm(currentSearchParam);
-  }, [currentSearchParam]);
+  }
 
   // Debounced update for search input
   useEffect(() => {
