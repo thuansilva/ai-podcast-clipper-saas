@@ -2,3 +2,6 @@ cenario,grupo,timestamp_T0,timestamp_T1_alerta,mttd_segundos,trace_encontrado,ti
 backend_indisponivel,com_observabilidade,2026-09-30T04:28:09Z,2026-09-30T04:29:31Z,82,nao,2026-09-30T04:30:32Z
 latencia_alta,com_observabilidade,2026-09-30T04:40:36Z,2026-09-30T04:43:36Z,180,nao,2026-09-30T04:49:37Z
 falha_webhook_stripe,com_observabilidade,2026-09-30T05:07:22Z,2026-09-30T05:10:11Z,169,sim,2026-09-30T05:15:41Z
+backend_indisponivel,baseline,2026-10-07T07:03:07Z,2026-10-07T07:03:33Z,26,n/a,2026-10-07T07:04:04Z
+latencia_alta,baseline,2026-10-07T07:07:08Z,2026-10-07T07:08:37Z,89,n/a,2026-10-07T07:11:20Z
+falha_webhook_stripe,baseline,2026-10-07T07:18:33Z,2026-10-07T07:18:53Z,20,n/a,2026-10-07T07:22:56Z

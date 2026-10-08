@@ -44,6 +44,15 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 
 ## Histórico
 
+### 2026-10-07: Experimento de Observabilidade — Grupo Baseline Medido
+- **Commit(s):** (alterações pendentes de commit — ver `git status`)
+- **O que foi feito:**
+  - Executado manualmente o roteiro `docs/pesquisa/experimento-observabilidade/roteiro-baseline.md` nos 3 cenários (`backend_indisponivel`, `latencia_alta`, `falha_webhook_stripe`), preenchendo o grupo `baseline` em `resultados.csv` (faltava desde o experimento original de 2026-09-30, que só tinha o grupo `com_observabilidade`).
+  - MTTD baseline medido: 26s/89s/20s, respectivamente — nos três casos, mais rápido que o MTTD com observabilidade (82s/180s/169s), o oposto da hipótese original do experimento.
+  - Causa identificada e documentada: o baseline mediu reação de alguém testando ativamente logo após a própria injeção da falha, não detecção "ambiente" de uma equipe sem vigilância — enquanto as regras de alerta do Grafana usam janelas deliberadas (`for: 1m`, `rate(...[5m])`) para evitar falso positivo. A comparação, portanto, não prova nada sobre o valor real da observabilidade em produção; prova só que alertas com janela de agregação são mais lentos que um teste manual no instante exato da falha.
+  - Novo documento `docs/pesquisa/experimento-observabilidade/objetivos-e-resultados.md`: consolida objetivo geral/específicos, metodologia, todos os resultados (com e sem observabilidade) e essa limitação metodológica — criado para servir de base a um artigo. Indexado em `docs/README.md`.
+- **Por quê:** Sem o grupo baseline, a pergunta de pesquisa central do experimento (observabilidade reduz MTTD comparado a detecção manual?) não podia ser respondida, nem qualitativa nem quantitativamente; a limitação encontrada evita que o artigo publique uma conclusão "observabilidade piora o MTTD" sem o contexto que a invalida.
+
 ### 2026-10-05: Fix Confirmado — Reembolso Stripe Não Revogava Créditos
 - **Commit(s):** (alterações pendentes de commit — ver `git status`)
 - **O que foi feito:**

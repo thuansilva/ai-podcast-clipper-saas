@@ -54,6 +54,7 @@ Experimentos e prototipagens em progresso que **não** são decisões finais de 
 
 | Documento | O que cobre |
 |-----------|-----------|
+| **experimento-observabilidade/objetivos-e-resultados.md** | Objetivo geral/específicos do experimento (MTTD com vs. sem observabilidade), metodologia e resultados completos dos 2 grupos (`com_observabilidade` e `baseline`) nos 3 cenários de falha — incluindo a limitação metodológica encontrada no baseline. Base para o artigo. |
 | **experimento-observabilidade/roteiro-baseline.md** | Baseline local de OpenTelemetry: como subir stack mínimo, índices esperados, validação de saída de spans. |
 | **experimento-observabilidade/guia-dashboards-grafana.md** | Templates de dashboard Grafana para monitorar Next.js (memória, HTTP requests) e backend (GPU, CPU, queued tasks). |
 
