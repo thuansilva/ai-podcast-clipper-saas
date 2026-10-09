@@ -29,6 +29,7 @@
     "test:load:stress": "PATH=./bin:$PATH k6 run --env PROFILE=stress load-tests/scenarios/main-suite.js",
     "test:load:stripe": "PATH=./bin:$PATH k6 run load-tests/scenarios/stripe-webhook.js",
     "test:load:s3": "PATH=./bin:$PATH k6 run load-tests/scenarios/s3-presign-flow.js",
+    "test:everything": "bash scripts/test-everything.sh",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

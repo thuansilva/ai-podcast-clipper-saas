@@ -31,6 +31,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# logs gerados por scripts/test-everything.sh (servidor Next.js e Inngest
+# dev server em background)
+/scripts/next-server.log
+/scripts/inngest-dev.log
+
 # local env files
 # do not commit any .env files to git, except for the .env.example file. https://create.t3.gg/en/usage/env-variables#using-environment-variables
 .env

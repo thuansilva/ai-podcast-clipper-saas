@@ -53,6 +53,7 @@ npm run check            # lint + typecheck
 npm run test             # testes unitários (Vitest)
 npm run test:integration # testes de integração
 npm run test:load        # testes de carga (k6)
+npm run test:everything  # modo completo: sobe Postgres/app/Inngest e roda unit + integração + smoke de carga numa tacada só (ver ai-podcast-clipper-frontend/load-tests/README.md)
 npm run db:studio        # Prisma Studio
 npm run db:push          # aplica o schema no banco (dev)
 npm run db:generate      # cria migration (Prisma migrate dev)

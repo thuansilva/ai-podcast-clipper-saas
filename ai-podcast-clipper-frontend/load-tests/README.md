@@ -56,6 +56,23 @@ npm run test:load:stripe
 npm run test:load:s3
 ```
 
+### Executando tudo de uma vez (modo completo)
+
+Se você só quer rodar a suíte inteira (unitários + integração + smoke de carga)
+numa única execução, sem subir manualmente Postgres/app/Inngest antes, use:
+
+```bash
+npm run test:everything
+```
+
+Esse comando (`scripts/test-everything.sh`) sobe o Postgres via Docker Compose,
+builda e inicia o Next.js com env vars fake/dummy, sobe o Inngest dev server,
+roda `test` → `test:integration` → `test:load:smoke` em sequência, e limpa os
+processos de app/Inngest no final (o Postgres fica rodando, para reuso rápido
+em execuções futuras). Ele **não** roda `test:load`/`test:load:stress` (pesados
+demais para o dia a dia) — para carga pesada, rode os scripts `test:load:*`
+individuais manualmente, com o app já de pé.
+
 ---
 
 ## 3. Variáveis de Ambiente Customizáveis
