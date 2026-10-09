@@ -44,8 +44,17 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 
 ## Histórico
 
+### 2026-10-09: Script `test:everything` — Modo Completo (Unit + Integração + Carga)
+- **Commit(s):** `82fd5fe`
+- **O que foi feito:**
+  - Novo `ai-podcast-clipper-frontend/scripts/test-everything.sh` + script `npm run test:everything`: sobe o Postgres (docker compose), aplica migrations (com baseline não-destrutivo se detectar banco de dev pré-existente sem drift), roda unitários, builda e sobe o app, sobe o Inngest dev server, roda a suíte de integração completa (incluindo os 2 arquivos que precisam do app real de pé), roda o smoke de carga (k6), e limpa os processos no final via `trap EXIT` — sem derrubar o Postgres (fica disponível pra outros fluxos de dev).
+  - Scripts individuais (`test`, `test:integration`, `test:all`, `test:load:*`) ficaram intactos — é um modo adicional, não substituição.
+  - Validado com execução real (não só leitura de código): 605 testes unitários, 96 testes de integração (15 arquivos, incluindo `health-check`/`legal-pages` contra o app real), smoke de carga com 0% de falha em 640 requisições (prova que o dispatch do webhook Stripe → Inngest funcionou de ponta a ponta), e nenhum processo órfão nas portas 3000/8288 depois do cleanup.
+  - Documentado em `AGENTS.md` (lista de scripts úteis) e `load-tests/README.md`.
+- **Por quê:** Não existia um jeito de rodar a suíte inteira (incluindo carga) com um único comando, sem orquestração manual de banco/app/Inngest — isso dificultava validar mudanças de ponta a ponta antes de confiar no CI.
+
 ### 2026-10-09: Fix de Atomicidade Real no `PrismaUnitOfWork` (Bug Financeiro Confirmado)
-- **Commit(s):** (alterações pendentes de commit — ver `git status`)
+- **Commit(s):** `2556a93`
 - **O que foi feito:**
   - Bug confirmado: `PrismaUnitOfWork.execute()` abria `db.$transaction(async () => operation())` mas **ignorava** o `TransactionClient` recebido no callback. Repositórios chamados dentro de `operation()` (`PrismaUserRepository`, `PrismaCreditTransactionRepository`, etc.) importam `db` global diretamente, não o `tx` — cada escrita de uma "unidade de trabalho" de crédito/billing comitava isolada e imediata no banco real, sem rollback se uma escrita posterior falhasse. Afetava todos os use cases de `src/application/use-cases/credits/*.ts`.
   - Fix: `src/infrastructure/database/repositories/prisma-unit-of-work.ts` agora popula `dbTransactionContext` (o `AsyncLocalStorage` de `src/server/db.ts`, construído originalmente para o isolamento de testes) com `{ tx }` via `dbTransactionContext.run({ tx }, operation)`, redirecionando automaticamente qualquer `db.*` chamado dentro da unidade de trabalho para a transação real. Interface `IUnitOfWork` e call sites dos use cases não mudaram.
@@ -54,18 +63,20 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
   - Documentação atualizada: novo item BLOCKER em `docs/operacao/checklist-go-live.md` (seção Billing e Stripe).
 - **Por quê:** Era um bug real de atomicidade em operações financeiras (créditos/billing) que passava despercebido porque "parecia" transacional — qualquer falha na segunda escrita de um use case de crédito deixava o banco em estado inconsistente (débito sem registro, ou pior) sem nenhum rollback real acontecer em produção.
 
-### 2026-10-09: Isolamento de Testes de Integração por Rollback de Transação
-- **Commit(s):** (alterações pendentes de commit — ver `git status`)
+### 2026-10-09: Isolamento de Testes de Integração por Rollback de Transação + `connection_limit`
+- **Commit(s):** `2556a93`
 - **O que foi feito:**
   - `src/server/db.ts`: `db` passou a ser um `Proxy` sobre o client Prisma. Sem transação de teste ativa, delega ao client real (funções vinculadas e cacheadas). Com escopo de teste (`dbTransactionContext`, `AsyncLocalStorage`), lê da transação e converte `$transaction` aninhado em SAVEPOINT.
   - `tests/helpers/with-rollback-transaction.ts`: `withRollbackTransaction` e `useRollbackTransactionPerTest`. O helper usa `aroundEach` do Vitest, porque `enterWith` dentro de `beforeEach` não chega ao corpo do teste.
   - 9 arquivos de integração migrados: limpeza manual (`afterAll`/`deleteMany`) removida e fixtures `beforeAll` convertidas em `beforeEach`. `youtube-info-action` ficou de fora por não acessar o banco.
   - Novo `tests/integration/rollback-transaction.integration.test.ts` (8 testes do próprio mecanismo: isolamento entre testes, savepoint, erro propagado).
+  - `DATABASE_URL` de testes (`.github/workflows/ci.yml`, `tests/setup.ts`) ganhou `?connection_limit=5`: cada arquivo de teste de integração roda num processo filho separado (Vitest, pool "forks", `fileParallelism` padrão), cada um abrindo seu próprio pool de conexões Prisma — sem limite explícito, isso pode se aproximar do `max_connections` do Postgres conforme a suíte crescer.
+  - Também corrigidos, na mesma leva: 3 causas raiz de falhas de integração que só apareciam contra um banco 100% migrado (CI) e não no banco de dev local desatualizado — fixture de usuário com `plan: "FREE"` (valor banido pela migration de taxonomia de planos), 2 testes dependentes de seed global de `ProcessingOption` nunca rodado no CI (passaram a criar os próprios fixtures), e timeout de 20s nos testes de concorrência de `credit-service.test.ts` (hardware de CI mais lento).
   - Verificação: suíte de integração com banco novo (`qa_rollback_test`) e tabelas zeradas após a execução; `npm run check`, `npm run test` (605 passed | 8 skipped) e `npm run build` com exit 0.
-- **Por quê:** Cada teste passa a começar e terminar com o banco no mesmo estado, sem depender de ordem nem de limpeza manual, o que eliminou a classe de bugs de dado residual que vinha aparecendo. `credit-service.test.ts` continua sem transação de propósito (testa concorrência real).
+- **Por quê:** Cada teste passa a começar e terminar com o banco no mesmo estado, sem depender de ordem nem de limpeza manual, o que eliminou a classe de bugs de dado residual que vinha aparecendo. `credit-service.test.ts` continua sem transação de propósito (testa concorrência real). O `connection_limit` evita um problema de escala ainda não manifestado, mas identificado ao analisar como os testes rodam em paralelo.
 
 ### 2026-10-08: Upgrade Next.js 16.4.0, Migração para `eslint` Direto e Correção de 13 Erros de Lint
-- **Commit(s):** (alterações pendentes de commit — ver `git status`)
+- **Commit(s):** `84dc770`
 - **O que foi feito:**
   - **Audit:** `npm audit fix` (sem `--force`) eliminou as 2 criticals (incluindo `fast-xml-parser` via AWS SDK, resolvido só por lockfile dentro do range já declarado). Restaram 5 high, todas devDependency (cadeia `eslint-config-next` → `@next/eslint-plugin-next` → `fast-glob` → `micromatch` → `braces`; `braces` sem versão corrigida publicada). `npm ls --omit=dev` não retorna essa cadeia. `.github/workflows/ci.yml` passou a rodar `npm audit --audit-level=high --omit=dev` (verificado: 0 vulnerabilidades em produção, exit 0).
   - **Next.js 15.5.27 → 16.4.0** (e `eslint-config-next` no mesmo major). O projeto já usava APIs assíncronas de `params`/`searchParams`/`cookies()`/`headers()`, então nenhum breaking change afetou o código. `postcss` (high) deixou de aparecer com o upgrade. `tsconfig.json` foi reescrito pelo próprio `next build` (mudança mandatória: `jsx: "preserve"` → `"react-jsx"`; o resto é reformatação, com `strict`/`noUncheckedIndexedAccess`/paths intactos). `middleware.ts` (em `src/`) não foi renomeado para `proxy.ts`, por ser só deprecado no Next 16 — fica como pendência.
@@ -86,7 +97,7 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 - **Por quê:** O CI estava vermelho no step de `npm audit` e o `npm run check` (que o próprio checklist dava como verde) estava quebrado por erros de lint que também bloqueavam `next build`, então o deploy real estava impedido. Além disso, o Next 15 seguia com a cadeia de audit de devDependency e `next lint` seria removido em qualquer caso. Consolidar o upgrade e as correções numa só entrada evita que o histórico fique fragmentado por fase. Mitigar a cadeia de `braces` pelo escopo de produção, em vez de `--force` (que faria downgrade de `eslint-config-next` para 14.2.35), foi decisão do usuário.
 
 ### 2026-10-08: CI de `npm audit` — Criticals Eliminados, 6 High Pendentes de Decisão Major
-- **Commit(s):** (alterações pendentes de commit — ver `git status`; só `ai-podcast-clipper-frontend/package-lock.json` foi modificado)
+- **Commit(s):** `84dc770` (incorporado ao commit do upgrade do Next, ver entrada acima)
 - **O que foi feito:**
   - Step "Audit dependencies (fail on high/critical)" do CI (`.github/workflows/ci.yml:48`, `npm audit --audit-level=high`) estava falhando com 50 vulnerabilidades (3 low, 25 moderate, 20 high, 2 critical).
   - `npm audit fix` (sem `--force`) aplicado dentro de `ai-podcast-clipper-frontend/`: reduziu para 7 (1 moderate, 6 high, **0 critical**). Só `package-lock.json` mudou — nenhuma versão em `package.json` foi tocada, todo o resultado veio de resolver dentro dos ranges semver já declarados.
@@ -97,7 +108,7 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 - **Por quê:** O gate de segurança do CI (`npm audit --audit-level=high`) é intencional e não deve ser contornado com `--force`/bump major sem decisão explícita — mas rodar `npm audit fix` sem `--force` já eliminou os riscos mais graves (criticals de produção, incluindo um já documentado como pendência desde a Fase 3) sem nenhum breaking change, deixando só uma decisão de versionamento major (Next/eslint-config-next) para o usuário resolver separadamente.
 
 ### 2026-10-07: Experimento de Observabilidade — Grupo Baseline Medido
-- **Commit(s):** (alterações pendentes de commit — ver `git status`)
+- **Commit(s):** `13a1e85`
 - **O que foi feito:**
   - Executado manualmente o roteiro `docs/pesquisa/experimento-observabilidade/roteiro-baseline.md` nos 3 cenários (`backend_indisponivel`, `latencia_alta`, `falha_webhook_stripe`), preenchendo o grupo `baseline` em `resultados.csv` (faltava desde o experimento original de 2026-09-30, que só tinha o grupo `com_observabilidade`).
   - MTTD baseline medido: 26s/89s/20s, respectivamente — nos três casos, mais rápido que o MTTD com observabilidade (82s/180s/169s), o oposto da hipótese original do experimento.
@@ -106,7 +117,7 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 - **Por quê:** Sem o grupo baseline, a pergunta de pesquisa central do experimento (observabilidade reduz MTTD comparado a detecção manual?) não podia ser respondida, nem qualitativa nem quantitativamente; a limitação encontrada evita que o artigo publique uma conclusão "observabilidade piora o MTTD" sem o contexto que a invalida.
 
 ### 2026-10-05: Fix Confirmado — Reembolso Stripe Não Revogava Créditos
-- **Commit(s):** (alterações pendentes de commit — ver `git status`)
+- **Commit(s):** `2a166ae`
 - **O que foi feito:**
   - Bug CONFIRMADO em teste manual real pelo usuário: reembolso real disparado no Stripe (modo sandbox/teste) não revogou créditos de assinatura — a suspeita HIGH registrada em `docs/operacao/checklist-go-live.md` na auditoria de 2026-10-04 deixou de ser hipótese.
   - Causa raiz: `src/app/api/webhooks/stripe/route.ts` lia `refundAmountCents` somando `charge.refunds?.data ?? []`, mas `refunds.data` só vem preenchido se a API do Stripe expandir explicitamente esse campo — nunca ocorre no payload padrão de webhook. `charge.refunds` chegava `undefined`, o `.reduce` sobre `[]` dava `0`, e a revogação era pulada silenciosamente (sem erro, sem log).
