@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { db } from "~/server/db";
 import {
   makeDeleteProjectUseCase,
@@ -9,10 +9,10 @@ import {
 } from "~/infrastructure/factories/use-case-factories";
 import { NotFoundError } from "~/domain/errors/not-found-error";
 import { UnauthorizedError } from "~/domain/errors/unauthorized-error";
+import { useRollbackTransactionPerTest } from "../helpers/with-rollback-transaction";
 
 describe("Project Use Cases Integration Tests", () => {
-  const createdUserIds: string[] = [];
-  const createdFileIds: string[] = [];
+  useRollbackTransactionPerTest();
 
   async function createTestUser() {
     const user = await db.user.create({
@@ -24,7 +24,6 @@ describe("Project Use Cases Integration Tests", () => {
         reservedCredits: 0,
       },
     });
-    createdUserIds.push(user.id);
     return user;
   }
 
@@ -38,18 +37,9 @@ describe("Project Use Cases Integration Tests", () => {
         sourceType: "YOUTUBE",
       },
     });
-    createdFileIds.push(file.id);
     return file;
   }
 
-  afterAll(async () => {
-    // Cascade delete users and all associated files and clips
-    if (createdUserIds.length > 0) {
-      await db.user.deleteMany({
-        where: { id: { in: createdUserIds } },
-      });
-    }
-  });
 
   describe("DeleteProjectUseCase Integration", () => {
     it("deve deletar um projeto com sucesso no banco de dados", async () => {
@@ -179,7 +169,6 @@ describe("Project Use Cases Integration Tests", () => {
           creditsCost: 10,
         },
       });
-      createdFileIds.push(file.id);
 
       const newName = "Novo Nome";
       const useCase = makeRenameProjectUseCase();

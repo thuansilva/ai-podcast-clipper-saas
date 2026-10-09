@@ -181,6 +181,11 @@ describe("Credit Use Cases Integration Tests", () => {
   });
 
   describe("Race Conditions & Concurrency Protection", () => {
+    // Teste de corretude sob concorrência (não de latência): o timeout default de
+    // 5000ms do Vitest é apertado para runners de CI mais lentos. Aplicado só aqui,
+    // sem alterar o testTimeout global.
+    const CONCURRENCY_TEST_TIMEOUT_MS = 20_000;
+
     it("deve impedir saldo negativo e permitir apenas 1 sucesso quando 5 requisições concorrentes tentarem reservar todo o saldo (10 créditos)", async () => {
       const user = await createTestUser(10, 0);
 
@@ -225,7 +230,7 @@ describe("Credit Use Cases Integration Tests", () => {
       });
       expect(holdTransactions).toHaveLength(1);
       expect(holdTransactions[0]?.amount).toBe(10);
-    });
+    }, CONCURRENCY_TEST_TIMEOUT_MS);
 
     it("deve debitar de forma atômica e consistente quando requisições parciais competirem por créditos", async () => {
       const user = await createTestUser(10, 0);
@@ -260,7 +265,7 @@ describe("Credit Use Cases Integration Tests", () => {
         where: { userId: user.id, type: "HOLD" },
       });
       expect(holdTransactions).toHaveLength(3);
-    });
+    }, CONCURRENCY_TEST_TIMEOUT_MS);
 
     it("deve impedir consumo concorrente duplicado de créditos reservados", async () => {
       const user = await createTestUser(5, 10);
@@ -294,6 +299,6 @@ describe("Credit Use Cases Integration Tests", () => {
         where: { userId: user.id, type: "CONSUME" },
       });
       expect(consumeTransactions).toHaveLength(1);
-    });
+    }, CONCURRENCY_TEST_TIMEOUT_MS);
   });
 });

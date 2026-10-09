@@ -4,18 +4,17 @@
  * Testes de integração: idempotência de webhooks do Stripe
  * com banco Postgres real.
  *
- * Bug testado: o evento é marcado como processado ANTES de confirmar
- * que o dispatch pro Inngest foi bem-sucedido.
- *
- * Todos os testes devem FALHAR contra o código atual (com bug)
- * e só passar APÓS a implementação do fix.
+ * Garante que o evento só é marcado como processado DEPOIS de confirmar
+ * que o dispatch pro Inngest foi bem-sucedido, e que retries do Stripe
+ * (mesmo event.id) são idempotentes.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { db } from "~/server/db";
 import Stripe from "stripe";
 import { POST } from "~/app/api/webhooks/stripe/route";
 import { inngest } from "~/inngest/client";
+import { useRollbackTransactionPerTest } from "../helpers/with-rollback-transaction";
 
 // Mock do inngest para simular falhas e sucesso
 vi.mock("~/inngest/client");
@@ -23,13 +22,13 @@ vi.mock("~/inngest/client");
 const mockInngestSend = vi.fn();
 (inngest as any).send = mockInngestSend;
 
-describe("Stripe Webhook Idempotency - Integration Tests (RED → GREEN TDD)", () => {
+describe("Stripe Webhook Idempotency - Integration Tests", () => {
+  useRollbackTransactionPerTest();
+
   const stripe = new Stripe("sk_test_mock", {
     apiVersion: "2025-04-30.basil",
   });
   const STRIPE_WEBHOOK_SECRET = "whsec_mock";
-
-  let createdUserIds: string[] = [];
 
   async function createTestUser(stripeCustomerId: string) {
     const user = await db.user.create({
@@ -39,10 +38,9 @@ describe("Stripe Webhook Idempotency - Integration Tests (RED → GREEN TDD)", (
         password: "hashedpassword123",
         stripeCustomerId,
         credits: 0,
-        plan: "FREE",
+        plan: "STARTER",
       },
     });
-    createdUserIds.push(user.id);
     return user;
   }
 
@@ -130,19 +128,8 @@ describe("Stripe Webhook Idempotency - Integration Tests (RED → GREEN TDD)", (
     });
   }
 
-  afterAll(async () => {
-    if (createdUserIds.length > 0) {
-      await db.user.deleteMany({
-        where: { id: { in: createdUserIds } },
-      });
-    }
-  });
-
   describe("Cenário 1: Falha no dispatch → evento NÃO deve ser marcado", () => {
-    it("DEVE FALHAR hoje: Se inngest.send falha, evento NÃO deve estar marcado no banco e resposta deve ser 5xx", async () => {
-      // Teste RED → verde após fix
-      // Hoje: FALHA porque evento fica marcado mesmo com falha
-
+    it("Se inngest.send falha, evento NÃO deve estar marcado no banco e resposta deve ser 5xx", async () => {
       const customerId = `cus_dispatch_fail_${Date.now()}`;
       const subscriptionId = `sub_dispatch_fail_${Date.now()}`;
       const eventId = `evt_dispatch_fail_${Date.now()}`;
@@ -164,11 +151,9 @@ describe("Stripe Webhook Idempotency - Integration Tests (RED → GREEN TDD)", (
       const response = await POST(request.clone());
 
       // Asserção 1: Resposta deve ser 5xx (não 200)
-      // FALHA hoje porque retorna 200 OK mesmo com falha do dispatch
       expect(response.status).toBeGreaterThanOrEqual(500);
 
       // Asserção 2: Evento NÃO deve estar marcado como processado
-      // FALHA hoje porque evento fica marcado no banco
       const processedEvent = await db.processedWebhookEvent.findUnique({
         where: {
           stripeEventId: eventId,
@@ -179,10 +164,7 @@ describe("Stripe Webhook Idempotency - Integration Tests (RED → GREEN TDD)", (
   });
 
   describe("Cenário 2: Retry após falha anterior → deve processar normalmente", () => {
-    it("DEVE FALHAR hoje: Primeira tentativa falha (evento NÃO marcado) → Retry sucede (evento marcado, inngest.send chamado novamente)", async () => {
-      // Teste RED → verde após fix
-      // Hoje: FALHA porque inngest.send é chamado só uma vez (retry ignorado)
-
+    it("Primeira tentativa falha (evento NÃO marcado) → Retry sucede (evento marcado, inngest.send chamado novamente)", async () => {
       const customerId = `cus_retry_after_fail_${Date.now()}`;
       const subscriptionId = `sub_retry_after_fail_${Date.now()}`;
       const eventId = `evt_retry_after_fail_${Date.now()}`;
@@ -204,13 +186,13 @@ describe("Stripe Webhook Idempotency - Integration Tests (RED → GREEN TDD)", (
       const response1 = await POST(request.clone());
 
       // Evento NÃO deve estar marcado após falha
-      // (após fix, será esperado: response.status >= 500)
+      expect(response1.status).toBeGreaterThanOrEqual(500);
       const processedEvent1 = await db.processedWebhookEvent.findUnique({
         where: {
           stripeEventId: eventId,
         },
       });
-      expect(processedEvent1).toBeNull(); // FALHA hoje (evento está marcado)
+      expect(processedEvent1).toBeNull();
 
       // Retry: Stripe reenvia com o mesmo event.id
       // Desta vez inngest.send SUCEDE
@@ -227,19 +209,15 @@ describe("Stripe Webhook Idempotency - Integration Tests (RED → GREEN TDD)", (
           stripeEventId: eventId,
         },
       });
-      expect(processedEvent2).toBeTruthy(); // FALHA hoje (retry ignorado, evento nunca marcado)
+      expect(processedEvent2).toBeTruthy();
 
       // inngest.send DEVE ter sido chamado 2 vezes (uma falha, uma sucesso)
-      // FALHA hoje porque é chamado só 1 vez (retry ignorado)
       expect(mockInngestSend).toHaveBeenCalledTimes(2);
     });
   });
 
   describe("Cenário 3: Idempotência em caso de sucesso anterior (regressão)", () => {
-    it("DEVE PASSAR: Retry após sucesso anterior é ignorado (inngest.send chamado 1 vez, não 2)", async () => {
-      // Teste verde antes e depois do fix (regressão)
-      // Comportamento correto que deve ser preservado
-
+    it("Retry após sucesso anterior é ignorado (inngest.send chamado 1 vez, não 2)", async () => {
       const customerId = `cus_idempotent_${Date.now()}`;
       const subscriptionId = `sub_idempotent_${Date.now()}`;
       const eventId = `evt_idempotent_${Date.now()}`;
@@ -277,10 +255,7 @@ describe("Stripe Webhook Idempotency - Integration Tests (RED → GREEN TDD)", (
   });
 
   describe("Cenário 4: event.id do Stripe passa como idempotencyKey ao Inngest", () => {
-    it("DEVE FALHAR hoje: event.id é passado como 'id' (ou idempotencyKey) ao inngest.send()", async () => {
-      // Teste RED → verde após fix
-      // Hoje: FALHA porque inngest.send é chamado sem o id do evento
-
+    it("event.id é passado como 'id' ao inngest.send()", async () => {
       const customerId = `cus_idempotency_key_${Date.now()}`;
       const subscriptionId = `sub_idempotency_key_${Date.now()}`;
       const eventId = `evt_idempotency_key_${Date.now()}`;
@@ -305,8 +280,7 @@ describe("Stripe Webhook Idempotency - Integration Tests (RED → GREEN TDD)", (
       const callArgs = mockInngestSend.mock.calls[0]!;
       const eventPayload = callArgs[0];
 
-      // Asserção incondicional: event.id deve estar em 'id' do payload
-      // FALHA hoje porque o campo 'id' não existe no payload
+      // event.id deve estar em 'id' do payload
       expect(eventPayload.id).toBe(eventId);
     });
   });

@@ -11,9 +11,10 @@
  * curl direto na Server Action, ignorando qualquer checagem de UI) é
  * rejeitado ANTES de qualquer chamada ao Stripe.
  */
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { db } from "~/server/db";
 import { env } from "~/env";
+import { useRollbackTransactionPerTest } from "../../helpers/with-rollback-transaction";
 
 const mockCheckoutCreate = vi.fn();
 const mockPortalCreate = vi.fn();
@@ -42,10 +43,12 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("Stripe Server Actions - Integração (schema real + Prisma real + Stripe mockado)", () => {
+  useRollbackTransactionPerTest();
+
   const userId = `user_stripe_it_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const stripeCustomerId = `cus_it_${Date.now()}`;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     await db.user.create({
       data: {
         id: userId,
@@ -54,10 +57,6 @@ describe("Stripe Server Actions - Integração (schema real + Prisma real + Stri
         stripeCustomerId,
       },
     });
-  });
-
-  afterAll(async () => {
-    await db.user.delete({ where: { id: userId } }).catch(() => undefined);
   });
 
   afterEach(() => {

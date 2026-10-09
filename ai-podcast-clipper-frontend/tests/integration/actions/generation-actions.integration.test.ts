@@ -12,8 +12,9 @@
  * (ex: via curl direto na Server Action, ignorando qualquer checagem de UI)
  * é rejeitado ANTES de qualquer escrita no banco ou envio de evento.
  */
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { db } from "~/server/db";
+import { useRollbackTransactionPerTest } from "../../helpers/with-rollback-transaction";
 
 const mockGetUserId = vi.fn();
 vi.mock("~/infrastructure/factories/auth-factory", () => ({
@@ -31,9 +32,11 @@ vi.mock("next/cache", () => ({
 }));
 
 describe("processVideo - Integração (schema real + use case real + Prisma real)", () => {
+  useRollbackTransactionPerTest();
+
   const userId = `user_generation_it_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     await db.user.create({
       data: {
         id: userId,
@@ -42,11 +45,6 @@ describe("processVideo - Integração (schema real + use case real + Prisma real
         credits: 50,
       },
     });
-  });
-
-  afterAll(async () => {
-    await db.uploadedFile.deleteMany({ where: { userId } });
-    await db.user.delete({ where: { id: userId } }).catch(() => undefined);
   });
 
   afterEach(() => {

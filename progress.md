@@ -44,6 +44,26 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 
 ## Histórico
 
+### 2026-10-09: Fix de Atomicidade Real no `PrismaUnitOfWork` (Bug Financeiro Confirmado)
+- **Commit(s):** (alterações pendentes de commit — ver `git status`)
+- **O que foi feito:**
+  - Bug confirmado: `PrismaUnitOfWork.execute()` abria `db.$transaction(async () => operation())` mas **ignorava** o `TransactionClient` recebido no callback. Repositórios chamados dentro de `operation()` (`PrismaUserRepository`, `PrismaCreditTransactionRepository`, etc.) importam `db` global diretamente, não o `tx` — cada escrita de uma "unidade de trabalho" de crédito/billing comitava isolada e imediata no banco real, sem rollback se uma escrita posterior falhasse. Afetava todos os use cases de `src/application/use-cases/credits/*.ts`.
+  - Fix: `src/infrastructure/database/repositories/prisma-unit-of-work.ts` agora popula `dbTransactionContext` (o `AsyncLocalStorage` de `src/server/db.ts`, construído originalmente para o isolamento de testes) com `{ tx }` via `dbTransactionContext.run({ tx }, operation)`, redirecionando automaticamente qualquer `db.*` chamado dentro da unidade de trabalho para a transação real. Interface `IUnitOfWork` e call sites dos use cases não mudaram.
+  - TDD: novo `tests/integration/prisma-unit-of-work-atomicity.integration.test.ts`, deliberadamente SEM usar `with-rollback-transaction.ts` (o SAVEPOINT do helper de teste mascararia o bug). Vermelho confirmado contra o código antigo (saldo do usuário ficava debitado — `credits` 10 → 5 — mesmo com a 2ª escrita, criação de `CreditTransaction`, falhando de propósito); verde depois do fix (saldo intocado, nenhuma `CreditTransaction` criada).
+  - Validado contra banco Postgres novo (`domain_uow_test`, `prisma migrate deploy`): teste novo 1/1, suíte de integração completa (exceto `health-check.test.ts`/`legal-pages.test.ts`, falhas de ambiente pré-existentes e já documentadas) 84/84, `credit-service.test.ts` (concorrência) 7/7, `npm run test` 605 passed | 8 skipped, `npm run check` sem erros.
+  - Documentação atualizada: novo item BLOCKER em `docs/operacao/checklist-go-live.md` (seção Billing e Stripe).
+- **Por quê:** Era um bug real de atomicidade em operações financeiras (créditos/billing) que passava despercebido porque "parecia" transacional — qualquer falha na segunda escrita de um use case de crédito deixava o banco em estado inconsistente (débito sem registro, ou pior) sem nenhum rollback real acontecer em produção.
+
+### 2026-10-09: Isolamento de Testes de Integração por Rollback de Transação
+- **Commit(s):** (alterações pendentes de commit — ver `git status`)
+- **O que foi feito:**
+  - `src/server/db.ts`: `db` passou a ser um `Proxy` sobre o client Prisma. Sem transação de teste ativa, delega ao client real (funções vinculadas e cacheadas). Com escopo de teste (`dbTransactionContext`, `AsyncLocalStorage`), lê da transação e converte `$transaction` aninhado em SAVEPOINT.
+  - `tests/helpers/with-rollback-transaction.ts`: `withRollbackTransaction` e `useRollbackTransactionPerTest`. O helper usa `aroundEach` do Vitest, porque `enterWith` dentro de `beforeEach` não chega ao corpo do teste.
+  - 9 arquivos de integração migrados: limpeza manual (`afterAll`/`deleteMany`) removida e fixtures `beforeAll` convertidas em `beforeEach`. `youtube-info-action` ficou de fora por não acessar o banco.
+  - Novo `tests/integration/rollback-transaction.integration.test.ts` (8 testes do próprio mecanismo: isolamento entre testes, savepoint, erro propagado).
+  - Verificação: suíte de integração com banco novo (`qa_rollback_test`) e tabelas zeradas após a execução; `npm run check`, `npm run test` (605 passed | 8 skipped) e `npm run build` com exit 0.
+- **Por quê:** Cada teste passa a começar e terminar com o banco no mesmo estado, sem depender de ordem nem de limpeza manual, o que eliminou a classe de bugs de dado residual que vinha aparecendo. `credit-service.test.ts` continua sem transação de propósito (testa concorrência real).
+
 ### 2026-10-08: Upgrade Next.js 16.4.0, Migração para `eslint` Direto e Correção de 13 Erros de Lint
 - **Commit(s):** (alterações pendentes de commit — ver `git status`)
 - **O que foi feito:**

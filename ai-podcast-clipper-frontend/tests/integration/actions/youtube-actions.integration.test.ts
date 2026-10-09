@@ -12,8 +12,10 @@
  * (ex: via curl direto na Server Action, ignorando qualquer checagem de UI)
  * é rejeitado ANTES de qualquer escrita no banco ou envio de evento.
  */
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { Prisma } from "@prisma/client";
 import { db } from "~/server/db";
+import { useRollbackTransactionPerTest } from "../../helpers/with-rollback-transaction";
 
 const mockGetUserId = vi.fn();
 vi.mock("~/infrastructure/factories/auth-factory", () => ({
@@ -31,10 +33,21 @@ vi.mock("next/cache", () => ({
 }));
 
 describe("importYouTubeVideo - Integração (schema real + value object real + use case real + Prisma real)", () => {
+  useRollbackTransactionPerTest();
+
   const userId = `user_youtube_it_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   const validUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
-  beforeAll(async () => {
+  // Opções administráveis (ProcessingOption) que importYouTubeVideo valida em
+  // runtime (genre, aspectRatio, clipModel). Criadas em cada teste dentro da
+  // transação de rollback (não vêm do seed).
+  const testProcessingOptions: Prisma.ProcessingOptionCreateInput[] = [
+    { type: "GENRE", value: "humor", label: "Humor (teste)" },
+    { type: "ASPECT_RATIO", value: "9:16", label: "9:16 (teste)" },
+    { type: "CLIP_MODEL", value: "face_focus", label: "Foco no Rosto (teste)" },
+  ];
+
+  beforeEach(async () => {
     await db.user.create({
       data: {
         id: userId,
@@ -43,11 +56,10 @@ describe("importYouTubeVideo - Integração (schema real + value object real + u
         credits: 50,
       },
     });
-  });
 
-  afterAll(async () => {
-    await db.uploadedFile.deleteMany({ where: { userId } });
-    await db.user.delete({ where: { id: userId } }).catch(() => undefined);
+    for (const option of testProcessingOptions) {
+      await db.processingOption.create({ data: option });
+    }
   });
 
   afterEach(() => {

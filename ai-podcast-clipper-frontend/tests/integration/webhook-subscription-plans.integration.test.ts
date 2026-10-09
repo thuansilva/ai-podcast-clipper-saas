@@ -11,16 +11,17 @@
  * - Price IDs de créditos avulsos (descontinuados) são rejeitados
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect } from "vitest";
 import { db } from "~/server/db";
 import {
   makeProcessSubscriptionCheckoutUseCase,
   makeProcessSubscriptionRenewalUseCase,
 } from "~/infrastructure/factories/use-case-factories";
 import { env } from "~/env";
+import { useRollbackTransactionPerTest } from "../helpers/with-rollback-transaction";
 
 describe("Webhook Subscription Plans - Integration (Banco Postgres real)", () => {
-  const createdUserIds: string[] = [];
+  useRollbackTransactionPerTest();
 
   async function createTestUser(
     initialCredits = 0,
@@ -38,18 +39,9 @@ describe("Webhook Subscription Plans - Integration (Banco Postgres real)", () =>
         plan: initialPlan,
       },
     });
-    createdUserIds.push(user.id);
     return user;
   }
 
-  afterAll(async () => {
-    // Cascade delete users and all associated records
-    if (createdUserIds.length > 0) {
-      await db.user.deleteMany({
-        where: { id: { in: createdUserIds } },
-      });
-    }
-  });
 
   describe("Checkout Session Completed - Real Price IDs", () => {
     it("deve atribuir 150 créditos ao usuário quando checkout de Starter mensal é processado", async () => {

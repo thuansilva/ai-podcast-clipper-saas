@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { describe, it, expect, afterEach, afterAll, vi } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { db } from "~/server/db";
 
 import { fetch as undiciFetch } from "undici";
@@ -19,9 +19,10 @@ import {
   getYouTubeDownloadEndpoint,
   type PipelineStep,
 } from "~/inngest/functions";
+import { useRollbackTransactionPerTest } from "../helpers/with-rollback-transaction";
 
 describe("Inngest Pipeline Integration Tests", () => {
-  const createdUserIds: string[] = [];
+  useRollbackTransactionPerTest();
 
   const createMockStep = (): PipelineStep => ({
     run: vi.fn(async (_name: string, fn: () => any) => await fn()),
@@ -37,7 +38,6 @@ describe("Inngest Pipeline Integration Tests", () => {
         reservedCredits,
       },
     });
-    createdUserIds.push(user.id);
     return user;
   }
 
@@ -67,13 +67,6 @@ describe("Inngest Pipeline Integration Tests", () => {
     vi.restoreAllMocks();
   });
 
-  afterAll(async () => {
-    if (createdUserIds.length > 0) {
-      await db.user.deleteMany({
-        where: { id: { in: createdUserIds } },
-      });
-    }
-  });
 
   it("Cenário 1: Sucesso de ponta a ponta (hold -> GPU -> clipes persistidos -> consume -> status processed)", async () => {
     const user = await createTestUser(10, 0);

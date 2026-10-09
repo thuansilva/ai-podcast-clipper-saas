@@ -13,12 +13,13 @@
  * - Após implementação dos handlers, estes testes passarão
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { db } from "~/server/db";
 import Stripe from "stripe";
 import { POST } from "~/app/api/webhooks/stripe/route";
 import { inngest } from "~/inngest/client";
 import { makeSuspendExpiredPastDueSubscriptionsUseCase } from "~/infrastructure/factories/use-case-factories";
+import { useRollbackTransactionPerTest } from "../helpers/with-rollback-transaction";
 
 // Mock do inngest
 vi.mock("~/inngest/client");
@@ -27,12 +28,13 @@ const mockInngestSend = vi.fn();
 (inngest as any).send = mockInngestSend;
 
 describe("Stripe Webhook Payment Failure & Refunds - Integration Tests (RED → GREEN TDD)", () => {
+  useRollbackTransactionPerTest();
+
   const stripe = new Stripe("sk_test_mock", {
     apiVersion: "2025-04-30.basil",
   });
   const STRIPE_WEBHOOK_SECRET = "whsec_mock";
 
-  let createdUserIds: string[] = [];
 
   async function createTestUser(stripeCustomerId: string) {
     const user = await db.user.create({
@@ -47,7 +49,6 @@ describe("Stripe Webhook Payment Failure & Refunds - Integration Tests (RED → 
         plan: "STARTER",
       },
     });
-    createdUserIds.push(user.id);
     return user;
   }
 
@@ -167,13 +168,6 @@ describe("Stripe Webhook Payment Failure & Refunds - Integration Tests (RED → 
     });
   }
 
-  afterAll(async () => {
-    if (createdUserIds.length > 0) {
-      await db.user.deleteMany({
-        where: { id: { in: createdUserIds } },
-      });
-    }
-  });
 
   describe("Cenário 1: invoice.payment_failed → marca PAST_DUE, sem revogação imediata", () => {
     it("DEVE FALHAR hoje: invoice.payment_failed marca subscription como PAST_DUE e dispatcher é chamado", async () => {

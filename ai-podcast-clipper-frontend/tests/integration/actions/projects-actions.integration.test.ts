@@ -12,8 +12,10 @@
  * (ex: via curl direto na Server Action, ignorando qualquer checagem de UI)
  * é rejeitado ANTES de qualquer escrita no banco.
  */
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import type { Prisma } from "@prisma/client";
 import { db } from "~/server/db";
+import { useRollbackTransactionPerTest } from "../../helpers/with-rollback-transaction";
 
 const mockGetUserId = vi.fn();
 vi.mock("~/infrastructure/factories/auth-factory", () => ({
@@ -31,9 +33,19 @@ vi.mock("next/cache", () => ({
 }));
 
 describe("projects-actions - Integração (schema real + use cases reais + Prisma real)", () => {
+  useRollbackTransactionPerTest();
+
   const userId = `user_projects_it_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 
-  beforeAll(async () => {
+  // Opções administráveis (ProcessingOption) que este teste precisa existir para
+  // validar clipModel/aspectRatio. Criadas em cada teste dentro da transação
+  // de rollback (não vêm do seed).
+  const testProcessingOptions: Prisma.ProcessingOptionCreateInput[] = [
+    { type: "CLIP_MODEL", value: "face_focus", label: "Foco no Rosto (teste)" },
+    { type: "ASPECT_RATIO", value: "1:1", label: "1:1 (teste)" },
+  ];
+
+  beforeEach(async () => {
     await db.user.create({
       data: {
         id: userId,
@@ -42,11 +54,10 @@ describe("projects-actions - Integração (schema real + use cases reais + Prism
         credits: 50,
       },
     });
-  });
 
-  afterAll(async () => {
-    await db.uploadedFile.deleteMany({ where: { userId } });
-    await db.user.delete({ where: { id: userId } }).catch(() => undefined);
+    for (const option of testProcessingOptions) {
+      await db.processingOption.create({ data: option });
+    }
   });
 
   afterEach(() => {
@@ -144,9 +155,6 @@ describe("projects-actions - Integração (schema real + use cases reais + Prism
         where: { id: otherProject.id },
       });
       expect(stillThere).not.toBeNull();
-
-      await db.uploadedFile.deleteMany({ where: { userId: otherUserId } });
-      await db.user.delete({ where: { id: otherUserId } });
     });
   });
 

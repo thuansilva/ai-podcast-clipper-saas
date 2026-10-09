@@ -3,7 +3,14 @@ import "@testing-library/jest-dom/vitest";
 process.env.SKIP_ENV_VALIDATION = "1";
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ??
-  "postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper";
+  // connection_limit baixo: cada arquivo de teste de integração roda num
+  // processo filho separado (Vitest, pool "forks", fileParallelism
+  // habilitado por padrão), e cada processo abre seu próprio Prisma Client
+  // com seu próprio pool de conexões. Sem limite explícito, o default do
+  // Prisma (baseado em nº de CPUs) multiplicado pelo nº de processos em
+  // paralelo pode se aproximar do max_connections do Postgres conforme a
+  // suíte crescer.
+  "postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper?connection_limit=5";
 process.env.STORAGE_PROVIDER = "local";
 process.env.AWS_ACCESS_KEY_ID = "mock_key";
 process.env.AWS_SECRET_ACCESS_KEY = "mock_secret";
