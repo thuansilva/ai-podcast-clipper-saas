@@ -4,6 +4,14 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 
 ---
 
+### 2026-10-10: Gap de setup local — `ASD_DIR` sem valor correto fora do Modal
+- **Commit(s):** nenhum ainda — alterações deixadas no working directory para revisão do usuário
+- **Contexto:** ao rodar `local_server.py` de verdade (frontend + backend local + Inngest, todos de pé) para uso manual da aplicação, o processamento de vídeo falhava com `[Errno 2] No such file or directory: '/asd'` na etapa de detecção de falante ativo.
+- **Causa:** `core/active_speaker_detection.py`/`local_server.py` usam `ASD_DIR = os.environ.get("ASD_DIR", "/asd")` como default. No Modal (`main.py:52`), o container copia o submódulo `asd/` pra esse caminho absoluto (`/asd` na raiz do sistema) — mas isso só existe dentro do container do Modal. Rodando `local_server.py` fora do Modal, o submódulo está em `ai-podcast-clipper-backend/asd` (caminho relativo ao repo), não em `/asd`. Nenhum documento do projeto mencionava essa variável para quem roda local — gap de setup, não bug de lógica.
+- **Correção:** `ASD_DIR` adicionado ao `ai-podcast-clipper-backend/.env` apontando para o caminho absoluto real do submódulo nesta máquina; `.env.example` documentado com a mesma explicação, para quem configurar um ambiente novo.
+- **Achado relacionado, não corrigido:** `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` no `.env` do backend ainda são placeholder (`AKIA...`/`...`) — mesmo com `ASD_DIR` corrigido, qualquer processamento real que precise ler/gravar no S3 vai falhar até essas credenciais serem configuradas com valores reais (decisão/ação do usuário, fora de código).
+- **Arquivos alterados:** `ai-podcast-clipper-backend/.env`, `ai-podcast-clipper-backend/.env.example`.
+
 ## Estado Atual (2026-10-04)
 
 - **Status de Prontidão:** PRONTO PARA FASE 5 — PORTÃO DE QUALIDADE FINAL (Fases 1-4 de 5 concluídas — Todos os 21 BLOCKERs resolvidos)
