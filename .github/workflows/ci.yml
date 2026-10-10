@@ -189,6 +189,14 @@ jobs:
           cache: pip
           cache-dependency-path: ai-podcast-clipper-backend/requirements.txt
 
+      # ffmpegcv (em requirements.txt) checa, na importação, se o binário
+      # "ffmpeg" existe no sistema — e levanta RuntimeError se não existir.
+      # Isso não é uma dependência pip; precisa do pacote apt instalado antes
+      # de "import local_server" (que importa ffmpegcv transitivamente via
+      # core/vertical_video.py), senão a própria coleta dos testes falha.
+      - name: Install ffmpeg (system dependency of ffmpegcv)
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Install full dependencies
         run: |
           python -m pip install --upgrade pip
