@@ -58,6 +58,7 @@ npm run db:studio        # Prisma Studio
 npm run db:push          # aplica o schema no banco (dev)
 npm run db:generate      # cria migration (Prisma migrate dev)
 npm run db:migrate       # aplica migrations (deploy)
+npm run prepare          # instala os git hooks do Husky (roda automaticamente no "npm install")
 ```
 
 ### Backend (`ai-podcast-clipper-backend`)
@@ -202,3 +203,17 @@ Este projeto tem subagentes configurados em `.claude/agents/` (ex.:
 - **NUNCA execute `git commit`, `git push` ou crie tags sem a autorização explícita do usuário.**
 - Todas as alterações de código e documentação devem ser apresentadas para revisão antes de qualquer ação de commit.
 - Quando arquivos forem criados ou alterados, apenas prepare os arquivos ou deixe-os no working directory e solicite aprovação do usuário para efetuar o commit.
+- **Git hook `pre-push` (Husky) roda a suíte completa antes de qualquer `git push`:**
+  `ai-podcast-clipper-backend` (`pytest`) e `ai-podcast-clipper-frontend`
+  (`npm run test:everything` — Postgres/build/Inngest/smoke de carga k6). O
+  push é abortado se qualquer uma falhar. Deliberadamente **não** roda no
+  `pre-commit` (decisão do usuário): a suíte completa leva minutos e depende
+  de Docker, então rodá-la a cada commit tornaria o dia a dia lento demais —
+  o `pre-push` é o último gate local antes do CI, e commits locais continuam
+  rápidos. O `.husky/` fica na **raiz do monorepo** (não dentro de
+  `ai-podcast-clipper-frontend/`), porque hooks de git são por repositório
+  inteiro; o Husky é uma devDependency do único `package.json` do projeto
+  (`ai-podcast-clipper-frontend/package.json`), e o script `prepare`
+  (`ai-podcast-clipper-frontend/scripts/husky-install.sh`) cuida de instalar
+  os hooks no lugar certo mesmo assim. Para pular pontualmente (ex.:
+  emergência já testada manualmente): `HUSKY=0 git push`.

@@ -193,6 +193,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          # requirements.txt (runtime deps for the GPU pipeline: torch,
+          # whisperx, etc.) never includes pytest/pytest-mock — só
+          # requirements-test.txt tem isso, e este job não a instala (pra não
+          # arriscar conflito de versão nos pacotes já fixados acima). Sem
+          # este passo, "pytest tests/test_local_server.py" falha com
+          # "pytest: command not found" (exit 127) antes de rodar qualquer
+          # teste.
+          pip install pytest pytest-mock
 
       - name: Run Pytest (local_server.py)
         run: pytest tests/test_local_server.py -v

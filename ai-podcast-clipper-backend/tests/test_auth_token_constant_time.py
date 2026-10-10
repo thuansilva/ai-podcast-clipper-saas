@@ -1,12 +1,21 @@
 """RNF-SEC-07 — bearer token comparison must be constant-time.
 
-The three auth checks (local_server.verify_auth_token, main.process_video and
-main.download_youtube) used `token.credentials != os.environ.get("AUTH_TOKEN")`,
-whose run time depends on how many leading characters match (timing attack).
-They must go through `hmac.compare_digest`, while preserving the existing
-semantics: wrong token -> 401, missing/empty AUTH_TOKEN -> 401 (never "open"),
-empty bearer -> 401, and a non-ASCII bearer must be a clean 401 (str
-`compare_digest` raises TypeError on non-ASCII, which would surface as a 500).
+The two Modal-side auth checks (main.process_video and main.download_youtube)
+used `token.credentials != os.environ.get("AUTH_TOKEN")`, whose run time
+depends on how many leading characters match (timing attack). They must go
+through `hmac.compare_digest`, while preserving the existing semantics: wrong
+token -> 401, missing/empty AUTH_TOKEN -> 401 (never "open"), empty bearer ->
+401, and a non-ASCII bearer must be a clean 401 (str `compare_digest` raises
+TypeError on non-ASCII, which would surface as a 500).
+
+The equivalent case for `local_server.verify_auth_token` lives in
+`tests/test_local_server.py` instead of here: `local_server.py` does
+compatibility monkey-patching of pyannote/whisperx/torch at import time, so
+importing it requires torch/torchaudio to be installed. This file is
+collected by the lean `backend` CI job (only `requirements-test.txt`, no
+torch) via `pytest --ignore=tests/test_local_server.py`, so it must not
+import `local_server` — doing so breaks collection for the whole job with a
+`ModuleNotFoundError` (missing `uvicorn`), not just this file.
 """
 
 import hmac
@@ -16,7 +25,6 @@ import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
-import local_server
 import main
 from core.schemas import DownloadYouTubeRequest, ProcessVideoRequest, ProcessVideoResponse
 from tests.manual_cuts_fixture import load_manual_cuts_payload
@@ -34,10 +42,6 @@ def _raw(attribute):
         if callable(getter):
             return getter()
     return attribute
-
-
-def _call_local_server(token: str) -> None:
-    local_server.verify_auth_token(_creds(token))
 
 
 def _call_main_process_video(token: str) -> None:
@@ -61,8 +65,8 @@ def _call_main_download_youtube(token: str) -> None:
 
 CALLERS = pytest.mark.parametrize(
     "call",
-    [_call_local_server, _call_main_process_video, _call_main_download_youtube],
-    ids=["local_server.verify_auth_token", "main.process_video", "main.download_youtube"],
+    [_call_main_process_video, _call_main_download_youtube],
+    ids=["main.process_video", "main.download_youtube"],
 )
 
 

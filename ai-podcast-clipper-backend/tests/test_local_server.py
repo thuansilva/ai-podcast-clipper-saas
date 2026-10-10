@@ -1,3 +1,4 @@
+import hmac
 import json
 import os
 import pathlib
@@ -8,9 +9,12 @@ from unittest.mock import MagicMock, patch
 
 import boto3
 import pytest
+from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from fastapi.testclient import TestClient
 
 import local_server
+from core import schemas
 from core.schemas import ClipItem, MomentsExtraction
 from core.transcription import WhisperTranscriber
 from local_server import app
@@ -309,3 +313,153 @@ class TestProcessVideoManualCutsIntegration:
         assert clips[0]["title"] == "Gancho do Gemini"
         assert clips[0]["start"] == 2.0
         assert clips[0]["end"] == 20.0
+
+
+# ---------------------------------------------------------------------------
+# RNF-SEC-07 — local_server.verify_auth_token bearer comparison must be
+# constant-time. This is the local_server half of the auth suite; the
+# main.process_video / main.download_youtube half lives in
+# tests/test_auth_token_constant_time.py, which runs in the lean `backend` CI
+# job (only requirements-test.txt, no torch). local_server.py does
+# compatibility monkey-patching of pyannote/whisperx/torch at import time, so
+# it can only be imported where torch/torchaudio are installed — i.e. here,
+# in the job that installs the full requirements.txt.
+# ---------------------------------------------------------------------------
+
+
+def _auth_creds(value: str) -> HTTPAuthorizationCredentials:
+    return HTTPAuthorizationCredentials(scheme="Bearer", credentials=value)
+
+
+def _call_verify_auth_token(token: str) -> None:
+    local_server.verify_auth_token(_auth_creds(token))
+
+
+def _assert_401(token: str) -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        _call_verify_auth_token(token)
+    assert exc_info.value.status_code == 401
+
+
+class TestVerifyAuthTokenConstantTime:
+    SECRET = "test-secret"
+
+    @pytest.fixture
+    def compare_digest_spy(self, monkeypatch: pytest.MonkeyPatch):
+        real = hmac.compare_digest
+        spy = MagicMock(side_effect=real)
+        monkeypatch.setattr(hmac, "compare_digest", spy)
+        return spy
+
+    def test_correct_token_is_accepted_via_compare_digest(self, monkeypatch, compare_digest_spy):
+        monkeypatch.setenv("AUTH_TOKEN", self.SECRET)
+        _call_verify_auth_token(self.SECRET)  # must not raise
+        compare_digest_spy.assert_called()
+
+    def test_wrong_token_is_rejected_via_compare_digest(self, monkeypatch, compare_digest_spy):
+        monkeypatch.setenv("AUTH_TOKEN", self.SECRET)
+        _assert_401("wrong-token")
+        compare_digest_spy.assert_called()
+
+    def test_rejects_any_token_when_auth_token_not_configured(self, monkeypatch):
+        monkeypatch.delenv("AUTH_TOKEN", raising=False)
+        _assert_401(self.SECRET)
+        _assert_401("")
+
+    def test_rejects_empty_token_when_auth_token_is_empty(self, monkeypatch):
+        monkeypatch.setenv("AUTH_TOKEN", "")
+        _assert_401("")
+
+    def test_non_ascii_token_is_rejected_with_401_not_500(self, monkeypatch):
+        monkeypatch.setenv("AUTH_TOKEN", self.SECRET)
+        _assert_401("tést-secret")
+
+
+# ---------------------------------------------------------------------------
+# Manual cut input hardening (Phase 3 audit of the POST /process_video v2
+# contract) — HTTP-level guard on the local runner. Moved here (out of
+# tests/test_manual_cut_input_hardening.py, which runs in the lean `backend`
+# CI job) because it imports local_server, which needs torch/torchaudio to
+# import at all.
+# ---------------------------------------------------------------------------
+
+
+class TestProcessVideoEndpointRejectsHostileCutsWith422:
+    """HTTP-level guard on the local runner: invalid cuts must be a 422 from
+    the request contract, never reach the pipeline (no GPU time spent) and
+    never be masked as 500 by the endpoint's generic `except Exception`."""
+
+    @pytest.fixture
+    def client_and_pipeline(self, monkeypatch):
+        monkeypatch.setenv("AUTH_TOKEN", "test-secret")
+        with patch.object(local_server.video_processor, "process_video") as process_video, \
+                patch.object(local_server.video_processor, "load_model"):
+            yield TestClient(local_server.app), process_video
+
+    def _post_raw(self, client, raw_body: str):
+        return client.post(
+            "/process_video",
+            content=raw_body,
+            headers={
+                "Authorization": "Bearer test-secret",
+                "Content-Type": "application/json",
+            },
+        )
+
+    @pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
+    def test_non_finite_end_literal_never_reaches_pipeline(self, client_and_pipeline, literal):
+        # Known limitation (reported, not fixed here): the request IS rejected
+        # by the contract, but FastAPI's default RequestValidationError handler
+        # echoes the offending `input` (a non-finite float) back in the 422
+        # body, and Starlette's JSONResponse refuses to serialize NaN/Inf
+        # (allow_nan=False) — so the client sees a 500, not a 422. What this
+        # test guarantees is the security-relevant part: the request is never
+        # accepted (no 2xx) and never reaches the GPU pipeline.
+        # The frontend can't trigger this: JSON.stringify(NaN) emits `null`.
+        client, process_video = client_and_pipeline
+        client = TestClient(client.app, raise_server_exceptions=False)
+        raw = (
+            '{"s3_key": "uploads/u/x/podcast.mp4", "mode": "manual", '
+            '"manual_cuts": [{"start": 0, "end": ' + literal + "}]}"
+        )
+
+        response = self._post_raw(client, raw)
+
+        assert response.status_code in (422, 500)
+        process_video.assert_not_called()
+
+    def test_oversized_title_returns_422(self, client_and_pipeline):
+        client, process_video = client_and_pipeline
+        payload = {
+            "s3_key": "uploads/u/x/podcast.mp4",
+            "mode": "manual",
+            "manual_cuts": [{"start": 0, "end": 5, "title": "x" * 201}],
+        }
+
+        response = client.post(
+            "/process_video",
+            json=payload,
+            headers={"Authorization": "Bearer test-secret"},
+        )
+
+        assert response.status_code == 422
+        process_video.assert_not_called()
+
+    def test_more_than_max_cuts_returns_422(self, client_and_pipeline):
+        client, process_video = client_and_pipeline
+        payload = {
+            "s3_key": "uploads/u/x/podcast.mp4",
+            "mode": "manual",
+            "manual_cuts": [
+                {"start": 0, "end": 5} for _ in range(schemas.MAX_MANUAL_CUTS + 1)
+            ],
+        }
+
+        response = client.post(
+            "/process_video",
+            json=payload,
+            headers={"Authorization": "Bearer test-secret"},
+        )
+
+        assert response.status_code == 422
+        process_video.assert_not_called()
