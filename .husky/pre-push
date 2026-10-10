@@ -1,0 +1,69 @@
+#!/usr/bin/env sh
+#
+# pre-push — roda a suíte completa do projeto (backend Python + frontend
+# Next.js + smoke de carga k6) antes de permitir um `git push`.
+#
+# Decisão deliberada: esta suíte pesada roda no `pre-push`, NÃO no
+# `pre-commit`. Motivo: `npm run test:everything` sobe Docker/Postgres,
+# builda o Next.js, levanta o Inngest dev server e roda um smoke de carga
+# k6 — isso leva minutos. Colocar isso no `pre-commit` tornaria cada commit
+# local lento e dependente de Docker estar de pé, o que prejudica o
+# dia a dia de commits pequenos/incrementais. O `pre-push` é o ponto certo
+# porque é o último gate local antes do código chegar no CI/remoto — commits
+# locais continuam rápidos, e só o push é bloqueado se algo falhar.
+#
+# Rodado via `.husky/_/pre-push` (ver `.husky/_/h`), que já garante cwd na
+# raiz do git (topo da working tree) independente de onde o `git push` foi
+# disparado (ex.: de dentro de ai-podcast-clipper-frontend/).
+#
+# Para pular pontualmente (ex.: emergência, hotfix já testado manualmente):
+#   HUSKY=0 git push
+set -eu
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "${REPO_ROOT}"
+
+echo ""
+echo "=================================================================="
+echo " pre-push: rodando suite completa de testes antes do push"
+echo " (backend pytest + frontend test:everything — Docker/Postgres/"
+echo " build/Inngest/k6 smoke. Isso leva minutos; aguarde.)"
+echo "=================================================================="
+echo ""
+
+# --- 1. Backend (pytest) ----------------------------------------------------
+BACKEND_DIR="${REPO_ROOT}/ai-podcast-clipper-backend"
+BACKEND_PYTHON="${BACKEND_DIR}/.venv/bin/python"
+
+if [ ! -x "${BACKEND_PYTHON}" ]; then
+  echo "pre-push: ERRO — venv do backend não encontrada em ${BACKEND_PYTHON}."
+  echo "pre-push: crie a venv (ver ai-podcast-clipper-backend/requirements*.txt) antes de fazer push."
+  exit 1
+fi
+
+echo "pre-push: [1/2] rodando suite do backend (pytest)..."
+if ! (cd "${BACKEND_DIR}" && "${BACKEND_PYTHON}" -m pytest); then
+  echo ""
+  echo "pre-push: ABORTADO — a suite do BACKEND (pytest, ai-podcast-clipper-backend/) falhou."
+  echo "pre-push: corrija os testes antes de dar push. Push cancelado."
+  exit 1
+fi
+echo "pre-push: [1/2] backend OK."
+echo ""
+
+# --- 2. Frontend (modo completo: unit + integração + build + smoke k6) -----
+FRONTEND_DIR="${REPO_ROOT}/ai-podcast-clipper-frontend"
+
+echo "pre-push: [2/2] rodando suite completa do frontend (npm run test:everything)..."
+if ! (cd "${FRONTEND_DIR}" && npm run test:everything); then
+  echo ""
+  echo "pre-push: ABORTADO — a suite do FRONTEND (npm run test:everything, ai-podcast-clipper-frontend/) falhou."
+  echo "pre-push: corrija os testes antes de dar push. Push cancelado."
+  exit 1
+fi
+echo "pre-push: [2/2] frontend OK."
+
+echo ""
+echo "=================================================================="
+echo " pre-push: todas as suites passaram. Push liberado."
+echo "=================================================================="
