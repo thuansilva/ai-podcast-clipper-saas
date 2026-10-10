@@ -575,4 +575,61 @@ describe("Inngest Pipeline Integration Tests", () => {
       expect(failedFile.errorMessage).toMatch(/crash/i);
     }
   });
+
+  it("Cenário 7 (Fase 1 — TDD red): corte manual cobra o preço manual (HOLD/CONSUME) e envia mode='manual' ao Modal, mesmo com layout clipModel='auto'", async () => {
+    const user = await createTestUser(10, 0);
+    // 600s de vídeo -> 10 créditos no automático; os 2 cortes abaixo somam 3 créditos no manual
+    const file = await createTestFile(user.id, { durationSeconds: 600 });
+    await db.uploadedFile.update({
+      where: { id: file.id },
+      data: { clipModel: "auto" }, // opção de LAYOUT, não modo de processamento
+    });
+
+    const sentBodies: Array<Record<string, unknown>> = [];
+    vi.mocked(undiciFetch).mockImplementation(
+      (async (url: RequestInfo, init?: { body?: string }) => {
+        if (url.toString() === env.PROCESS_VIDEO_ENDPOINT) {
+          sentBodies.push(JSON.parse(init?.body ?? "{}"));
+          return new Response(
+            JSON.stringify({ success: true, file_id: file.s3Key, clips: [] }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response("Not Found", { status: 404 });
+      }) as any
+    );
+
+    const result = await processVideoHandler({
+      event: {
+        data: {
+          uploadedFileId: file.id,
+          userId: user.id,
+          preset: "HORMOZI",
+          mode: "manual",
+          manualCuts: [
+            { title: "Momento 1", startTime: 10, endTime: 40 },
+            { title: "Momento 2", startTime: 100, endTime: 170 },
+          ],
+        },
+      },
+      step: createMockStep(),
+    });
+
+    expect(result.success).toBe(true);
+
+    // Cobrança: HOLD e CONSUME no preço manual (3 créditos, não 10)
+    const transactions = await db.creditTransaction.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(transactions.map((t) => [t.type, t.amount])).toEqual([
+      ["HOLD", 3],
+      ["CONSUME", 3],
+    ]);
+
+    // Processamento: o Modal precisa receber o mesmo modo que foi cobrado
+    expect(sentBodies).toHaveLength(1);
+    expect(sentBodies[0]!.mode).toBe("manual");
+    expect(sentBodies[0]!.manual_cuts).toHaveLength(2);
+  });
 });

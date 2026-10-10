@@ -74,11 +74,13 @@ export class RetryProjectUseCase {
     await this.clipRepository.deleteByUploadedFileId(input.projectId);
 
     // Send to Inngest again
+    // D6: `mode` é derivado de `manualCutsJson != null`, nunca de `clipModel`
+    // (que só assume valores de LAYOUT: "auto" | "face_focus" — nunca "manual").
     await this.queueGateway.sendProcessVideoEvent({
       uploadedFileId: project.id,
       userId: project.userId,
       preset: updated.subtitlePreset || "HORMOZI",
-      mode: updated.clipModel === "manual" ? "manual" : "auto",
+      mode: updated.manualCutsJson != null ? "manual" : "auto",
       manualCuts: updated.manualCutsJson
         ? JSON.parse(updated.manualCutsJson as string)
         : undefined,

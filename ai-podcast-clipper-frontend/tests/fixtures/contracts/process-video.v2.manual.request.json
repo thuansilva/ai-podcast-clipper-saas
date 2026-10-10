@@ -1,0 +1,12 @@
+{
+  "s3_key": "uploads/file-123/video.mp4",
+  "preset": "HORMOZI",
+  "genre": "auto",
+  "aspect_ratio": "9:16",
+  "auto_zoom": true,
+  "mode": "manual",
+  "manual_cuts": [
+    { "title": "Momento 1", "start": 10, "end": 40 },
+    { "title": "Momento 2", "start": 100, "end": 160 }
+  ]
+}

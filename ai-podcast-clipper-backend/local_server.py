@@ -17,6 +17,7 @@ for the consolidation rationale. The only things that belong here are:
 Run with: `python local_server.py` (uvicorn on 0.0.0.0:8000).
 """
 
+import hmac
 import os
 import sys
 import uuid
@@ -35,7 +36,13 @@ auth_scheme = HTTPBearer()
 
 
 def verify_auth_token(token: HTTPAuthorizationCredentials = Depends(auth_scheme)) -> None:
-    if token.credentials != os.environ.get("AUTH_TOKEN"):
+    expected_token = os.environ.get("AUTH_TOKEN") or ""
+    # RNF-SEC-07: constant-time comparison (no timing side channel); bytes so a
+    # non-ASCII bearer is a clean 401 instead of a TypeError/500. An empty
+    # AUTH_TOKEN or bearer is always rejected (never "open by misconfig").
+    if not expected_token or not token.credentials or not hmac.compare_digest(
+        token.credentials.encode("utf-8"), expected_token.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect bearer token",
@@ -117,6 +124,7 @@ from google import genai
 from core.schemas import ProcessVideoRequest, ProcessVideoResponse
 from core.transcription import WhisperTranscriber
 from core.video_pipeline import run_video_processing_pipeline
+from core.video_probe import ManualCutExceedsVideoDurationError
 
 import pathlib
 import shutil
@@ -208,8 +216,7 @@ class LocalVideoProcessor:
 
         try:
             return run_video_processing_pipeline(
-                s3_key=request.s3_key,
-                preset=request.preset or "HORMOZI",
+                request=request,
                 base_dir=base_dir,
                 transcriber=self.transcriber,
                 gemini_client=self.gemini_client,
@@ -235,6 +242,8 @@ def process_video_endpoint(req: ProcessVideoRequest, _: None = Depends(verify_au
             models_loaded = True
 
         return video_processor.process_video(req)
+    except ManualCutExceedsVideoDurationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception as e:
         import traceback
         traceback.print_exc()

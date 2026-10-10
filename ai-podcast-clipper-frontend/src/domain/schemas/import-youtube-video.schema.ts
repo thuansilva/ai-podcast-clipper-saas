@@ -1,6 +1,7 @@
 import { z, type ZodType } from "zod";
 import type { ImportYouTubeVideoInput } from "~/application/dtos/video-dtos";
 import { manualCutsArraySchema } from "./manual-cut.schema";
+import { PROJECT_SUBTITLE_PRESETS } from "./projects-actions.schema";
 
 /**
  * Payload de `importYouTubeVideo` (`src/actions/youtube.ts`) sem `userId`,
@@ -30,7 +31,9 @@ export type ImportYouTubeVideoActionInput = Omit<
 export const importYouTubeVideoSchema: ZodType<ImportYouTubeVideoActionInput> =
   z.object({
     url: z.string().trim().min(1, "URL do YouTube é obrigatória."),
-    preset: z.string().trim().min(1).max(50).optional(),
+    // Allowlist (não só tamanho): o preset chega ao backend de processamento,
+    // que já foi vulnerável a injeção de shell via esse campo.
+    preset: z.enum(PROJECT_SUBTITLE_PRESETS).optional(),
     mode: z.enum(["auto", "manual"]).optional(),
     manualCuts: manualCutsArraySchema.optional(),
     sliceStartTime: z.number().nonnegative().optional(),

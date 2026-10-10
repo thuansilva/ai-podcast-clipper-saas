@@ -17,8 +17,9 @@ import boto3
 
 from core.clip_pipeline import process_clip
 from core.moments import identify_moments
-from core.schemas import ProcessVideoResponse
+from core.schemas import ProcessVideoRequest, ProcessVideoResponse
 from core.transcription import WhisperTranscriber
+from core.video_probe import get_video_duration_seconds, validate_manual_cuts_against_duration
 
 
 def resolve_input_video_path(
@@ -43,8 +44,7 @@ def resolve_input_video_path(
 
 
 def run_video_processing_pipeline(
-    s3_key: str,
-    preset: str,
+    request: ProcessVideoRequest,
     base_dir: pathlib.Path,
     transcriber: WhisperTranscriber,
     gemini_client=None,
@@ -52,27 +52,46 @@ def run_video_processing_pipeline(
     s3_bucket: str = "ai-podcast-clipper",
     asd_dir: str = "/asd",
 ) -> ProcessVideoResponse:
-    """Run the full pipeline (download/transcribe/identify moments/process
-    clips) for a single source video and return the response payload."""
+    """Run the full pipeline (download/transcribe/identify moments or manual
+    cuts/process clips) for a single source video and return the response
+    payload.
+
+    `request.mode` is the single bifurcation point between the automatic
+    (Gemini-driven) and manual (user-defined timestamps) paths — see
+    docs/historico/superpowers/specs/2026-10-09-manual-cuts-process-video-contract-v2-spec.md,
+    section 6. `main.py`/`local_server.py` only forward `request` here, they
+    never re-implement this decision.
+    """
+    s3_key = request.s3_key
+    preset = request.preset
     video_path = resolve_input_video_path(s3_key, base_dir, s3_bucket=s3_bucket)
 
-    # 1. Transcription
+    if request.mode == "manual":
+        # RN-PIPE-MANUAL-06: real duration is only known after download/probe.
+        video_duration = get_video_duration_seconds(video_path)
+        validate_manual_cuts_against_duration(request.manual_cuts, video_duration)
+
+    # 1. Transcription always runs — subtitles depend on it even in manual mode
+    # (RN-PIPE-MANUAL-08).
     transcript_segments_json = transcriber.transcribe(base_dir, video_path)
     transcript_segments = json.loads(transcript_segments_json)
 
-    # 2. Identify moments for clips using structured schema
-    print("Identifying clip moments with Gemini structured output...")
-    moments_extraction = identify_moments(transcript_segments, gemini_client=gemini_client)
-    clips_to_process = moments_extraction.clips[:clips_limit]
-    print(f"Identified {len(clips_to_process)} candidate clips")
+    if request.mode == "manual":
+        # RN-PIPE-MANUAL-08/09: Gemini is skipped; every cut sent is processed,
+        # clips_limit (automatic-only) does not apply.
+        clips_to_process: list = request.manual_cuts
+        print(f"Manual mode: processing {len(clips_to_process)} user-defined cuts")
+    else:
+        # 2. Identify moments for clips using structured schema
+        print("Identifying clip moments with Gemini structured output...")
+        moments_extraction = identify_moments(transcript_segments, gemini_client=gemini_client)
+        clips_to_process = moments_extraction.clips[:clips_limit]
+        print(f"Identified {len(clips_to_process)} candidate clips")
 
     # 3. Process clips (LR-ASD on cropped segments + vertical reframe + styled subtitles)
     processed_clips = []
     for index, clip_item in enumerate(clips_to_process):
-        print(
-            f"Processing clip {index} ({clip_item.title}): from "
-            f"{clip_item.start}s to {clip_item.end}s"
-        )
+        print(f"Processing clip {index}: from {clip_item.start}s to {clip_item.end}s")
         clip_result = process_clip(
             base_dir=base_dir,
             original_video_path=video_path,

@@ -7,6 +7,7 @@ logic, which lives in `core/` and is shared with the local dev runner
 new processing logic in `core/`, not here.
 """
 
+import hmac
 import os
 import pathlib
 import shutil
@@ -28,6 +29,7 @@ from core.schemas import (
 )
 from core.transcription import WhisperTranscriber
 from core.video_pipeline import run_video_processing_pipeline
+from core.video_probe import ManualCutExceedsVideoDurationError
 from core.youtube_downloader import (
     YouTubeAgeRestrictedError,
     YouTubeVideoUnavailableError,
@@ -109,7 +111,13 @@ class AiPodcastClipper:
         request: ProcessVideoRequest,
         token: HTTPAuthorizationCredentials = Depends(auth_scheme),
     ) -> ProcessVideoResponse:
-        if token.credentials != os.environ.get("AUTH_TOKEN"):
+        expected_token = os.environ.get("AUTH_TOKEN") or ""
+        # RNF-SEC-07: constant-time comparison (no timing side channel); bytes so a
+        # non-ASCII bearer is a clean 401 instead of a TypeError/500. An empty
+        # AUTH_TOKEN or bearer is always rejected (never "open by misconfig").
+        if not expected_token or not token.credentials or not hmac.compare_digest(
+            token.credentials.encode("utf-8"), expected_token.encode("utf-8")
+        ):
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Incorrect bearer token",
@@ -122,13 +130,17 @@ class AiPodcastClipper:
 
         try:
             return run_video_processing_pipeline(
-                s3_key=request.s3_key,
-                preset=request.preset or "HORMOZI",
+                request=request,
                 base_dir=base_dir,
                 transcriber=self.transcriber,
                 gemini_client=self.gemini_client,
                 s3_bucket=S3_BUCKET,
                 asd_dir=ASD_DIR,
+            )
+        except ManualCutExceedsVideoDurationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=str(e),
             )
         finally:
             if base_dir.exists():
@@ -146,7 +158,13 @@ def download_youtube(
     request: DownloadYouTubeRequest,
     token: HTTPAuthorizationCredentials = Depends(auth_scheme),
 ) -> DownloadYouTubeResponse:
-    if token.credentials != os.environ.get("AUTH_TOKEN"):
+    expected_token = os.environ.get("AUTH_TOKEN") or ""
+    # RNF-SEC-07: constant-time comparison (no timing side channel); bytes so a
+    # non-ASCII bearer is a clean 401 instead of a TypeError/500. An empty
+    # AUTH_TOKEN or bearer is always rejected (never "open by misconfig").
+    if not expected_token or not token.credentials or not hmac.compare_digest(
+        token.credentials.encode("utf-8"), expected_token.encode("utf-8")
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect bearer token",

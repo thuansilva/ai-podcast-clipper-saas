@@ -178,7 +178,9 @@ Anualmente (ou conforme configurado), o Stripe emite `invoice.payment_succeeded`
 
 Quando o usuário inicia o processamento de um vídeo:
 
-1. **`HoldCreditsUseCase`**: Calcula o custo (função do duration do vídeo), debita de `subscriptionCredits` + `oneTimeCredits` (prioridade), move para `reservedCredits`, cria transação `HOLD`.
+0. **Guards do modo manual (antes do hold)**: em `validate-and-reserve-credits` (`src/inngest/functions.ts`), se `mode="manual"` chegar sem cortes, o processamento lança `ManualCutsRequiredError` (`src/domain/errors/manual-cuts-required-error.ts`) **antes** de `HoldCreditsUseCase` ser chamado. Se houver cortes com `mode` omitido ou `"auto"`, lança `ManualCutsModeMismatchError` (`src/domain/errors/manual-cuts-mode-mismatch-error.ts`), também antes do hold. Nenhum HOLD é criado, nenhum crédito é reservado e não há cobrança pelo preço automático (RN-PIPE-MANUAL-02 / RN-PIPE-MANUAL-15 / D5). A checagem roda depois da validação de duração do plano e antes da reserva.
+
+1. **`HoldCreditsUseCase`**: Calcula o custo (função da duração do vídeo; no modo manual, função dos cortes via `calculateManualCutsCredits`), debita de `subscriptionCredits` + `oneTimeCredits` (prioridade), move para `reservedCredits`, cria transação `HOLD`.
    - O description do HOLD inclui `[sub:X,ot:Y]` para rastrear a origem dos créditos reservados.
 
 2. **Processamento**: Pipeline do backend consome o vídeo. Se bem-sucedido:
@@ -188,6 +190,8 @@ Quando o usuário inicia o processamento de um vídeo:
 
 3. **Se houver falha no processamento**:
    - **`RefundCreditsUseCase`** (manual, chamada pelo handler de erro): Reverte o hold completo, restaura créditos integralmente.
+
+> **Gap conhecido (2026-10-09):** o preço do hold depende de `event.data.mode === "manual"` com cortes presentes, enquanto o modo enviado ao backend é derivado de `manualCutsJson` ou dos cortes do evento (`buildProcessVideoPayload`). Como os schemas aceitam `mode: "auto"` junto com `manualCuts`, essa combinação cobra o preço automático e processa os cortes em modo manual. Ver `../operacao/checklist-go-live.md`.
 
 #### 4. Reembolso por Charge Refunded
 

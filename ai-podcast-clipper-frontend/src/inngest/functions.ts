@@ -15,6 +15,9 @@ import { PrismaSubscriptionRepository } from "~/infrastructure/database/reposito
 import { Prisma } from "@prisma/client";
 import { calculateManualCutsCredits } from "~/domain/services/credit-pricing.service";
 import { validateVideoDuration } from "~/domain/services/plan-policy.service";
+import { ManualCutsRequiredError } from "~/domain/errors/manual-cuts-required-error";
+import { ManualCutsModeMismatchError } from "~/domain/errors/manual-cuts-mode-mismatch-error";
+import { buildProcessVideoPayload } from "~/application/services/process-video-payload.service";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 import { fetch as undiciFetch, Agent } from "undici";
 import { logger } from "~/lib/observability/logger";
@@ -209,10 +212,24 @@ export async function processVideoHandler({
           throw new Error(durationValidation.error);
         }
 
-        const isManual =
-          event.data.mode === "manual" &&
-          Array.isArray(event.data.manualCuts) &&
-          event.data.manualCuts.length > 0;
+        const hasManualCuts =
+          Array.isArray(event.data.manualCuts) && event.data.manualCuts.length > 0;
+
+        // RN-PIPE-MANUAL-02 / D5: mode="manual" sem cortes é erro, nunca cai
+        // para o cálculo automático de créditos (fallback silencioso).
+        if (event.data.mode === "manual" && !hasManualCuts) {
+          throw new ManualCutsRequiredError();
+        }
+
+        // RN-PIPE-MANUAL-03 (espelho do backend): o payload do GPU deriva
+        // `mode` da presença de cortes (D6); sem este guard, cortes com mode
+        // omitido/"auto" seriam cobrados pelo preço automático mas
+        // processados em modo manual (até 50 clipes).
+        if (event.data.mode !== "manual" && hasManualCuts) {
+          throw new ManualCutsModeMismatchError();
+        }
+
+        const isManual = event.data.mode === "manual" && hasManualCuts;
 
         const holdCreditsUseCase = makeHoldCreditsUseCase();
         const holdResult = await holdCreditsUseCase.execute({
@@ -268,19 +285,9 @@ export async function processVideoHandler({
           "Content-Type": "application/json",
           Authorization: `Bearer ${env.PROCESS_VIDEO_ENDPOINT_AUTH}`,
         }),
-        body: JSON.stringify({
-          s3_key: video.s3Key,
-          preset: video.subtitlePreset ?? preset ?? "NONE",
-          genre: video.genre ?? "auto",
-          aspect_ratio: video.aspectRatio ?? "9:16",
-          auto_zoom: video.autoZoom ?? true,
-          mode: video.clipModel ?? event.data.mode ?? "auto",
-          manual_cuts: event.data.manualCuts?.map((c) => ({
-            title: c.title,
-            start: c.startTime,
-            end: c.endTime,
-          })),
-        }),
+        body: JSON.stringify(
+          buildProcessVideoPayload({ video, eventData: event.data }),
+        ),
       });
 
       if (!response.ok) {

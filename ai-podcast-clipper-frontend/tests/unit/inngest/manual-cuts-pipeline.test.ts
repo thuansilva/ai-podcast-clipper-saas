@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { processVideoHandler, type PipelineStep } from "~/inngest/functions";
 import { env } from "~/env";
 import { Prisma } from "@prisma/client";
+import { calculateManualCutsCredits } from "~/domain/services/credit-pricing.service";
 
 
 import { fetch as undiciFetch } from "undici";
@@ -295,13 +296,8 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
     expect(parsedBody.manual_cuts).toBeUndefined();
   });
 
-  it("deve fazer fallback para cálculo normal se mode for manual mas a lista de cortes estiver vazia", async () => {
+  it("deve falhar explicitamente (nunca fazer fallback silencioso) quando mode for manual e a lista de cortes estiver vazia (RN-PIPE-MANUAL-02 / D5)", async () => {
     const mockStep = createMockStep();
-
-    mockHoldCreditsExecute.mockResolvedValue({
-      success: true,
-      heldCredits: 10,
-    });
 
     const result = await processVideoHandler({
       event: {
@@ -315,22 +311,20 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
       step: mockStep,
     });
 
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/corte manual/i);
 
-    // Como manualCuts está vazio, isManual deve ser falso e amount não deve ser calculado pelos cortes
-    expect(mockHoldCreditsExecute).toHaveBeenCalledWith({
-      userId: "user-456",
-      durationSeconds: 600,
-      fileId: "file-123",
-      amount: undefined,
+    // D5: o crédito nunca deve ser reservado (nem no preço manual, nem caindo
+    // silenciosamente para o cálculo automático) quando mode="manual" vem sem cortes.
+    expect(mockHoldCreditsExecute).not.toHaveBeenCalled();
+
+    // Nenhuma chamada ao Modal GPU deve ocorrer — a requisição é rejeitada antes disso.
+    expect(undiciFetch).not.toHaveBeenCalled();
+
+    expect(mockUploadedFileUpdate).toHaveBeenCalledWith({
+      where: { id: "file-123" },
+      data: expect.objectContaining({ status: "failed" }),
     });
-
-    const fetchSpy = vi.mocked(undiciFetch);
-    const [, requestInit] = fetchSpy.mock.calls[0]!;
-    const parsedBody = JSON.parse(requestInit?.body as string);
-
-    expect(parsedBody.mode).toBe("manual");
-    expect(parsedBody.manual_cuts).toEqual([]);
   });
 
   it("deve abortar e marcar como failed quando a duração exceder o limite do plano STARTER (> 2h)", async () => {
@@ -426,5 +420,55 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
       auto_zoom: false,
       mode: "auto",
     });
+  });
+
+  it("cobrança e payload devem ser coerentes: créditos reservados pelo preço de cortes manuais exigem mode='manual' no Modal (Fase 1 — TDD red)", async () => {
+    const mockStep = createMockStep();
+    const manualCuts = [
+      { title: "Momento 1", startTime: 10, endTime: 40 }, // 30s -> 1 crédito
+      { title: "Momento 2", startTime: 100, endTime: 170 }, // 70s -> 2 créditos
+    ];
+
+    // clipModel é a opção de LAYOUT do vídeo ("auto" | "face_focus"), não o modo de processamento.
+    mockUploadedFileFindUniqueOrThrow.mockResolvedValue({
+      id: "file-123",
+      userId: "user-456",
+      s3Key: "uploads/file-123/video.mp4",
+      durationSeconds: 600,
+      sourceType: "UPLOAD",
+      status: "queued",
+      displayName: "podcast.mp4",
+      clipModel: "auto",
+      user: { id: "user-456", plan: "STARTER" },
+    });
+
+    const result = await processVideoHandler({
+      event: {
+        data: {
+          uploadedFileId: "file-123",
+          userId: "user-456",
+          preset: "HORMOZI",
+          mode: "manual",
+          manualCuts,
+        },
+      },
+      step: mockStep,
+    });
+
+    expect(result.success).toBe(true);
+
+    // Cobrança: reserva no preço manual (3 créditos).
+    expect(mockHoldCreditsExecute).toHaveBeenCalledWith({
+      userId: "user-456",
+      durationSeconds: 600,
+      fileId: "file-123",
+      amount: calculateManualCutsCredits(manualCuts),
+    });
+
+    // Processamento: o Modal precisa receber o modo que foi cobrado.
+    const [, requestInit] = vi.mocked(undiciFetch).mock.calls[0]!;
+    const parsedBody = JSON.parse(requestInit?.body as string);
+    expect(parsedBody.mode).toBe("manual");
+    expect(parsedBody.manual_cuts).toHaveLength(2);
   });
 });

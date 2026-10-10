@@ -14,10 +14,19 @@ import type { ManualCutDTO } from "~/application/dtos/video-dtos";
 export const MAX_MANUAL_CUTS = 50;
 
 /**
- * Valida a FORMA de um corte manual na borda (tipo, não-negatividade e que
- * `endTime` seja estritamente maior que `startTime`). Compartilhado por
- * `import-youtube-video.schema.ts` e `process-video.schema.ts` para não
- * duplicar a regra em dois lugares.
+ * Duração máxima (em segundos) de um único corte manual. Mesmo limite do
+ * backend (`ManualCut.validate_duration`, `_validate_clip_duration(...,
+ * max_seconds=60.0)`, RN-PIPE-MANUAL-04) — validar aqui também evita que o
+ * usuário configure um corte que só vai falhar silenciosamente (422) na hora
+ * de processar, depois do crédito já ter sido reservado.
+ */
+export const MAX_MANUAL_CUT_DURATION_SECONDS = 60;
+
+/**
+ * Valida a FORMA de um corte manual na borda (tipo, não-negatividade,
+ * `endTime` estritamente maior que `startTime` e duração máxima de 60s).
+ * Compartilhado por `import-youtube-video.schema.ts` e
+ * `process-video.schema.ts` para não duplicar a regra em dois lugares.
  */
 export const manualCutSchema: ZodType<ManualCutDTO> = z
   .object({
@@ -29,7 +38,14 @@ export const manualCutSchema: ZodType<ManualCutDTO> = z
   .refine((cut) => cut.endTime > cut.startTime, {
     message: "endTime deve ser maior que startTime.",
     path: ["endTime"],
-  });
+  })
+  .refine(
+    (cut) => cut.endTime - cut.startTime <= MAX_MANUAL_CUT_DURATION_SECONDS,
+    {
+      message: `A duração do corte não pode exceder ${MAX_MANUAL_CUT_DURATION_SECONDS}s.`,
+      path: ["endTime"],
+    }
+  );
 
 export const manualCutsArraySchema: ZodType<ManualCutDTO[]> = z
   .array(manualCutSchema)

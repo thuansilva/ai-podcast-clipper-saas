@@ -214,7 +214,8 @@ class TestCreateSubtitlesWithFfmpeg:
 
             mock_run.assert_called_once()
             called_cmd = mock_run.call_args[0][0]
-            assert "ffmpeg" in called_cmd
+            assert called_cmd[0] == "ffmpeg"
             assert "-vf" in called_cmd
-            assert "ass=" in called_cmd
-            assert "subtitles_neon.ass" in called_cmd
+            vf_arg = called_cmd[called_cmd.index("-vf") + 1]
+            assert vf_arg == f"ass={os.path.join(tmpdir, 'subtitles_neon.ass')}"
+            assert mock_run.call_args.kwargs.get("shell", False) is False

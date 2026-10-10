@@ -167,6 +167,9 @@ describe("RetryProjectUseCase", () => {
       status: "failed",
     });
 
+    // `clipModel` nunca assume o valor "manual" na realidade (só "auto"/"face_focus",
+    // opção de LAYOUT) — o modo manual é sinalizado exclusivamente por `manualCutsJson`
+    // (D6), por isso não é setado em `updates` aqui.
     const manualCuts = [{ id: "cut-1", title: "Corte 1", startTime: 10, endTime: 30 }];
     await uploadedFileRepository.update(project.id, {
       manualCutsJson: JSON.stringify(manualCuts),
@@ -177,7 +180,6 @@ describe("RetryProjectUseCase", () => {
       userId: "user-1",
       updates: {
         subtitlePreset: "MRBEAST",
-        clipModel: "manual",
       },
     });
 
@@ -188,6 +190,57 @@ describe("RetryProjectUseCase", () => {
       preset: "MRBEAST",
       mode: "manual",
       manualCuts,
+    });
+  });
+
+  describe("regressão do BLOCKER de corte manual no retry (Fase 1 — TDD red)", () => {
+    it("deve reenfileirar em modo manual quando há cortes salvos em manualCutsJson, sem nenhum update (clipModel nulo)", async () => {
+      const project = await uploadedFileRepository.create({
+        userId: "user-1",
+        s3Key: "test.mp4",
+        sourceType: "UPLOAD",
+        status: "failed",
+      });
+
+      const manualCuts = [{ id: "cut-1", title: "Corte 1", startTime: 10, endTime: 30 }];
+      await uploadedFileRepository.update(project.id, {
+        manualCutsJson: JSON.stringify(manualCuts),
+      });
+
+      await useCase.execute({ projectId: project.id, userId: "user-1" });
+
+      expect(queueGateway.sentEvents).toHaveLength(1);
+      expect(queueGateway.sentEvents[0]).toEqual({
+        uploadedFileId: project.id,
+        userId: "user-1",
+        preset: "HORMOZI",
+        mode: "manual",
+        manualCuts,
+      });
+    });
+
+    it("deve preservar o modo manual no retry quando o usuário altera apenas o layout (clipModel 'face_focus')", async () => {
+      const project = await uploadedFileRepository.create({
+        userId: "user-1",
+        s3Key: "test.mp4",
+        sourceType: "UPLOAD",
+        status: "failed",
+      });
+
+      const manualCuts = [{ id: "cut-1", title: "Corte 1", startTime: 10, endTime: 30 }];
+      await uploadedFileRepository.update(project.id, {
+        manualCutsJson: JSON.stringify(manualCuts),
+      });
+
+      await useCase.execute({
+        projectId: project.id,
+        userId: "user-1",
+        updates: { clipModel: "face_focus" },
+      });
+
+      expect(queueGateway.sentEvents).toHaveLength(1);
+      expect(queueGateway.sentEvents[0]!.mode).toBe("manual");
+      expect(queueGateway.sentEvents[0]!.manualCuts).toEqual(manualCuts);
     });
   });
 });

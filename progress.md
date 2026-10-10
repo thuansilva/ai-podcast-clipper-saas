@@ -44,6 +44,60 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 
 ## Histórico
 
+### 2026-10-09: RNF-SEC-07 Resolvido — Comparação de Token Constant-Time + Auditoria dos `shell=True`
+- **Commit(s):** nenhum ainda — alterações deixadas no working directory para revisão do usuário
+- **O que foi feito:**
+  - Comparação do Bearer token trocada de `!=` por `hmac.compare_digest` sobre bytes em `local_server.py::verify_auth_token`, `main.py::process_video` e `main.py::download_youtube`. `AUTH_TOKEN` ausente/vazio ou bearer vazio → 401 explícito.
+  - Novo teste `ai-podcast-clipper-backend/tests/test_auth_token_constant_time.py` (15 casos: 5 cenários × 3 pontos de entrada, incluindo espião em `hmac.compare_digest`).
+  - Auditoria dos 5 `subprocess.run(..., shell=True)` restantes no backend (`core/clip_pipeline.py` ×2, `core/vertical_video.py`, `core/transcription.py`, `core/active_speaker_detection.py`): todos interpolam só valores internos (`uuid4`, índices, floats validados pelo Pydantic, configuração do operador). Fechado sem ação necessária; migrar para lista de argumentos continua sendo defesa em profundidade futura.
+  - Novo achado (BAIXA, a verificar): `core/video_pipeline.py::resolve_input_video_path` aceita `s3_key` como caminho local (`os.path.exists` + `shutil.copy`). Não é shell injection, mas não está verificado se um chamador pode controlar `s3_key`. Registrado no checklist.
+  - Documentação: RNF-SEC-07 ⚠️ → ✅ na matriz de requisitos com o teste como evidência; RNF-SEC-16 com a auditoria concluída; checklist (item HIGH → Infraestrutura resolvido, pendências de segurança atualizadas).
+- **Correção de premissa:** o "fail-open" com `AUTH_TOKEN=""` não era alcançável via HTTP. O `HTTPBearer` do FastAPI já rejeita bearer vazio com 401 antes da verificação, e `"x" != ""` já rejeitava. A mudança é defesa em profundidade. O caso não-ASCII também não era bug do código antigo: é guarda contra regressão, porque `compare_digest` com `str` não-ASCII lança `TypeError`.
+- **Validação (execução real em 2026-10-09):**
+  - Backend `.venv/bin/python -m pytest`: 192 passed (2 warnings de deprecação de starlette/anyio, pré-existentes).
+  - `tests/test_auth_token_constant_time.py`: 15 passed.
+  - Frontend: não executado, pois esta correção não toca código do frontend.
+
+### 2026-10-09: Auditoria de Segurança Pós-Cortes Manuais — RCE por `preset` e Cobrança Divergente
+- **Commit(s):** nenhum ainda — alterações deixadas no working directory para revisão do usuário
+- **O que foi feito:**
+  - RCE corrigida: `core/subtitles.py` executava o ffmpeg de legendas com `shell=True` e `preset` controlado pelo usuário (só limitado a 50 caracteres). Agora usa lista de argumentos com `shell=False`, e `preset` é allowlist fechada (`SubtitlePreset` no backend, `z.enum(PROJECT_SUBTITLE_PRESETS)` no frontend; fora da lista → 422). Regra RN-PIPE-PRESET-01, RNF-SEC-16.
+  - Cobrança divergente corrigida: o hold lia `event.data.mode`, mas o payload ao GPU derivava o modo da presença de cortes. Guard novo `ManualCutsModeMismatchError` rejeita cortes com `mode` omitido/`"auto"` antes da reserva de crédito (RN-PIPE-MANUAL-15). Decisão do usuário: rejeitar, não cobrar como manual.
+  - Hardening de `ManualCut`: `NaN`/`Infinity` rejeitados em `start`/`end` (`allow_inf_nan=False`); título limitado a 200 caracteres no backend (`MAX_MANUAL_CUT_TITLE_LENGTH`), igual ao Zod.
+  - Documentação: RNF-SEC-16 novo; RF-PIPE-05 e RF-PIPE-08 atualizados; RN-PIPE-MANUAL-04 e 15 e RN-PIPE-PRESET-01 em `casos-de-uso-e-regras-de-negocio.md`; guards em `visao-fluxo-processamento-video.md` e `visao-fluxo-pagamento.md`; checklist com os itens resolvidos e uma seção de pendências.
+  - Correção de documentação: a linha de legendas dizia "6 testes de `test_subtitles.py` falhando", o que não é verdade hoje (13 passed). Atualizada.
+- **Pendências registradas (não corrigidas):**
+  - (MÉDIA, funcional) Preset `NONE` ("Sem Legenda") aceito mas sem implementação: cai para HORMOZI.
+  - (MÉDIA, funcional) Projetos antigos com `subtitlePreset` fora da allowlist recebem 422 no retry.
+  - (BAIXA, auditoria futura) 5 outros `subprocess.run(..., shell=True)` em `core/` ainda não auditados contra os demais campos do request.
+  - RNF-SEC-07 (comparação de token não constant-time) segue aberto.
+- **Validação (execução real em 2026-10-09):**
+  - Backend `.venv/bin/python -m pytest`: 177 passed.
+  - Backend, suítes de segurança (`test_preset_shell_injection.py`, `test_manual_cut_input_hardening.py`, `test_subtitles.py`, `test_local_server.py`): 75 passed.
+  - Frontend `npm run test`: 655 passed | 8 skipped.
+  - Frontend, testes de segurança (3 unit: manual-cuts-billing-consistency, process-video.schema, import-youtube-video.schema): 58 passed. Integração `manual-cuts-billing-consistency`: 2 passed.
+  - Frontend `npm run check`: exit 0, 0 erros, 7 warnings pré-existentes.
+  - Frontend `npm run test:integration`: 96 passed | 12 failed. As 12 falhas são `ECONNREFUSED 127.0.0.1:3000` em `health-check.test.ts` e `legal-pages.test.ts`, porque a aplicação não estava rodando (ambiente, não código).
+
+### 2026-10-09: Contrato `POST /process_video` v2 — Corte Manual Não Chegava ao Backend (BLOCKER)
+- **Commit(s):** nenhum ainda — alterações deixadas no working directory para revisão do usuário
+- **O que foi feito:**
+  - Bug em dois lados, confirmado no `HEAD` anterior: o backend (`core/schemas.py::ProcessVideoRequest`) só declarava `s3_key`/`preset` e o Pydantic descartava `mode`/`manual_cuts` em silêncio; o frontend montava `mode` a partir de `clipModel` (opção de layout), e o retry comparava com um valor que `clipModel` nunca assume.
+  - Backend: `ProcessVideoRequest` com `extra="forbid"`, `mode` (`auto` default / `manual`) e `manual_cuts` (`ManualCut`, ≤ 60s por corte, ≤ 50 cortes). Novo `core/video_probe.py` valida a duração real do vídeo via ffprobe antes da transcrição. `core/video_pipeline.py::run_video_processing_pipeline(request)` é o único ponto da bifurcação auto/manual (modo manual pula Gemini e processa todos os cortes); `main.py` e `local_server.py` só repassam o request.
+  - Frontend: `buildProcessVideoPayload` (novo `src/application/services/process-video-payload.service.ts`) deriva `mode` de cortes presentes; `RetryProjectUseCase` usa `manualCutsJson`; `ManualCutsRequiredError` (novo) impede reserva de crédito com `mode="manual"` sem cortes.
+  - Documentação: RF-PIPE-08 de ⚠️ para ✅ com matriz de rastreabilidade; RN-PIPE-MANUAL-01 a 14 em `casos-de-uso-e-regras-de-negocio.md` (a linha de cortes manuais estava marcada ✅ sem ser verdade, corrigida); diagrama de processamento com a bifurcação; guard no fluxo de pagamento; BLOCKER fechado no checklist go-live.
+- **Validação (execução real em 2026-10-09):**
+  - Backend `pytest` (`.venv/bin/python -m pytest` em `ai-podcast-clipper-backend/`): 130 passed.
+  - Frontend `npm run test`: 617 passed | 8 skipped.
+  - Frontend `npm run test:integration`: 94 passed | 12 failed. As 12 falhas são todas `ECONNREFUSED 127.0.0.1:3000` em `tests/integration/health-check.test.ts` e `tests/integration/legal-pages.test.ts`, porque a aplicação não estava rodando (dependência de ambiente, não do código alterado).
+  - Os 6 arquivos de teste de corte manual (unit + integração) rodados isoladamente: 53 passed.
+- **Gaps abertos (registrados no checklist, não corrigidos nesta entrega):**
+  - `aspect_ratio`/`auto_zoom`/`genre` aceitos sem efeito (D1).
+  - `mode: "auto"` com `manualCuts` passa pelos schemas Zod: o hold cobra o preço automático, mas o payload envia `mode: "manual"`.
+  - Importação do YouTube com cortes não grava `manualCutsJson`, então o retry perde os cortes.
+  - Handler 422 de `main.py` (Modal) sem teste direto.
+- **Por quê:** o BLOCKER de "funcionalidade anunciada não entrega no backend" fazia o usuário pagar o preço manual e receber o resultado de IA. A correção fecha o contrato ponta a ponta, e os gaps acima ficam visíveis para decisão em vez de escondidos.
+
 ### 2026-10-09: Script `test:everything` — Modo Completo (Unit + Integração + Carga)
 - **Commit(s):** `82fd5fe`
 - **O que foi feito:**

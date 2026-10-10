@@ -9,17 +9,24 @@ flowchart TD
     A["👤 Usuário importa vídeo do YouTube"] -->|Frontend| B["CreateProjectClient: gera S3 key + cria UploadedFile"]
     B -->|status: queued| C["Inngest recebe ProcessVideoEvent"]
     
-    C -->|Step 1: validate-and-reserve-credits| D{["Baixar do YouTube<br/>(se aplicável)<br/>Validar duração<br/>Reservar créditos<br/>(HOLD transaction)"]}
+    C -->|Step 1: validate-and-reserve-credits| D{["Baixar do YouTube (se aplicável)<br/>Validar duração do plano<br/>mode=manual sem cortes: erro, sem hold<br/>Reservar créditos (HOLD)<br/>manual: preço por cortes / auto: preço por duração"]}
     D -->|Hold bem-sucedido| E["Step 2: mark-processing"]
     D -->|Insuficiente de créditos| F["❌ Status: no credits"]
     
     E -->|Status: processing| G["Step 3: call-modal-gpu"]
     G -->|HTTP POST ao PROCESS_VIDEO_ENDPOINT| H["Modal (Produção) OU GPU Local (Dev)"]
     
-    H --> I["core/video_pipeline.run_video_processing_pipeline"]
-    I -->|1. Transcrição| J["WhisperX: transcreve áudio com timestamps"]
-    J -->|2. Identificação de momentos| K["Gemini: identifica clipes 30-60s com virality score"]
-    K -->|Para cada clipe| L["core/clip_pipeline.process_clip"]
+    H --> I["core/video_pipeline.run_video_processing_pipeline(request)"]
+    I --> I1{"request.mode"}
+    I1 -->|"auto"| A1["1. Transcrição (WhisperX)"]
+    A1 --> A2["2. Gemini: identify_moments<br/>clips[:5] (clips_limit)"]
+    I1 -->|"manual"| M1["1. ffprobe: duração real do vídeo"]
+    M1 -->|"algum corte end > duração"| MX["HTTP 422: requisição inteira rejeitada<br/>sem transcrição e sem clipes"]
+    M1 -->|"todos os cortes dentro da duração"| M2["2. Transcrição (WhisperX)<br/>serve às legendas"]
+    M2 --> M3["Gemini PULADO<br/>clipes = manual_cuts (todos, sem limite de 5)"]
+    A2 --> K["Para cada clipe"]
+    M3 --> K
+    K --> L["core/clip_pipeline.process_clip"]
     
     L --> M["3. Corte + Detecção de Fala Ativa"]
     M -->|FFMPEG: corta segmento| N["4. LR-ASD: detecta falante ativo"]
@@ -39,6 +46,7 @@ flowchart TD
     style H fill:#fff9c4
     style I fill:#f3e5f5
     style L fill:#f3e5f5
+    style MX fill:#ffcdd2
 ```
 
 ## Estados do Projeto (UploadedFile)
@@ -129,12 +137,15 @@ A funcionalidade de upload direto de arquivo de vídeo (`generateUploadUrl`) **e
 2. Se `sourceType === "YOUTUBE"`, baixa o vídeo via `downloadYouTubeVideo()` (chama `YOUTUBE_DOWNLOAD_ENDPOINT`)
 3. Atualiza `s3Key` e `durationSeconds` no banco
 4. Valida duração máxima conforme o plano do usuário (`validateVideoDuration`)
-5. Calcula créditos necessários:
+5. Se `mode === "manual"` e não há cortes, lança `ManualCutsRequiredError` (`src/domain/errors/manual-cuts-required-error.ts`) **antes** de qualquer hold: nenhum crédito é reservado e não há fallback silencioso para o preço automático (RN-PIPE-MANUAL-02 / D5). Se há cortes e `mode !== "manual"`, lança `ManualCutsModeMismatchError` (`src/domain/errors/manual-cuts-mode-mismatch-error.ts`), também antes do hold (RN-PIPE-MANUAL-15)
+6. Calcula créditos necessários:
    - Modo **manual** (manual cuts): usa `calculateManualCutsCredits(manualCuts)`
    - Modo **auto** (clipe automático): usa duração do vídeo como base
-6. **Reserva créditos** via `HoldCreditsUseCase` (cria `CreditTransaction` com `type: HOLD`)
+7. **Reserva créditos** via `HoldCreditsUseCase` (cria `CreditTransaction` com `type: HOLD`)
    - Se insuficiente, lança erro → capturado no `.catch()` → status fica `"no credits"`
    - Se bem-sucedido, retorna `heldCredits` para próximas etapas
+
+> **Gap conhecido (2026-10-09):** `mode` e `manualCuts` chegam como campos independentes. Os schemas Zod (`src/domain/schemas/process-video.schema.ts`, `src/domain/schemas/import-youtube-video.schema.ts`) aceitam `mode: "auto"` junto com cortes. Nesse caso o hold usa o preço automático (lê `event.data.mode`), mas o payload para o backend deriva o modo de `manualCutsJson`/cortes presentes (`buildProcessVideoPayload`) e envia `mode: "manual"`. Ver `../operacao/checklist-go-live.md`.
 
 **Transações de crédito**:
 - `HOLD`: reserva créditos provisórios (não deduzido ainda do saldo do usuário)
@@ -168,7 +179,7 @@ Faz HTTP POST para `env.PROCESS_VIDEO_ENDPOINT` (Modal em produção OU GPU loca
 }
 ```
 
-Ambos (Modal e GPU local) recebem esse payload. Porém, **GAP FUNCIONAL CRÍTICO**: `core/schemas.py::ProcessVideoRequest` só valida `s3_key` e `preset` — os campos `genre`, `aspect_ratio`, `auto_zoom`, `mode`, `manual_cuts` são **descartados silenciosamente** pelo Pydantic v2 (comportamento padrão sem `extra=...`). O backend sempre executa o pipeline automático completo (detecção de momentos via IA, crop 9:16, legendas com preset), ignorando qualquer configuração manual do usuário. Isso causa gasto desnecessário de chamadas à API do Gemini. Decisão requerida: implementar recepção desses campos no backend, ou documentar limitação no frontend.
+Ambos (Modal e GPU local) recebem esse payload. `core/schemas.py::ProcessVideoRequest` usa `extra="forbid"`: campo desconhecido gera HTTP 422 em vez de ser descartado em silêncio (RN-PIPE-MANUAL-13). `mode` tem default `"auto"` (RN-PIPE-MANUAL-14). `mode="manual"` exige `manual_cuts` não vazio, e `mode="auto"` não aceita cortes (RN-PIPE-MANUAL-02/03). `aspect_ratio`, `auto_zoom` e `genre` são aceitos, mas **ainda não têm efeito** no processamento (RN-PIPE-MANUAL-12, gap conhecido D1). `preset` de legenda é validado contra uma allowlist (`SubtitlePreset`); valor fora dela gera 422 antes de qualquer comando de shell (RN-PIPE-PRESET-01, RNF-SEC-16).
 
 ### Fluxo Principal do Backend: `core/video_pipeline.run_video_processing_pipeline()`
 
@@ -180,6 +191,7 @@ video_path = resolve_input_video_path(s3_key, base_dir, s3_bucket)
 ```
 - Se `s3_key` é um path local que existe (útil para dev), copia direto
 - Senão, baixa do S3
+- Se `request.mode == "manual"`: logo após resolver o caminho, `get_video_duration_seconds` (ffprobe, `core/video_probe.py`) lê a duração real e `validate_manual_cuts_against_duration` rejeita a requisição inteira (HTTP 422) se qualquer corte tiver `end` maior que essa duração (RN-PIPE-MANUAL-06). Isso acontece antes da transcrição.
 
 #### 2. Transcrição (WhisperX)
 ```python
@@ -199,6 +211,8 @@ transcript_segments = json.loads(transcript_segments_json)
 **Nota**: O segmento **não inclui** `confidence` nem `speaker` neste ponto. A diarização (detecção de falante) ocorre posteriormente, em nível de clipe (via LR-ASD), não na transcrição global.
 
 #### 3. Identificação de Momentos Virais (Gemini)
+
+Só executa no modo `auto`. No modo `manual` esta etapa é pulada e a transcrição (passo 2) continua rodando (RN-PIPE-MANUAL-08).
 ```python
 moments_extraction = identify_moments(transcript_segments, gemini_client)
 clips_to_process = moments_extraction.clips[:clips_limit]
@@ -384,6 +398,7 @@ Usuário clica **"Reprocessar"** na Dashboard:
    - `errorMessage = null`
    - Deleta qualquer `Clip` que foi parcialmente gerado (evita duplicatas)
    - Permite opcionalmente atualizar `subtitlePreset`, `clipModel`, `aspectRatio`, etc.
+   - O `mode` reenfileirado é derivado de `manualCutsJson != null` (D6), nunca de `clipModel`. **Gap conhecido:** cortes de projeto importado do YouTube não são gravados em `manualCutsJson` na importação (`ImportYouTubeVideoUseCase`), então o retry reprocessa em modo automático. Ver `../operacao/checklist-go-live.md`.
 3. Envia novo `ProcessVideoEvent` ao Inngest
 4. Volta ao Step 1 (reservar créditos, processar, etc.)
 

@@ -16,7 +16,7 @@ import boto3
 
 from core.active_speaker_detection import run_active_speaker_detection
 from core.s3_paths import compute_clip_output_s3_key
-from core.schemas import ClipItem
+from core.schemas import ClipItem, ManualCut
 from core.subtitles import create_subtitles_with_ffmpeg
 from core.vertical_video import create_vertical_video
 
@@ -30,14 +30,20 @@ def process_clip(
     clip_index: int,
     transcript_segments: list,
     preset: str = "HORMOZI",
-    clip_item: ClipItem | None = None,
+    clip_item: ClipItem | ManualCut | None = None,
     s3_bucket: str = "ai-podcast-clipper",
     asd_dir: str = "/asd",
 ) -> dict:
     """Process a single candidate clip end-to-end and upload it to S3.
 
-    Returns the clip metadata dict (S3 key, timing, preset, and — when
-    `clip_item` is provided — title/hook/virality_score/reason).
+    Returns the clip metadata dict (S3 key, timing, preset, and title/hook/
+    virality_score/reason, whose shape depends on the origin of `clip_item`:
+
+    - `ClipItem` (automatic/Gemini mode): title/hook/virality_score/reason all
+      filled in (RN-PIPE-MANUAL-11).
+    - `ManualCut` (manual mode): title is `clip_item.title` or a generated
+      fallback ("Manual clip {N}", N 1-based); hook/virality_score/reason are
+      `None` (RN-PIPE-MANUAL-10/11).
     """
     clip_name = f"clip_{clip_index}"
     output_s3_key = compute_clip_output_s3_key(s3_key, clip_name)
@@ -108,11 +114,18 @@ def process_clip(
         "duration": duration,
         "preset": preset,
     }
-    if clip_item:
+    if isinstance(clip_item, ClipItem):
         clip_metadata.update({
             "title": clip_item.title,
             "hook": clip_item.hook,
             "virality_score": clip_item.virality_score,
             "reason": clip_item.reason,
+        })
+    elif isinstance(clip_item, ManualCut):
+        clip_metadata.update({
+            "title": clip_item.title or f"Manual clip {clip_index + 1}",
+            "hook": None,
+            "virality_score": None,
+            "reason": None,
         })
     return clip_metadata
