@@ -2,6 +2,7 @@
 #
 # test-everything.sh — "modo completo": roda unitários + integração + smoke
 # de carga numa única execução, subindo tudo que for necessário (Postgres,
+# MinIO (alternativa ao S3 real) + bucket/usuário restrito via minio-init,
 # app Next.js buildado, Inngest dev server).
 #
 # Isto é um MODO ADICIONAL para rodar localmente antes de considerar uma
@@ -16,8 +17,8 @@
 #   npm run test:everything
 #   (ou diretamente: bash scripts/test-everything.sh)
 #
-# Pré-requisito: Docker + Docker Compose (para subir o Postgres de teste via
-# docker-compose.yml na raiz do monorepo).
+# Pré-requisito: Docker + Docker Compose (para subir o Postgres de teste e o
+# MinIO via docker-compose.yml na raiz do monorepo).
 #
 set -euo pipefail
 
@@ -40,10 +41,12 @@ INNGEST_HEALTH_URL="http://localhost:${INNGEST_PORT}"
 
 NEXT_SERVER_PID=""
 INNGEST_DEV_PID=""
-# Guardamos se fomos nós que demos "docker compose up" no Postgres: se ele já
-# estava rodando (comum no dia a dia, já que é leve e outros comandos locais
-# reusam), não é nossa responsabilidade derrubá-lo no cleanup.
+# Guardamos se fomos nós que demos "docker compose up" no Postgres/MinIO: se
+# eles já estavam rodando (comum no dia a dia, já que são leves e outros
+# comandos locais reusam), não é nossa responsabilidade derrubá-los no
+# cleanup.
 POSTGRES_WAS_RUNNING="false"
+MINIO_WAS_RUNNING="false"
 
 # Cores só para o resumo final ficar legível no terminal.
 COLOR_RED="\033[0;31m"
@@ -100,12 +103,16 @@ cleanup() {
     wait "${NEXT_SERVER_PID}" 2>/dev/null || true
   fi
 
-  # Decisão: o Postgres do docker-compose é leve e outros comandos locais
-  # (npm run dev, db:studio, etc.) se beneficiam dele continuar rodando entre
-  # execuções — só derrubamos se fomos nós que subimos agora E ele não
-  # estava rodando antes desta execução.
+  # Decisão: o Postgres/MinIO do docker-compose são leves e outros comandos
+  # locais (npm run dev, db:studio, upload manual via mc/console do MinIO,
+  # etc.) se beneficiam deles continuarem rodando entre execuções — só
+  # derrubamos se fomos nós que subimos agora E eles não estavam rodando
+  # antes desta execução.
   if [ "${POSTGRES_WAS_RUNNING}" = "false" ]; then
     log "Postgres foi iniciado por este script e será mantido rodando para reuso local (não derrubado automaticamente)."
+  fi
+  if [ "${MINIO_WAS_RUNNING}" = "false" ]; then
+    log "MinIO foi iniciado por este script e será mantido rodando para reuso local (não derrubado automaticamente)."
   fi
 
   log "Cleanup concluído."
@@ -162,6 +169,44 @@ if [ "${PG_READY}" != "true" ]; then
 fi
 log "Postgres pronto."
 add_summary "OK" "Postgres disponível (localhost:5432)"
+
+# --- 1b. Docker + MinIO (alternativa gratuita ao AWS S3 real p/ dev local) -
+if docker compose -f "${REPO_ROOT}/docker-compose.yml" ps minio --format '{{.State}}' 2>/dev/null | grep -q "running"; then
+  MINIO_WAS_RUNNING="true"
+  log "MinIO já estava rodando — reusando."
+else
+  log "Subindo MinIO (docker compose up -d minio)..."
+  docker compose -f "${REPO_ROOT}/docker-compose.yml" up -d minio
+fi
+
+log "Esperando MinIO ficar healthy..."
+MINIO_READY="false"
+for _ in $(seq 1 30); do
+  if docker compose -f "${REPO_ROOT}/docker-compose.yml" ps minio --format '{{.Health}}' 2>/dev/null | grep -q "healthy"; then
+    MINIO_READY="true"
+    break
+  fi
+  sleep 2
+done
+
+if [ "${MINIO_READY}" != "true" ]; then
+  fail_step "MinIO não ficou healthy a tempo (ver 'docker compose logs minio')."
+  exit 1
+fi
+log "MinIO pronto."
+
+# minio-init é um container one-shot (bucket + usuário restrito do
+# projeto, ver docker-compose.yml) e é idempotente — reexecutá-lo aqui a
+# cada "test:everything" não falha nem duplica nada. "docker compose up
+# <serviço>" (sem -d) bloqueia até o container parar e propaga o exit code
+# dele para o próprio comando "up", então basta checar o `if` normal.
+log "Rodando minio-init (cria bucket + usuário restrito do projeto no MinIO)..."
+if docker compose -f "${REPO_ROOT}/docker-compose.yml" up minio-init; then
+  add_summary "OK" "MinIO disponível (localhost:9000, console localhost:9001) + minio-init"
+else
+  fail_step "minio-init falhou (ver 'docker compose logs minio-init')."
+  exit 1
+fi
 
 # --- 2. Prisma generate + migrate deploy -----------------------------------
 log "Rodando prisma generate..."
@@ -256,7 +301,7 @@ export AWS_SECRET_ACCESS_KEY="mock_secret"
 export AWS_REGION="us-east-1"
 export S3_BUCKET_NAME="mock-bucket"
 export PROCESS_VIDEO_ENDPOINT="https://mock.modal.run/process_video"
-export PROCESS_VIDEO_ENDPOINT_AUTH="mock-auth-token"
+export AUTH_TOKEN"mock-auth-token"
 export STRIPE_SECRET_KEY="sk_test_mock"
 export STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY="price_starter_monthly_mock"
 export STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL="price_starter_annual_mock"

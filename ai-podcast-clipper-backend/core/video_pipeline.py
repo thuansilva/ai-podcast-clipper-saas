@@ -13,11 +13,10 @@ import os
 import pathlib
 import shutil
 
-import boto3
-
 from core.clip_pipeline import process_clip
-from core.moments import identify_moments
+from core.moments_port import MomentsProvider
 from core.schemas import ProcessVideoRequest, ProcessVideoResponse
+from core.storage.ports import ObjectStorage
 from core.transcription import WhisperTranscriber
 from core.video_probe import get_video_duration_seconds, validate_manual_cuts_against_duration
 
@@ -25,21 +24,20 @@ from core.video_probe import get_video_duration_seconds, validate_manual_cuts_ag
 def resolve_input_video_path(
     s3_key: str,
     base_dir: pathlib.Path,
-    s3_bucket: str = "ai-podcast-clipper",
+    storage: ObjectStorage,
 ) -> pathlib.Path:
     """Resolve the local path of the source video for `s3_key`.
 
     If `s3_key` happens to already be a path that exists on the local
     filesystem (convenient for the local dev runner, which can point
-    straight at a file on disk), it's copied as-is; otherwise it's
-    downloaded from S3.
+    straight at a file on disk), it's copied as-is, without touching
+    `storage`; otherwise it's downloaded through the injected `storage`.
     """
     video_path = base_dir / "input.mp4"
     if os.path.exists(s3_key):
         shutil.copy(s3_key, str(video_path))
     else:
-        s3_client = boto3.client("s3")
-        s3_client.download_file(s3_bucket, s3_key, str(video_path))
+        storage.download_file(s3_key, str(video_path))
     return video_path
 
 
@@ -47,9 +45,9 @@ def run_video_processing_pipeline(
     request: ProcessVideoRequest,
     base_dir: pathlib.Path,
     transcriber: WhisperTranscriber,
-    gemini_client=None,
+    storage: ObjectStorage,
+    moments_provider: MomentsProvider,
     clips_limit: int = 5,
-    s3_bucket: str = "ai-podcast-clipper",
     asd_dir: str = "/asd",
 ) -> ProcessVideoResponse:
     """Run the full pipeline (download/transcribe/identify moments or manual
@@ -64,7 +62,7 @@ def run_video_processing_pipeline(
     """
     s3_key = request.s3_key
     preset = request.preset
-    video_path = resolve_input_video_path(s3_key, base_dir, s3_bucket=s3_bucket)
+    video_path = resolve_input_video_path(s3_key, base_dir, storage=storage)
 
     if request.mode == "manual":
         # RN-PIPE-MANUAL-06: real duration is only known after download/probe.
@@ -82,9 +80,10 @@ def run_video_processing_pipeline(
         clips_to_process: list = request.manual_cuts
         print(f"Manual mode: processing {len(clips_to_process)} user-defined cuts")
     else:
-        # 2. Identify moments for clips using structured schema
-        print("Identifying clip moments with Gemini structured output...")
-        moments_extraction = identify_moments(transcript_segments, gemini_client=gemini_client)
+        # 2. Identify moments for clips using the configured provider
+        # (Gemini/Claude — core/moments_factory.py)
+        print("Identifying clip moments...")
+        moments_extraction = moments_provider.identify_moments(transcript_segments)
         clips_to_process = moments_extraction.clips[:clips_limit]
         print(f"Identified {len(clips_to_process)} candidate clips")
 
@@ -102,7 +101,7 @@ def run_video_processing_pipeline(
             transcript_segments=transcript_segments,
             preset=preset,
             clip_item=clip_item,
-            s3_bucket=s3_bucket,
+            storage=storage,
             asd_dir=asd_dir,
         )
         processed_clips.append(clip_result)

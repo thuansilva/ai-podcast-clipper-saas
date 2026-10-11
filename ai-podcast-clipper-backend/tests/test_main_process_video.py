@@ -61,3 +61,33 @@ def test_modal_process_video_forwards_full_request_to_shared_pipeline(
     forwarded: ProcessVideoRequest = pipeline.call_args.kwargs["request"]
     assert forwarded is request
     assert forwarded.mode == "manual"
+
+
+def test_modal_process_video_forwards_object_storage_to_shared_pipeline(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # Phase 1b (D1): the Modal side hands the shared pipeline the ObjectStorage
+    # built once by the container (load_model), not a bucket name.
+    from tests.storage_fakes import FakeObjectStorage
+
+    monkeypatch.setenv("AUTH_TOKEN", "test-secret")
+    request: ProcessVideoRequest = ProcessVideoRequest.model_validate(
+        load_manual_cuts_payload()
+    )
+    token = HTTPAuthorizationCredentials(scheme="Bearer", credentials="test-secret")
+
+    storage = FakeObjectStorage()
+    fake_clipper = MagicMock()
+    fake_clipper.transcriber = MagicMock()
+    fake_clipper.gemini_client = MagicMock()
+    fake_clipper.storage = storage
+
+    pipeline = MagicMock(
+        return_value=ProcessVideoResponse(file_id=request.s3_key, clips=[])
+    )
+    monkeypatch.setattr(main, "run_video_processing_pipeline", pipeline)
+
+    _raw_process_video()(fake_clipper, request, token)
+
+    assert pipeline.call_args.kwargs["storage"] is storage
+    assert "s3_bucket" not in pipeline.call_args.kwargs

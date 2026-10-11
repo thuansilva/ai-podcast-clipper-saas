@@ -17,6 +17,141 @@ services:
       timeout: 5s
       retries: 5
 
+  # MinIO — alternativa self-hosted e gratuita ao AWS S3 real, usada em dev
+  # local (Fase 1c do plano de "MinIO como alternativa ao S3 real"). Evita
+  # custo de S3 real durante desenvolvimento/testes; apontar a aplicação
+  # (frontend/backend) para aqui em vez do AWS S3 real é feito só via env
+  # var (AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY/endpoint customizado — ver
+  # valores do usuário restrito no serviço `minio-init` abaixo), fora do
+  # escopo desta tarefa.
+  #
+  # Imagem: a imagem oficial `minio/minio` (Docker Hub) e o mirror
+  # `quay.io/minio/minio` deixaram de estar disponíveis de graça —
+  # confirmado em 2026-10-10 via `docker pull`/`docker manifest inspect`
+  # (minio/minio:<tag> retorna "pull access denied"/"unauthorized";
+  # quay.io/minio/minio:<tag> retorna "no such manifest"/MANIFEST_UNKNOWN —
+  # erros diferentes, mesmo resultado prático: nenhum dos dois serve a
+  # imagem gratuitamente). A MinIO, Inc. descontinuou a distribuição
+  # gratuita de imagens de container da Community Edition nesses
+  # registries. Usamos em vez disso o build comunitário gratuito publicado
+  # pela Chainguard (https://images.chainguard.dev/directory/image/minio/),
+  # que empacota os binários oficiais `minio` E `mc` num único image
+  # Wolfi — por isso o MESMO image é reaproveitado no `minio-init` abaixo em
+  # vez de `minio/mc`, que também não está mais disponível gratuitamente. O
+  # plano gratuito da Chainguard só publica a tag rolante `latest` (tags
+  # datadas, tipo `minio:2026-09-22`, exigem assinatura paga) — para não
+  # depender de uma tag mutável, fixamos pelo digest sha256 exato (imutável,
+  # efeito equivalente a uma tag fixa de versão). Versão do MinIO
+  # empacotada neste digest específico (confirmada rodando `minio
+  # --version` dentro da imagem): RELEASE.2026-09-22T19-25-18Z.
+  minio:
+    image: cgr.dev/chainguard/minio@sha256:7df55d002b698e4494a131b848dd553361bbe58b7e19f62d9623c29af1ba9ccf
+    container_name: ai-podcast-minio
+    restart: always
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      # Credenciais de ROOT — só para bootstrap/administração (usadas pelo
+      # `minio-init` abaixo para criar o bucket e o usuário restrito do
+      # projeto). A aplicação NUNCA deve usar estas credenciais — ver
+      # usuário restrito (MINIO_APP_ACCESS_KEY/MINIO_APP_SECRET_KEY) no
+      # `minio-init`. Default não-sensível de dev local, mesmo padrão já
+      # usado pro Postgres acima (POSTGRES_PASSWORD).
+      # ATENÇÃO — SÓ DEV LOCAL, NUNCA EM PRODUÇÃO: estes defaults
+      # (`minioadmin`/`minioadmin`) são públicos (documentação oficial do
+      # MinIO). Um MinIO de produção exige credenciais root fortes e únicas,
+      # injetadas via secret manager, nunca estes valores.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      # CORS: o frontend faz upload direto do browser via URL pré-assinada
+      # (PUT) — sem isso, o browser bloqueia a resposta. Validado manualmente
+      # com um PUT real via URL pré-assinada (boto3) + header
+      # "Origin: http://localhost:3000": resposta 200 com
+      # "Access-Control-Allow-Origin: http://localhost:3000"; com uma origem
+      # diferente, o header de CORS não é mais refletido (bloqueado pelo
+      # browser), confirmando que a config restringe de fato à origem
+      # configurada (sem ela, esta versão do MinIO reflete QUALQUER origin
+      # por padrão).
+      MINIO_API_CORS_ALLOW_ORIGIN: ${MINIO_API_CORS_ALLOW_ORIGIN:-http://localhost:3000}
+    ports:
+      - "9000:9000" # API S3
+      - "9001:9001" # Console web
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      # A imagem Chainguard não tem curl/wget (base Wolfi minimalista) nem
+      # grep — por isso a checagem usa só recursos internos do bash (nesta
+      # imagem, /bin/sh é um symlink para /usr/bin/bash): abre um socket TCP
+      # cru via /dev/tcp, manda a requisição HTTP à mão e confere "200" na
+      # linha de status.
+      test: ["CMD-SHELL", 'exec 3<>/dev/tcp/127.0.0.1/9000 && printf "GET /minio/health/live HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3 && read -r line <&3 && [[ "$$line" == *200* ]]']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # Container one-shot: cria o bucket do projeto e um usuário/credenciais
+  # RESTRITOS (política só de leitura/escrita/delete nesse bucket
+  # específico) para a aplicação usar — nunca o usuário root do MinIO.
+  # Idempotente: reexecutar (`docker compose up -d minio minio-init`) não
+  # falha nem duplica nada (confirmado rodando o script duas vezes em
+  # sequência).
+  #
+  # Regra de ciclo de vida (ILM, expiração de uploads/ e youtube/ em 1 dia —
+  # ver docs/operacao/aws-s3-lifecycle-rules.md) propositalmente NÃO
+  # automatizada aqui: `mc ilm rule add` não é idempotente (cada execução
+  # cria uma regra nova com ID novo, duplicando a regra a cada
+  # `docker compose up`), e tornar isso idempotente exigiria checar as
+  # regras já existentes via `mc ilm rule ls --json` e parsear o resultado —
+  # complexidade desproporcional para um container one-shot de dev. Quem
+  # precisar dessa regra em dev local pode rodar manualmente uma vez:
+  # `docker compose exec minio-init mc ilm rule add --expire-days 1 --prefix "uploads/" local/ai-podcast-clipper`
+  # (e o mesmo para "youtube/").
+  #
+  # Valores que o frontend/backend devem usar para apontar pro MinIO LOCAL
+  # em vez do AWS S3 real. ATENÇÃO — SÓ DEV LOCAL, NUNCA EM PRODUÇÃO: as
+  # credenciais default abaixo são fixas, determinísticas e estão
+  # versionadas neste arquivo (portanto públicas). Em produção (AWS S3 real
+  # ou um MinIO self-hosted), use credenciais próprias via secret manager e
+  # um S3_ENDPOINT_URL público com https:// — o frontend recusa endpoint
+  # localhost/privado/http em NODE_ENV=production (ver
+  # ai-podcast-clipper-frontend/src/infrastructure/storage/storage-endpoint-guard.ts).
+  #   AWS_ACCESS_KEY_ID     = valor de MINIO_APP_ACCESS_KEY abaixo (default: ai-podcast-clipper-app)
+  #   AWS_SECRET_ACCESS_KEY = valor de MINIO_APP_SECRET_KEY abaixo (default: ai-podcast-clipper-app-secret123)
+  #   S3_BUCKET_NAME        = ai-podcast-clipper (mesmo default já usado em
+  #                           ai-podcast-clipper-backend/main.py:75 e
+  #                           local_server.py:132/141)
+  #   AWS_REGION            = us-east-1 (MinIO aceita qualquer valor; mantido
+  #                           igual ao default já usado em
+  #                           scripts/test-everything.sh e nos .env.example)
+  #   endpoint customizado  = http://localhost:9000 (do host) ou
+  #                           http://minio:9000 (de outro container nesta
+  #                           mesma rede do compose)
+  minio-init:
+    image: cgr.dev/chainguard/minio@sha256:7df55d002b698e4494a131b848dd553361bbe58b7e19f62d9623c29af1ba9ccf
+    container_name: ai-podcast-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_APP_BUCKET: ${MINIO_APP_BUCKET:-ai-podcast-clipper}
+      MINIO_APP_ACCESS_KEY: ${MINIO_APP_ACCESS_KEY:-ai-podcast-clipper-app}
+      MINIO_APP_SECRET_KEY: ${MINIO_APP_SECRET_KEY:-ai-podcast-clipper-app-secret123}
+    command:
+      - |
+        set -e
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        mc mb --ignore-existing "local/$$MINIO_APP_BUCKET"
+        mc admin user add local "$$MINIO_APP_ACCESS_KEY" "$$MINIO_APP_SECRET_KEY"
+        policy_json="{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":[\"s3:*\"],\"Resource\":[\"arn:aws:s3:::$${MINIO_APP_BUCKET}\",\"arn:aws:s3:::$${MINIO_APP_BUCKET}/*\"]}]}"
+        printf '%s' "$$policy_json" > /tmp/policy.json
+        mc admin policy create local ai-podcast-clipper-rw /tmp/policy.json
+        mc admin policy attach local ai-podcast-clipper-rw --user "$$MINIO_APP_ACCESS_KEY"
+        echo "minio-init concluido: bucket=$$MINIO_APP_BUCKET usuario=$$MINIO_APP_ACCESS_KEY"
+    restart: "no"
+
   k6:
     image: grafana/k6:latest
     container_name: ai-podcast-k6
@@ -173,6 +308,7 @@ services:
 
 volumes:
   postgres_data:
+  minio_data:
   prometheus_data:
   loki_data:
   tempo_data:

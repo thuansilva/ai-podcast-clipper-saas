@@ -3,12 +3,13 @@
 import os
 import shutil
 import tempfile
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
-import boto3
 import yt_dlp
 from yt_dlp.utils import DownloadError, ExtractorError
+
+from core.storage.ports import ObjectStorage
 
 
 class YouTubeDownloaderError(Exception):
@@ -147,18 +148,19 @@ def get_youtube_video_info(url: str) -> dict[str, Any]:
 
 def download_youtube_to_s3(
     url: str,
-    s3_bucket: str,
     s3_key: str,
-    s3_client: Optional[Any] = None,
+    storage: ObjectStorage,
 ) -> dict[str, Any]:
     """
-    Downloads the highest quality MP4 stream up to 1080p and uploads directly to S3.
+    Downloads the highest quality MP4 stream up to 1080p and uploads it
+    through the injected `storage` (the central config, see
+    `core/storage/factory.py`, is the only source of truth for the
+    destination bucket/endpoint — never a parameter here).
 
     Args:
         url: YouTube video URL.
-        s3_bucket: Destination AWS S3 bucket.
-        s3_key: Destination AWS S3 object key.
-        s3_client: Optional boto3 S3 client. Created automatically if not provided.
+        s3_key: Destination object key.
+        storage: Injected `ObjectStorage` the downloaded file is uploaded to.
 
     Returns:
         dict containing s3_key, duration (in seconds), title, and thumbnail URL.
@@ -231,13 +233,12 @@ def download_youtube_to_s3(
                         f"Downloaded video file not found in temp directory: {temp_dir}"
                     )
 
-                # Upload file to S3
-                client = s3_client if s3_client is not None else boto3.client("s3")
+                # Upload file through the injected storage.
                 try:
-                    client.upload_file(local_video_path, s3_bucket, s3_key)
+                    storage.upload_file(local_video_path, s3_key)
                 except Exception as upload_err:
                     raise YouTubeDownloaderError(
-                        f"Failed to upload video to S3 ({s3_bucket}/{s3_key}): {upload_err}"
+                        f"Failed to upload video to S3 (key={s3_key}): {upload_err}"
                     ) from upload_err
 
                 return {

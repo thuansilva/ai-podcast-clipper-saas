@@ -5,19 +5,55 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { env } from "~/env";
 import type { IStorageGateway } from "~/domain/ports/storage-gateway";
+
+/**
+ * Config injetada no gateway. Nenhum campo é lido de `~/env` diretamente
+ * aqui: quem resolve a env (AWS real vs MinIO) é a factory
+ * (`~/infrastructure/factories/storage-gateway.factory`), para que este
+ * gateway permaneça agnóstico de onde a config vem (produção, teste de
+ * integração contra MinIO, etc.).
+ */
+export interface IS3StorageGatewayConfig {
+  region: string;
+  bucket: string;
+  credentials: {
+    accessKeyId: string;
+    secretAccessKey: string;
+  };
+  /** Setado para MinIO/S3-compatível; ausente = AWS S3 real. */
+  endpoint?: string;
+  /**
+   * Quando omitido mas `endpoint` está presente, o gateway força
+   * `true` sozinho (MinIO exige path-style). Sem `endpoint`, nunca é
+   * enviado ao `S3Client` — regressão do caso AWS real.
+   */
+  forcePathStyle?: boolean;
+}
 
 export class S3StorageGateway implements IStorageGateway {
   private readonly s3Client: S3Client;
+  private readonly bucket: string;
 
-  constructor() {
+  constructor(config: IS3StorageGatewayConfig) {
+    this.bucket = config.bucket;
+
     this.s3Client = new S3Client({
-      region: env.AWS_REGION,
-      credentials: {
-        accessKeyId: env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-      },
+      region: config.region,
+      credentials: config.credentials,
+      ...(config.endpoint
+        ? {
+            endpoint: config.endpoint,
+            forcePathStyle: true,
+            // AWS SDK v3 adiciona por padrão um header de checksum (CRC32) na
+            // URL pré-assinada; o MinIO rejeita esse header com `BadDigest`
+            // em alguns casos. "WHEN_REQUIRED" mantém o comportamento
+            // legado (sem checksum automático), restrito ao caso
+            // S3-compatível (endpoint customizado) para não alterar a
+            // config observável da AWS real.
+            requestChecksumCalculation: "WHEN_REQUIRED" as const,
+          }
+        : {}),
     });
   }
 
@@ -28,7 +64,7 @@ export class S3StorageGateway implements IStorageGateway {
     expiresInSeconds = 3600
   ): Promise<string> {
     const command = new PutObjectCommand({
-      Bucket: env.S3_BUCKET_NAME,
+      Bucket: this.bucket,
       Key: s3Key,
       ContentType: contentType,
       // Assinar com ContentLength faz o S3 rejeitar qualquer PUT cujo corpo
@@ -47,7 +83,7 @@ export class S3StorageGateway implements IStorageGateway {
     expiresInSeconds = 3600
   ): Promise<string> {
     const command = new GetObjectCommand({
-      Bucket: env.S3_BUCKET_NAME,
+      Bucket: this.bucket,
       Key: s3Key,
     });
 
@@ -58,7 +94,7 @@ export class S3StorageGateway implements IStorageGateway {
 
   async deleteFile(key: string): Promise<void> {
     const command = new DeleteObjectCommand({
-      Bucket: env.S3_BUCKET_NAME,
+      Bucket: this.bucket,
       Key: key,
     });
 

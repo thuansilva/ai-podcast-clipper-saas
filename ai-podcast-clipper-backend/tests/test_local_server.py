@@ -7,7 +7,6 @@ import subprocess
 from typing import Any, Dict, List
 from unittest.mock import MagicMock, patch
 
-import boto3
 import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
@@ -23,6 +22,7 @@ from tests.manual_cuts_fixture import (
     FIXTURE_MAX_CUT_END_SECONDS,
     load_manual_cuts_payload,
 )
+from tests.storage_fakes import FakeObjectStorage
 
 client = TestClient(app)
 
@@ -169,7 +169,7 @@ def sample_video_path(tmp_path_factory: pytest.TempPathFactory) -> pathlib.Path:
 def pipeline_env(
     monkeypatch: pytest.MonkeyPatch, sample_video_path: pathlib.Path
 ) -> Dict[str, Any]:
-    from core import clip_pipeline, video_pipeline
+    from core import clip_pipeline
 
     monkeypatch.setenv("AUTH_TOKEN", "test-secret")
     monkeypatch.setattr(local_server, "models_loaded", True)
@@ -179,21 +179,26 @@ def pipeline_env(
     monkeypatch.setattr(local_server.video_processor, "transcriber", transcriber)
     monkeypatch.setattr(local_server.video_processor, "gemini_client", MagicMock())
 
-    identify_moments = MagicMock(
-        return_value=MomentsExtraction(
-            clips=[
-                ClipItem(
-                    title="Gancho do Gemini",
-                    hook="gancho",
-                    start=2.0,
-                    end=20.0,
-                    virality_score=7,
-                    reason="motivo",
-                )
-            ]
-        )
+    # Phase 1b: the local runner gets its ObjectStorage from the shared factory,
+    # held by the processor like transcriber/moments_provider. Tests inject a fake.
+    storage = FakeObjectStorage()
+    monkeypatch.setattr(local_server.video_processor, "storage", storage)
+
+    moments_provider = MagicMock()
+    moments_provider.identify_moments.return_value = MomentsExtraction(
+        clips=[
+            ClipItem(
+                title="Gancho do Gemini",
+                hook="gancho",
+                start=2.0,
+                end=20.0,
+                virality_score=7,
+                reason="motivo",
+            )
+        ]
     )
-    monkeypatch.setattr(video_pipeline, "identify_moments", identify_moments)
+    monkeypatch.setattr(local_server.video_processor, "moments_provider", moments_provider)
+    identify_moments = moments_provider.identify_moments
 
     monkeypatch.setattr(
         clip_pipeline,
@@ -202,12 +207,12 @@ def pipeline_env(
     )
     monkeypatch.setattr(clip_pipeline, "create_vertical_video", MagicMock())
     monkeypatch.setattr(clip_pipeline, "create_subtitles_with_ffmpeg", MagicMock())
-    monkeypatch.setattr(boto3, "client", MagicMock(return_value=MagicMock()))
 
     return {
         "transcriber": transcriber,
         "identify_moments": identify_moments,
         "video_path": sample_video_path,
+        "storage": storage,
     }
 
 
@@ -238,6 +243,18 @@ class TestProcessVideoManualCutsIntegration:
             "Corte sobreposto",
         ]
         assert all(clip["virality_score"] is None for clip in clips)
+
+    def test_clips_are_uploaded_through_the_injected_storage(self, pipeline_env):
+        # D1: the local runner uploads every rendered clip via the shared
+        # ObjectStorage port (not a hidden boto3 client), under clips/.
+        payload = _payload_for_local_file(pipeline_env["video_path"])
+
+        response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
+
+        assert response.status_code == 200
+        storage: FakeObjectStorage = pipeline_env["storage"]
+        assert len(storage.uploads) == FIXTURE_CUT_COUNT
+        assert all(key.startswith("clips/") for _, key in storage.uploads)
 
     def test_manual_mode_skips_gemini_but_still_transcribes(self, pipeline_env):
         payload = _payload_for_local_file(pipeline_env["video_path"])

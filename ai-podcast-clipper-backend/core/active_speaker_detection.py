@@ -11,6 +11,7 @@ invocation instead of drifting.
 import pathlib
 import pickle
 import subprocess
+import sys
 import time
 
 
@@ -33,14 +34,19 @@ def run_active_speaker_detection(
         FileNotFoundError: if Columbia_test.py didn't produce the expected
             pickle files (e.g. it crashed or `asd_dir` is wrong).
     """
-    columbia_command = (
-        f"python Columbia_test.py --videoName {clip_name} "
-        f"--videoFolder {str(base_dir)} "
-        f"--pretrainModel weight/finetuning_TalkSet.model"
-    )
+    columbia_command = [
+        sys.executable,
+        "Columbia_test.py",
+        "--videoName",
+        clip_name,
+        "--videoFolder",
+        str(base_dir),
+        "--pretrainModel",
+        "weight/finetuning_TalkSet.model",
+    ]
 
     start_time = time.time()
-    subprocess.run(columbia_command, cwd=asd_dir, shell=True)
+    subprocess.run(columbia_command, cwd=asd_dir)
     duration = time.time() - start_time
     print(f"Columbia LR-ASD script completed in {duration:.2f} seconds")
 

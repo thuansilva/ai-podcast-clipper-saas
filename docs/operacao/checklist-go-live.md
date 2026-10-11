@@ -193,6 +193,19 @@ Estes itens foram identificados por 5 especialistas durante revisão técnica do
   - **Arquivo**: `src/infrastructure/queue/stripe-queue.ts:86-98,107-122`
   - **Mitigação recomendada**: Adicionar `NODE_ENV !== "development"` check ou falhar explicitamente em produção
 
+- **(HIGH — frontend mitigado; backend ABERTO)** `S3_ENDPOINT_URL` de desenvolvimento (ex.: MinIO em `http://localhost:9000`) configurado por engano em produção (`RNF-SEC-17`).
+  - **Frontend — mitigado (2026-10-10):** `src/infrastructure/storage/storage-endpoint-guard.ts::assertStorageEndpointAllowed`, chamado por `src/infrastructure/factories/storage-gateway.factory.ts::createStorageGateway`, falha alto com `NODE_ENV=production` para host `localhost`/loopback/IP privado/link-local, nome interno (`.local`, `.internal`, `.localhost`), nome sem domínio (ex.: `minio`) ou protocolo não-`https:`. Antes do guard, o upload quebrava silenciosamente no browser. Testes: `tests/unit/infrastructure/storage/storage-endpoint-guard.test.ts` e `tests/integration/storage/storage-gateway.factory.production-guard.integration.test.ts` (ambos verdes na execução de 2026-10-10).
+  - **Backend — ABERTO:** `ai-podcast-clipper-backend/core/storage/factory.py::create_object_storage` usa `S3_ENDPOINT_URL` sem nenhuma checagem de ambiente. No Modal (produção), uma variável de dev herdada faria o `boto3` apontar para um host inalcançável, e o processamento falharia. O backend não tem `NODE_ENV`, então é preciso escolher um indicador de produção antes de implementar o mesmo guard.
+  - **Mitigação recomendada (backend):** aplicar a mesma regra (https público, sem host interno) em `create_object_storage` quando o indicador de produção estiver presente, com teste unitário cobrindo o caso `localhost` e o caso HTTPS público.
+  - **Operação:** nunca definir `S3_ENDPOINT_URL` no ambiente de deploy (Vercel/Modal). Ver `./minio-dev-local.md`, seção 6.
+
+- **(MEDIUM — configuração do provedor de momentos virais, `RNF-AVAIL-07`)** `MOMENTS_PROVIDER` aceita `gemini` (default) ou `claude`, e cada valor exige a chave do próprio provedor no ambiente de deploy: `GEMINI_API_KEY` para `gemini`, `ANTHROPIC_API_KEY` para `claude`. Valor fora dessas duas opções também falha no startup.
+  - **Falha alta:** `MOMENTS_PROVIDER=claude` sem `ANTHROPIC_API_KEY` levanta `ValueError` em `load_model()` (`core/moments_factory.py`), e o processo não sobe. Valor desconhecido também levanta `ValueError`.
+  - **Gap conhecido:** `main.py` e `local_server.py` sempre constroem o cliente Gemini com fallback `dummy_key` e o injetam na factory, então a checagem de `GEMINI_API_KEY` não dispara no wiring atual. Chave Gemini ausente só aparece na primeira chamada ao Gemini, em runtime.
+  - **Sem failover automático:** trocar de provedor é mudança de configuração e redeploy. Um 503 do Gemini não troca o provedor sozinho.
+  - **Validação pendente:** `tests/test_claude_moments.py` usa `MagicMock` para o cliente Anthropic. Antes de usar `MOMENTS_PROVIDER=claude` em produção, rodar um processamento real com uma `ANTHROPIC_API_KEY` de teste e conferir o `MomentsExtraction` devolvido (clipes válidos, timestamps dentro da transcrição, duração 30-60s).
+  - **Pendência de configuração:** `ai-podcast-clipper-backend/.env.example` ainda não documenta `MOMENTS_PROVIDER`, `ANTHROPIC_API_KEY` e `CLAUDE_MODEL` (registrado em `progress.md`, 2026-10-11). Configurar a chave como Modal secret, nunca no repositório.
+
 ### Riscos de Segurança por Design
 
 - **(HIGH)** `local_server.py`: SSRF/injeção de argumento no yt-dlp — não valida host da URL antes de passar pro yt-dlp (`local_server.py:143-160`), diferente de `main.py` que valida via `_assert_youtube_host`.
@@ -200,9 +213,14 @@ Estes itens foram identificados por 5 especialistas durante revisão técnica do
 
 - **(HIGH)** `download_youtube` do Modal aceita bucket E chave S3 arbitrários do chamador autenticado (`core/schemas.py:77-84`, `main.py:156-162`) — quem tiver o token pode escrever em qualquer bucket alcançável pelas credenciais AWS, inclusive sobrescrever `clips/` de outros usuários.
   - **Arquivo**: `ai-podcast-clipper-backend/core/schemas.py:77-84`, `main.py:156-162`
+  - **Atualização (2026-10-10):** o campo `s3_bucket` foi removido de `DownloadYouTubeRequest` (`ai-podcast-clipper-backend/core/schemas.py:190-197`, verificado por leitura); o bucket agora vem só da config central (`S3_BUCKET_NAME`), então o chamador não escolhe mais o bucket. **Permanece aberto:** a escolha da chave (`s3_key`) pelo chamador autenticado.
 
 - **(HIGH)** `core/video_pipeline.py::resolve_input_video_path` (linhas 37-38) aceita caminho de arquivo local mesmo em produção (Modal) — não é exclusivo de dev. Se um `s3_key` coincidir com um caminho existente no container, lê local em vez de buscar do S3.
   - **Arquivo**: `ai-podcast-clipper-backend/core/video_pipeline.py:37-38`
+
+- [x] **Escrita de arquivo arbitrário via `LocalObjectStorage.upload_file`/`download_file` (modo `STORAGE_PROVIDER=local`) — RESOLVIDO (2026-10-10)** — a auditoria do storage plugável achou que `shutil.copy(src_path, key)` usava `key` (vinda do `s3_key` do request) sem nenhum confinamento de diretório; um chamador com `AUTH_TOKEN` válido podia mandar `s3_key: "/root/.bashrc"` ou um caminho com `../` e sobrescrever arquivo arbitrário no servidor, no modo `local` (não é o default, que é `s3`). Corrigido com TDD (RED confirmado antes): `LocalObjectStorage` agora exige `root_dir` no construtor e resolve/confina toda `key` dentro dele (`Path.is_relative_to` sobre o caminho *resolvido*, não checagem de substring `".."`), rejeitando caminho absoluto ou que escape do root. `create_object_storage` lê `LOCAL_STORAGE_DIR` (default `/tmp/ai-podcast-clipper-local-storage`) e cria o diretório. O fallback de leitura separado (`resolve_input_video_path`, item acima) não foi tocado, de propósito — continua aberto como item próprio.
+  - **Arquivo**: `ai-podcast-clipper-backend/core/storage/local_object_storage.py`, `core/storage/factory.py`
+  - **Teste**: `ai-podcast-clipper-backend/tests/test_local_object_storage.py` (11 testes, incluindo rejeição de caminho absoluto e de escape via `../` tentando escapar de verdade), `tests/test_storage_factory.py::TestLocalProviderStorageRoot` (2 testes). Suíte completa: 241 passed (sem filtro de marker), 238 passed/3 deselected (`-m "not minio"`), 3 passed (`-m "minio"`).
 
 - **(NICE/Confirmar)** Divergência de modelo Gemini: AGENTS.md e documentação citam "Gemini 2.5 Pro", código usa `gemini-2.5-flash` como default (`core/moments.py:48`). Confirmar se é intencional (decisão de custo deliberada, ou desalinhamento).
   - **Arquivo**: `ai-podcast-clipper-backend/core/moments.py:48`

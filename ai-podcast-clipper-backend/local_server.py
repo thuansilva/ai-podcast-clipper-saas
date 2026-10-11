@@ -121,7 +121,9 @@ load_dotenv()
 
 from google import genai
 
+from core.moments_factory import create_moments_provider
 from core.schemas import ProcessVideoRequest, ProcessVideoResponse
+from core.storage.factory import create_object_storage
 from core.transcription import WhisperTranscriber
 from core.video_pipeline import run_video_processing_pipeline
 from core.video_probe import ManualCutExceedsVideoDurationError
@@ -193,6 +195,8 @@ class LocalVideoProcessor:
     def __init__(self):
         self.transcriber: Optional[WhisperTranscriber] = None
         self.gemini_client = None
+        self.moments_provider = None
+        self.storage = None
 
     def load_model(self) -> None:
         print("Loading models (configurable via WHISPER_* env vars for local VRAM budgets)")
@@ -205,9 +209,15 @@ class LocalVideoProcessor:
         self.transcriber.load()
         print("Transcription models loaded...")
 
+        # Built unconditionally (dummy fallback key), same reasoning as
+        # main.py: keeps a Gemini client around even when MOMENTS_PROVIDER
+        # is set to "claude".
         print("Creating gemini client...")
-        self.gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        self.gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "dummy_key"))
         print("Created gemini client...")
+
+        self.storage = create_object_storage()
+        self.moments_provider = create_moments_provider(gemini_client=self.gemini_client)
 
     def process_video(self, request: ProcessVideoRequest) -> ProcessVideoResponse:
         run_id = str(uuid.uuid4())
@@ -219,8 +229,8 @@ class LocalVideoProcessor:
                 request=request,
                 base_dir=base_dir,
                 transcriber=self.transcriber,
-                gemini_client=self.gemini_client,
-                s3_bucket=S3_BUCKET,
+                moments_provider=self.moments_provider,
+                storage=self.storage,
                 asd_dir=ASD_DIR,
             )
         finally:

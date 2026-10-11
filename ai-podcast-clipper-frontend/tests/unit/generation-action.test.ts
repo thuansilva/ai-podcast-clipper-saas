@@ -11,6 +11,7 @@ vi.mock("~/env", () => ({
     AWS_ACCESS_KEY_ID: "mock-key",
     AWS_SECRET_ACCESS_KEY: "mock-secret",
     S3_BUCKET_NAME: "mock-bucket",
+    STORAGE_PROVIDER: "s3",
   },
 }));
 

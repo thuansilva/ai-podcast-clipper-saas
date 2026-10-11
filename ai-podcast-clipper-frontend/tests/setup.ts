@@ -11,13 +11,20 @@ process.env.DATABASE_URL =
   // paralelo pode se aproximar do max_connections do Postgres conforme a
   // suíte crescer.
   "postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper?connection_limit=5";
-process.env.STORAGE_PROVIDER = "local";
-process.env.AWS_ACCESS_KEY_ID = "mock_key";
-process.env.AWS_SECRET_ACCESS_KEY = "mock_secret";
+// Default "minio" (não "s3" real): testes que não mockam `~/env`/o storage
+// gateway (ex.: alguns use cases exercitados via factory em testes de
+// integração) acabam chamando `S3StorageGateway` de verdade. Sem endpoint,
+// isso dispararia chamadas de rede para a AWS real com credenciais falsas —
+// o MinIO local do docker-compose (mesmo host/bucket/credenciais de
+// `.env.development`) é o alvo seguro para esse caso.
+process.env.STORAGE_PROVIDER = "minio";
+process.env.S3_ENDPOINT_URL = "http://localhost:9000";
+process.env.AWS_ACCESS_KEY_ID = "ai-podcast-clipper-app";
+process.env.AWS_SECRET_ACCESS_KEY = "ai-podcast-clipper-app-secret123";
 process.env.AWS_REGION = "us-east-1";
-process.env.S3_BUCKET_NAME = "mock-bucket";
+process.env.S3_BUCKET_NAME = "ai-podcast-clipper";
 process.env.PROCESS_VIDEO_ENDPOINT = "https://mock.modal.run/process_video";
-process.env.PROCESS_VIDEO_ENDPOINT_AUTH = "mock-auth-token";
+process.env.AUTH_TOKEN = "mock-auth-token";
 process.env.STRIPE_SECRET_KEY = "sk_test_mock";
 process.env.STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY = "price_starter_monthly_mock";
 process.env.STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL = "price_starter_annual_mock";

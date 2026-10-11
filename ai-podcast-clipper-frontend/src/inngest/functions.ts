@@ -93,7 +93,7 @@ export async function downloadYouTubeVideo({
     dispatcher: agent,
     headers: injectTraceHeaders({
       "Content-Type": "application/json",
-      Authorization: `Bearer ${env.PROCESS_VIDEO_ENDPOINT_AUTH}`,
+      Authorization: `Bearer ${env.AUTH_TOKEN}`,
     }),
     body: JSON.stringify({
       url,
@@ -283,7 +283,7 @@ export async function processVideoHandler({
         dispatcher: agent,
         headers: injectTraceHeaders({
           "Content-Type": "application/json",
-          Authorization: `Bearer ${env.PROCESS_VIDEO_ENDPOINT_AUTH}`,
+          Authorization: `Bearer ${env.AUTH_TOKEN}`,
         }),
         body: JSON.stringify(
           buildProcessVideoPayload({ video, eventData: event.data }),

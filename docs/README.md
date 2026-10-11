@@ -42,6 +42,7 @@ Tudo que você precisa para rodar, manter e diagnosticar o sistema em produção
 |-----------|-----------|------------------|-----------|
 | **checklist-go-live.md** | Checklist consolidado de **21 BLOCKERs** resolvidos (100% ✅) + itens HIGH e NICE. Auditoria realizada por 6 especialistas (devops, security, domain, qa, frontend, accessibility). Todos os riscos críticos (billing, webhooks, segurança, infra, CI, produto) com notas de resolução. | Antes de qualquer release para produção. Primeira coisa a revisar se algo quebrar em prod. | DevOps, Architect, Tech Lead, PM |
 | **aws-s3-lifecycle-rules.md** | Guia passo a passo para configurar regras de ciclo de vida no S3: expiração automática de uploads/youtube após 1 dia, manter clips/ para sempre. Economia: ~95% em custo de storage. | Quando preparar ambiente de produção; quando revisar custos de AWS. | DevOps, Cloud Architect |
+| **minio-dev-local.md** | Como subir o MinIO (S3-compatível, gratuito) para dev local com `docker compose up -d minio minio-init`: portas 9000/9001, credenciais do usuário restrito da aplicação (variáveis `MINIO_APP_*`), limitação de o Modal não alcançar `localhost`, e por que a imagem é a Chainguard (fixada por digest) em vez de `minio/minio`. | Antes de desenvolver com storage local, rodar testes `pytest -m minio` / `test:integration` de storage, ou trocar a versão da imagem. | DevOps, Backend Dev, Frontend Dev |
 | **observabilidade.md** | Lições aprendidas do stack local OpenTelemetry + Prometheus + Grafana + Tempo + Loki: indexação com delay, busca por trace ID vs /api/search, métricas do collector. | Quando debugar traces; para entender timing de observabilidade; para estender stack em prod. | DevOps, Backend Dev, SRE |
 
 **Regra:** Sempre que descobrir um gap de segurança/infra/observabilidade, registrar no checklist com status, origem, e se resolvido, a solução. Nunca deixar "TODO verificar depois".
@@ -154,6 +155,11 @@ RNF-PERF-03: Processamento de vídeo < 5 minutos para 30min de podcast
 1. `./arquitetura/visao-fluxo-processamento-video.md` → entender steps
 2. `./arquitetura/visao-dados-modelo-er.md` → entender persistência (UploadedFile, Clip)
 3. `./requisitos/requisitos-funcionais-e-nao-funcionais.md` → RF-VIDEO-*
+
+### Antes de mexer em storage de arquivos (S3, MinIO ou local):
+1. `./arquitetura/visao-fluxo-processamento-video.md` → seção "Armazenamento: porta `ObjectStorage`"
+2. `./requisitos/requisitos-funcionais-e-nao-funcionais.md` → RF-PIPE-12, RNF-SEC-17, RNF-MAINT-11
+3. `./operacao/minio-dev-local.md` → subir MinIO local e limitações (Modal não alcança localhost)
 
 ### Antes de mexer em UI/fluxo do usuário:
 1. `./arquitetura/visao-jornada-usuario.md` → diagrama de navegação

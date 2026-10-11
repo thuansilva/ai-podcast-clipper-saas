@@ -4,11 +4,9 @@ import { PrismaClipRepository } from "../database/repositories/prisma-clip.repos
 import { PrismaCreditTransactionRepository } from "../database/repositories/prisma-credit-transaction.repository";
 import { PrismaSubscriptionRepository } from "../database/repositories/prisma-subscription.repository";
 import { PrismaUnitOfWork } from "../database/repositories/prisma-unit-of-work";
-import { S3StorageGateway } from "../storage/s3-storage.gateway";
-import { LocalStorageGateway } from "../storage/local-storage.gateway";
 import { StripePaymentGateway } from "../payments/stripe-payment.gateway";
 import { InngestQueueGateway } from "../queue/inngest-queue.gateway";
-import { env } from "~/env";
+import { createStorageGateway } from "./storage-gateway.factory";
 
 import { HoldCreditsUseCase } from "~/application/use-cases/credits/hold-credits.use-case";
 import { ConsumeCreditsUseCase } from "~/application/use-cases/credits/consume-credits.use-case";
@@ -142,7 +140,7 @@ export function makeResolvePastDueGracePeriodUseCase(): ResolvePastDueGracePerio
 
 // --- Fábricas de Vídeos ---
 export function makeGenerateUploadUrlUseCase(): GenerateUploadUrlUseCase {
-  const storageGateway = env.STORAGE_PROVIDER === "local" ? new LocalStorageGateway() : new S3StorageGateway();
+  const storageGateway = createStorageGateway();
   return new GenerateUploadUrlUseCase(
     storageGateway,
     new PrismaUploadedFileRepository()
@@ -157,7 +155,7 @@ export function makeImportYouTubeVideoUseCase(): ImportYouTubeVideoUseCase {
 }
 
 export function makeDeleteProjectUseCase(): DeleteProjectUseCase {
-  const storageGateway = env.STORAGE_PROVIDER === "local" ? new LocalStorageGateway() : new S3StorageGateway();
+  const storageGateway = createStorageGateway();
   return new DeleteProjectUseCase(
     new PrismaUploadedFileRepository(),
     new PrismaClipRepository(),
@@ -176,7 +174,7 @@ export function makeListUserVideosUseCase(): ListUserVideosUseCase {
 
 // --- Fábricas de Clipes ---
 export function makeGetClipPlayUrlUseCase(): GetClipPlayUrlUseCase {
-  const storageGateway = env.STORAGE_PROVIDER === "local" ? new LocalStorageGateway() : new S3StorageGateway();
+  const storageGateway = createStorageGateway();
   return new GetClipPlayUrlUseCase(
     new PrismaClipRepository(),
     storageGateway
@@ -188,7 +186,7 @@ export function makeUpdateClipUseCase(): UpdateClipUseCase {
 }
 
 export function makeDeleteClipUseCase(): DeleteClipUseCase {
-  const storageGateway = env.STORAGE_PROVIDER === "local" ? new LocalStorageGateway() : new S3StorageGateway();
+  const storageGateway = createStorageGateway();
   return new DeleteClipUseCase(
     new PrismaClipRepository(),
     storageGateway

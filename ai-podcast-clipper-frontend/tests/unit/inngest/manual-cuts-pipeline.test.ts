@@ -17,7 +17,7 @@ vi.mock("undici", () => {
 vi.mock("~/env", () => ({
   env: {
     PROCESS_VIDEO_ENDPOINT: "https://modal.run/process-video",
-    PROCESS_VIDEO_ENDPOINT_AUTH: "mock-token",
+    AUTH_TOKEN: "mock-token",
     S3_BUCKET_NAME: "mock-bucket",
   },
 }));

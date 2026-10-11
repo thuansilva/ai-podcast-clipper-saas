@@ -16,10 +16,11 @@ flowchart TD
     E -->|Status: processing| G["Step 3: call-modal-gpu"]
     G -->|HTTP POST ao PROCESS_VIDEO_ENDPOINT| H["Modal (Produção) OU GPU Local (Dev)"]
     
-    H --> I["core/video_pipeline.run_video_processing_pipeline(request)"]
+    H --> I["core/video_pipeline.run_video_processing_pipeline(request, storage, moments_provider)"]
+    I -->|"download_file(s3_key)<br/>(cópia direta se s3_key existe no disco)"| PORT
     I --> I1{"request.mode"}
     I1 -->|"auto"| A1["1. Transcrição (WhisperX)"]
-    A1 --> A2["2. Gemini: identify_moments<br/>clips[:5] (clips_limit)"]
+    A1 --> A2["2. moments_provider.identify_moments<br/>(porta MomentsProvider)<br/>clips[:5] (clips_limit)"]
     I1 -->|"manual"| M1["1. ffprobe: duração real do vídeo"]
     M1 -->|"algum corte end > duração"| MX["HTTP 422: requisição inteira rejeitada<br/>sem transcrição e sem clipes"]
     M1 -->|"todos os cortes dentro da duração"| M2["2. Transcrição (WhisperX)<br/>serve às legendas"]
@@ -32,7 +33,16 @@ flowchart TD
     M -->|FFMPEG: corta segmento| N["4. LR-ASD: detecta falante ativo"]
     N -->|OpenCV/FFMPEGCV: reframe vertical| O["5. Vertical Reframe 9:16"]
     O -->|pysubs2 + FFMPEG: queima legendas| P["6. Legendas Stylizadas"]
-    P -->|S3 upload| Q["7. Upload S3 (clips/)"]
+    P -->|"upload_file(clip, clips/...)"| Q["7. Upload do clipe final (clips/)"]
+    Q --> PORT
+    
+    subgraph STORAGE["Porta ObjectStorage (core/storage/ports.py)"]
+        PORT["ObjectStorage<br/>download_file / upload_file<br/>bucket fixo na config"]
+    end
+    
+    PORT -->|"STORAGE_PROVIDER=s3 (sem S3_ENDPOINT_URL)"| AWS[("AWS S3 real")]
+    PORT -->|"STORAGE_PROVIDER=s3 + S3_ENDPOINT_URL<br/>(MinIO local: inalcançável pelo Modal)"| MINIO[("MinIO localhost:9000")]
+    PORT -->|"STORAGE_PROVIDER=local"| FS[("Sistema de arquivos local")]
     
     Q --> R["✅ Modal retorna ModalProcessVideoResponse"]
     R -->|clips[] metadata| S["Step 4: persist-clips-and-consume"]
@@ -40,6 +50,15 @@ flowchart TD
     T -->|CONSUME transaction| U["Consome créditos reservados"]
     U -->|Status: processed| V["✅ Projeto concluído com sucesso"]
     
+    A2 -->|"porta MomentsProvider"| MP
+
+    subgraph MOMENTS["Porta MomentsProvider (core/moments_port.py)"]
+        MP["MomentsProvider<br/>identify_moments(transcript)"]
+    end
+
+    MP -->|"MOMENTS_PROVIDER=gemini (default)"| GEM["GeminiMomentsProvider<br/>(core/moments.py)"]
+    MP -->|"MOMENTS_PROVIDER=claude"| CLA["ClaudeMomentsProvider<br/>(core/claude_moments.py)"]
+
     style A fill:#e1f5ff
     style V fill:#c8e6c9
     style F fill:#ffcdd2
@@ -115,7 +134,7 @@ Isso causava **drift**: uma mudança em um ambiente poderia não ser refletida n
 **Depois da consolidação**, a lógica real vive em módulos compartilhados dentro de `core/`:
 - `core/video_pipeline.py` — orquestração: transcrição → identificação de momentos → processamento de clipes
 - `core/clip_pipeline.py` — orquestra por-clip: corte → LR-ASD → reframe vertical → legendas → S3
-- `core/transcription.py`, `core/moments.py`, `core/active_speaker_detection.py`, `core/vertical_video.py`, `core/subtitles.py` — módulos especializados
+- `core/transcription.py`, `core/moments.py` (adapter Gemini), `core/claude_moments.py` (adapter Claude), `core/moments_port.py` e `core/moments_factory.py` (porta e seleção de provedor de momentos), `core/active_speaker_detection.py`, `core/vertical_video.py`, `core/subtitles.py` — módulos especializados
 
 Os dois deploy wrappers são **finos**:
 - `main.py` — apenas decorators Modal (`@app.function`), gerenciamento de secrets do Modal, nada de lógica
@@ -126,6 +145,49 @@ A **única diferença** entre produção e dev agora é a camada de infra/deploy
 ### Upload Direto (Status Atual)
 
 A funcionalidade de upload direto de arquivo de vídeo (`generateUploadUrl`) **existe no backend**, mas está **escondida na UI** por decisão de produto. Atualmente, o único fluxo ativo é a importação via YouTube. Se a feature for reativada, a infra já suporta ambos os fluxos (`sourceType: UPLOAD | YOUTUBE`).
+
+## Armazenamento: porta `ObjectStorage`
+
+O pipeline não usa `boto3` diretamente: recebe um `storage: ObjectStorage` injetado (`core/storage/ports.py`, protocolo com `download_file(key, dest_path)` e `upload_file(src_path, key)`). Quem escolhe o adapter é `core/storage/factory.py::create_object_storage`, chamado por `main.py` (Modal) e `local_server.py` (GPU local).
+
+| Variável | Default | Efeito (verificado em `core/storage/factory.py`) |
+|----------|---------|-----------------------------------------------|
+| `STORAGE_PROVIDER` | `s3` | `s3` → `S3ObjectStorage`; `local` → `LocalObjectStorage` (cópia de arquivo); qualquer outro valor levanta `ValueError` |
+| `S3_ENDPOINT_URL` | vazio | vazio → `boto3.client("s3")` (AWS real); preenchido (ex.: MinIO) → `endpoint_url` + path-style |
+| `S3_BUCKET_NAME` | `ai-podcast-clipper` | bucket único do adapter, vindo da config central (nunca do request) |
+
+- No frontend, a mesma seleção fica em `src/infrastructure/factories/storage-gateway.factory.ts`, e com `NODE_ENV=production` um `S3_ENDPOINT_URL` de dev é recusado pelo guard `storage-endpoint-guard.ts`.
+- **MinIO não é um provider separado:** é `STORAGE_PROVIDER=s3` + `S3_ENDPOINT_URL`. Ver `../operacao/minio-dev-local.md`.
+- **Limitação:** o Modal roda na nuvem e não alcança `localhost:9000`. MinIO só serve ao `local_server.py` (GPU local) e ao frontend em dev.
+- **Ressalva de segurança:** a checagem `os.path.exists(s3_key)` em `resolve_input_video_path` continua inline e não depende de `STORAGE_PROVIDER`; a restrição desse fallback segue como item aberto no `../operacao/checklist-go-live.md`.
+
+## Identificação de Momentos: porta `MomentsProvider`
+
+A etapa que lê a transcrição e devolve os clipes candidatos (modo `auto`) não chama um LLM diretamente. O pipeline recebe um `moments_provider: MomentsProvider` injetado. A porta é um `typing.Protocol` (`core/moments_port.py`) com `identify_moments(transcript) -> MomentsExtraction`, no mesmo padrão de `ObjectStorage`, descrito na seção anterior. Quem escolhe o adapter é `core/moments_factory.py::create_moments_provider`, chamado dentro de `load_model()` por `main.py` (Modal) e `local_server.py` (GPU local), ao lado de `self.storage = create_object_storage()`.
+
+| Adapter | Arquivo | Como obtém os momentos |
+|---------|---------|------------------------|
+| `GeminiMomentsProvider` | `core/moments.py` | Gemini com Structured Outputs (`response_schema=MomentsExtraction`), delegando à função livre `identify_moments` |
+| `ClaudeMomentsProvider` | `core/claude_moments.py` | Claude (Anthropic) com tool-use forçado: `tool_choice` aponta para a ferramenta `extract_viral_moments`, com `input_schema=MomentsExtraction.model_json_schema()` |
+
+Os dois adapters usam o mesmo texto de regras (`_IDENTIFY_MOMENTS_PROMPT_TEMPLATE`, de `core/moments.py`), então as regras de duração (30-60s), não sobreposição e timestamps vindos da transcrição são as mesmas nos dois provedores.
+
+| Variável | Default | Efeito (verificado em `core/moments_factory.py`, `core/moments.py`, `core/claude_moments.py`) |
+|----------|---------|-----------------------------------------------|
+| `MOMENTS_PROVIDER` | `gemini` | `gemini` → `GeminiMomentsProvider`; `claude` → `ClaudeMomentsProvider`; qualquer outro valor levanta `ValueError` (sem fallback silencioso) |
+| `GEMINI_API_KEY` | — | Exigida pela factory quando `MOMENTS_PROVIDER=gemini` e nenhum `gemini_client` foi injetado |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Modelo usado pelo adapter Gemini |
+| `ANTHROPIC_API_KEY` | — | Exigida pela factory quando `MOMENTS_PROVIDER=claude` e nenhum `claude_client` foi injetado |
+| `CLAUDE_MODEL` | `claude-sonnet-5-5` | Modelo usado pelo adapter Claude |
+
+**Regras de comportamento:**
+
+- **Motivo:** o Gemini ocasionalmente devolve `503 UNAVAILABLE` (sobrecarga do lado do Google) nessa etapa. O toggle existe para trocar de provedor sem reverter código.
+- **Troca manual, sem failover automático:** a seleção é feita por configuração, no startup. Se o Gemini devolver 503, o pipeline não troca sozinho para o Claude; o operador altera `MOMENTS_PROVIDER` e redeploya/reinicia.
+- **Chave Gemini ausente não falha no startup (no wiring atual):** `main.py` e `local_server.py` sempre constroem o cliente Gemini com fallback `dummy_key` e o injetam na factory como `gemini_client`. Como o cliente nunca é `None`, a checagem de `GEMINI_API_KEY` não dispara nos entrypoints. Uma chave Gemini ausente aparece só na primeira chamada ao Gemini.
+- **Chave Claude ausente falha no startup:** o cliente Claude não é injetado pelos entrypoints, então `MOMENTS_PROVIDER=claude` sem `ANTHROPIC_API_KEY` levanta `ValueError` em `load_model()` e o processo não sobe.
+- **Modo `manual` não usa provedor:** no modo manual (RF-PIPE-08) a identificação é pulada, e nenhum dos dois provedores é chamado.
+- **Validação com a API real pendente:** `tests/test_claude_moments.py` usa `MagicMock` para o cliente Anthropic. Ainda não há execução documentada contra a API real da Anthropic; ver `../operacao/checklist-go-live.md` antes de usar `MOMENTS_PROVIDER=claude` em produção.
 
 ## Fluxo Detalhado por Etapa
 
@@ -187,10 +249,10 @@ Ambos (Modal e GPU local) recebem esse payload. `core/schemas.py::ProcessVideoRe
 
 #### 1. Resolver Caminho do Vídeo
 ```python
-video_path = resolve_input_video_path(s3_key, base_dir, s3_bucket)
+video_path = resolve_input_video_path(s3_key, base_dir, storage)
 ```
-- Se `s3_key` é um path local que existe (útil para dev), copia direto
-- Senão, baixa do S3
+- Se `s3_key` é um path local que existe no disco (útil para dev), copia direto. Essa checagem `os.path.exists` continua **inline** em `core/video_pipeline.py`, independente de `STORAGE_PROVIDER` — ver a seção "Armazenamento: porta ObjectStorage" abaixo
+- Senão, baixa via `storage.download_file(s3_key, ...)` (porta `ObjectStorage`, adapter conforme `STORAGE_PROVIDER`)
 - Se `request.mode == "manual"`: logo após resolver o caminho, `get_video_duration_seconds` (ffprobe, `core/video_probe.py`) lê a duração real e `validate_manual_cuts_against_duration` rejeita a requisição inteira (HTTP 422) se qualquer corte tiver `end` maior que essa duração (RN-PIPE-MANUAL-06). Isso acontece antes da transcrição.
 
 #### 2. Transcrição (WhisperX)
@@ -210,19 +272,19 @@ transcript_segments = json.loads(transcript_segments_json)
 
 **Nota**: O segmento **não inclui** `confidence` nem `speaker` neste ponto. A diarização (detecção de falante) ocorre posteriormente, em nível de clipe (via LR-ASD), não na transcrição global.
 
-#### 3. Identificação de Momentos Virais (Gemini)
+#### 3. Identificação de Momentos Virais (`MomentsProvider`: Gemini ou Claude)
 
 Só executa no modo `auto`. No modo `manual` esta etapa é pulada e a transcrição (passo 2) continua rodando (RN-PIPE-MANUAL-08).
 ```python
-moments_extraction = identify_moments(transcript_segments, gemini_client)
+moments_extraction = moments_provider.identify_moments(transcript_segments)
 clips_to_process = moments_extraction.clips[:clips_limit]
 ```
 
-**Arquivo Principal**: `ai-podcast-clipper-backend/core/moments.py::identify_moments()`
+**Arquivos**: `ai-podcast-clipper-backend/core/moments_port.py` (porta), `core/moments_factory.py` (seleção por `MOMENTS_PROVIDER`), e os adapters `core/moments.py::identify_moments()` (Gemini) e `core/claude_moments.py::identify_moments()` (Claude). Detalhes na seção "Identificação de Momentos: porta `MomentsProvider`" abaixo.
 
-- Usa **Gemini Structured Outputs** com um prompt que pede: "encontre histórias/hooks/perguntas/respostas de 30-60s"
-- Retorna lista de `ClipItem` (title, hook, virality_score, reason, start, end)
-- **Nota sobre modelo**: O código usa `gemini-2.5-flash` como default (`core/moments.py:48`), mas documentação/AGENTS.md mencionam "Gemini 2.5 Pro". Isso pode ser decisão de custo deliberada — confirmar com usuário se alinhado.
+- Os dois adapters usam o mesmo prompt (`_IDENTIFY_MOMENTS_PROMPT_TEMPLATE`, definido em `core/moments.py`), que pede: "encontre histórias/hooks/perguntas/respostas de 30-60s". O Gemini devolve via **Structured Outputs** (`response_schema`); o Claude devolve via tool-use forçado.
+- Ambos retornam `MomentsExtraction`, com lista de `ClipItem` (title, hook, virality_score, reason, start, end)
+- **Nota sobre modelo**: o adapter Gemini usa `GEMINI_MODEL`, com default `gemini-2.5-flash` (`core/moments.py:48`), mas documentação/AGENTS.md mencionam "Gemini 2.5 Pro". Isso pode ser decisão de custo deliberada — confirmar com usuário se alinhado.
 
 #### 4. Processar Cada Clipe
 ```python
@@ -407,7 +469,7 @@ Usuário clica **"Reprocessar"** na Dashboard:
 | Aspecto | Modal (Produção) | GPU Local (Dev) |
 |---------|------------------|-----------------|
 | **Deploy wrapper** | `main.py` (decorators Modal) | `local_server.py` (FastAPI) |
-| **Secrets** | Modal secrets (`GEMINI_API_KEY`, etc.) | Env vars locais (`.env`) |
+| **Secrets** | Modal secrets (`GEMINI_API_KEY`, `ANTHROPIC_API_KEY` se `MOMENTS_PROVIDER=claude`, etc.) | Env vars locais (`.env`) |
 | **GPU** | Modal GPU (NVIDIA L40S) | GPU local (ex.: RTX 4090) |
 | **Lógica pipeline** | `core/video_pipeline.py` + módulos | Mesmo `core/video_pipeline.py` + módulos |
 | **S3 access** | AWS credentials via Modal secrets | AWS credentials via env var `AWS_*` |

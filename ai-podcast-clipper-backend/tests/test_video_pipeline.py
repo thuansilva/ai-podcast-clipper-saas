@@ -16,7 +16,7 @@ tests that do not need it.
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -25,6 +25,8 @@ from core import video_pipeline
 from core.schemas import ClipItem, MomentsExtraction, ProcessVideoRequest
 from core.transcription import WhisperTranscriber
 from tests.manual_cuts_fixture import load_manual_cuts_payload
+from tests.moments_fakes import FakeMomentsProvider
+from tests.storage_fakes import FakeObjectStorage
 
 TRANSCRIPT_SEGMENTS: List[Dict[str, Any]] = [
     {"start": 0.0, "end": 0.4, "word": "Olá"},
@@ -84,14 +86,16 @@ def transcriber() -> WhisperTranscriber:
 
 @pytest.fixture
 def deps(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Dict[str, MagicMock]:
+    moments_provider = MagicMock()
+    moments_provider.identify_moments.return_value = _gemini_extraction()
     mocks: Dict[str, MagicMock] = {
         "resolve": MagicMock(return_value=tmp_path / "input.mp4"),
-        "identify": MagicMock(return_value=_gemini_extraction()),
+        "moments_provider": moments_provider,
+        "identify": moments_provider.identify_moments,
         "process_clip": MagicMock(side_effect=_fake_process_clip),
         "duration": MagicMock(return_value=60.0),
     }
     monkeypatch.setattr(video_pipeline, "resolve_input_video_path", mocks["resolve"])
-    monkeypatch.setattr(video_pipeline, "identify_moments", mocks["identify"])
     monkeypatch.setattr(video_pipeline, "process_clip", mocks["process_clip"])
     monkeypatch.setattr(
         video_pipeline, "get_video_duration_seconds", mocks["duration"], raising=False
@@ -104,14 +108,18 @@ def _run(
     base_dir: Path,
     transcriber: WhisperTranscriber,
     clips_limit: int = 5,
+    storage: Optional[FakeObjectStorage] = None,
+    moments_provider=None,
 ):
+    # Phase 1b: the pipeline receives the ObjectStorage port (D1) instead of
+    # an s3_bucket string. Default to an in-memory fake, never real S3.
     return video_pipeline.run_video_processing_pipeline(
         request=request,
         base_dir=base_dir,
         transcriber=transcriber,
-        gemini_client=MagicMock(),
+        moments_provider=moments_provider if moments_provider is not None else MagicMock(),
         clips_limit=clips_limit,
-        s3_bucket="test-bucket",
+        storage=storage if storage is not None else FakeObjectStorage(),
         asd_dir="/asd",
     )
 
@@ -220,7 +228,7 @@ class TestAutoModeRegression:
     ):
         # Regression guard for the automatic path: behaviour must not change.
         request = ProcessVideoRequest(s3_key="uploads/user_1/abc/podcast.mp4", mode="auto")
-        _run(request, tmp_path, transcriber, clips_limit=2)
+        _run(request, tmp_path, transcriber, clips_limit=2, moments_provider=deps["moments_provider"])
 
         deps["identify"].assert_called_once()
         assert deps["process_clip"].call_count == 2
@@ -246,8 +254,114 @@ class TestAutoModeRegression:
     ):
         # RN-PIPE-MANUAL-14: legacy caller (only s3_key/preset) keeps the automatic path.
         request = ProcessVideoRequest(s3_key="uploads/user_1/abc/podcast.mp4", preset="NEON")
-        response = _run(request, tmp_path, transcriber, clips_limit=5)
+        response = _run(
+            request, tmp_path, transcriber, clips_limit=5, moments_provider=deps["moments_provider"]
+        )
 
         deps["identify"].assert_called_once()
         assert len(response.clips) == 3
         assert all(clip["preset"] == "NEON" for clip in response.clips)
+
+
+class TestStorageInjection:
+    """D1: the pipeline forwards the injected ObjectStorage to the places that
+    need it (source download and per-clip upload) instead of building its own
+    boto3 client or taking an s3_bucket string."""
+
+    def test_storage_is_forwarded_to_input_resolution(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        storage = FakeObjectStorage()
+        request = ProcessVideoRequest.model_validate(load_manual_cuts_payload())
+
+        _run(request, tmp_path, transcriber, storage=storage)
+
+        assert deps["resolve"].call_args.kwargs["storage"] is storage
+
+    def test_storage_is_forwarded_to_every_clip(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        storage = FakeObjectStorage()
+        request = ProcessVideoRequest.model_validate(load_manual_cuts_payload())
+
+        _run(request, tmp_path, transcriber, storage=storage)
+
+        assert deps["process_clip"].call_count == 3
+        for call in deps["process_clip"].call_args_list:
+            assert call.kwargs["storage"] is storage
+
+    def test_s3_bucket_is_no_longer_a_pipeline_parameter(self):
+        import inspect
+
+        parameters = inspect.signature(video_pipeline.run_video_processing_pipeline).parameters
+        assert "s3_bucket" not in parameters
+        assert "storage" in parameters
+
+
+class TestMomentsProviderInjection:
+    """The pipeline delegates viral moment identification to the injected
+    `MomentsProvider` (core/moments_port.py) instead of calling Gemini's
+    `identify_moments` directly — same injection pattern as `ObjectStorage`
+    above, so Gemini/Claude/any future backend is a config choice
+    (core/moments_factory.py), not a pipeline-level branch."""
+
+    def test_auto_mode_calls_injected_provider_with_transcript(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        fake_provider = FakeMomentsProvider(_gemini_extraction())
+        request = ProcessVideoRequest(s3_key="uploads/user_1/abc/podcast.mp4", mode="auto")
+
+        _run(request, tmp_path, transcriber, moments_provider=fake_provider)
+
+        assert len(fake_provider.calls) == 1
+        assert fake_provider.calls[0] == TRANSCRIPT_SEGMENTS
+
+    def test_manual_mode_never_calls_the_injected_provider(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        fake_provider = FakeMomentsProvider(_gemini_extraction())
+        request = ProcessVideoRequest.model_validate(load_manual_cuts_payload())
+
+        _run(request, tmp_path, transcriber, moments_provider=fake_provider)
+
+        assert fake_provider.calls == []
+
+    def test_gemini_client_is_no_longer_a_pipeline_parameter(self):
+        import inspect
+
+        parameters = inspect.signature(video_pipeline.run_video_processing_pipeline).parameters
+        assert "gemini_client" not in parameters
+        assert "moments_provider" in parameters
+
+
+class TestResolveInputVideoPath:
+    """Preserves core/video_pipeline.py::resolve_input_video_path behaviour
+    (refactor only): an s3_key that is an existing local file is copied as-is,
+    anything else is downloaded through the storage port into base_dir/input.mp4."""
+
+    def test_downloads_through_storage_when_key_is_not_a_local_file(self, tmp_path: Path):
+        key = "uploads/test-user/does-not-exist-locally/podcast.mp4"
+        storage = FakeObjectStorage(files={key: b"remote-video-bytes"})
+        base_dir = tmp_path / "run"
+        base_dir.mkdir()
+
+        resolved = video_pipeline.resolve_input_video_path(key, base_dir, storage=storage)
+
+        assert resolved == base_dir / "input.mp4"
+        assert storage.downloads == [(key, str(base_dir / "input.mp4"))]
+        assert resolved.read_bytes() == b"remote-video-bytes"
+
+    def test_existing_local_path_is_copied_without_touching_storage(self, tmp_path: Path):
+        source = tmp_path / "local-podcast.mp4"
+        source.write_bytes(b"local-video-bytes")
+        base_dir = tmp_path / "run"
+        base_dir.mkdir()
+        storage = FakeObjectStorage()
+
+        resolved = video_pipeline.resolve_input_video_path(
+            str(source), base_dir, storage=storage
+        )
+
+        assert resolved == base_dir / "input.mp4"
+        assert resolved.read_bytes() == b"local-video-bytes"
+        assert storage.downloads == []

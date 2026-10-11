@@ -19,6 +19,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from google import genai
 
 from core.moments import identify_moments as core_identify_moments
+from core.moments_factory import create_moments_provider
 from core.otel_setup import setup_otel
 from core.schemas import (
     DownloadYouTubeRequest,
@@ -27,6 +28,7 @@ from core.schemas import (
     ProcessVideoRequest,
     ProcessVideoResponse,
 )
+from core.storage.factory import create_object_storage
 from core.transcription import WhisperTranscriber
 from core.video_pipeline import run_video_processing_pipeline
 from core.video_probe import ManualCutExceedsVideoDurationError
@@ -72,7 +74,6 @@ mount_path = "/root/.cache/torch"
 
 auth_scheme = HTTPBearer()
 
-S3_BUCKET = "ai-podcast-clipper"
 ASD_DIR = "/asd"
 
 
@@ -94,9 +95,16 @@ class AiPodcastClipper:
         )
         self.transcriber.load()
 
+        # Built unconditionally (dummy fallback key) so `self.gemini_client`
+        # stays available for the legacy `identify_moments` method below even
+        # when MOMENTS_PROVIDER="claude" — same "dummy_key" pattern as
+        # core/moments.py's own default client builder.
         print("Creating gemini client...")
-        self.gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        self.gemini_client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "dummy_key"))
         print("Created gemini client...")
+
+        self.storage = create_object_storage()
+        self.moments_provider = create_moments_provider(gemini_client=self.gemini_client)
 
     def identify_moments(self, transcript: list) -> MomentsExtraction:
         """Thin delegate to core.moments so this stays testable/instantiable
@@ -133,8 +141,8 @@ class AiPodcastClipper:
                 request=request,
                 base_dir=base_dir,
                 transcriber=self.transcriber,
-                gemini_client=self.gemini_client,
-                s3_bucket=S3_BUCKET,
+                moments_provider=self.moments_provider,
+                storage=self.storage,
                 asd_dir=ASD_DIR,
             )
         except ManualCutExceedsVideoDurationError as e:
@@ -176,8 +184,8 @@ def download_youtube(
     try:
         result = download_youtube_to_s3(
             url=request.url,
-            s3_bucket=request.s3_bucket,
             s3_key=s3_key,
+            storage=create_object_storage(),
         )
         return DownloadYouTubeResponse(
             success=True,

@@ -65,3 +65,13 @@ def identify_moments(transcript: list, gemini_client: "genai.Client | None" = No
         if cleaned.endswith("```"):
             cleaned = cleaned[:-len("```")].strip()
         return MomentsExtraction.model_validate_json(cleaned)
+
+
+class GeminiMomentsProvider:
+    """`MomentsProvider` (core/moments_port.py) adapter backed by Gemini."""
+
+    def __init__(self, gemini_client: "genai.Client | None" = None) -> None:
+        self.gemini_client = gemini_client
+
+    def identify_moments(self, transcript: list) -> MomentsExtraction:
+        return identify_moments(transcript, gemini_client=self.gemini_client)

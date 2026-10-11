@@ -1,14 +1,21 @@
-"""Tests for YouTube downloader core module and Modal CPU worker endpoint."""
+"""Tests for YouTube downloader core module and Modal CPU worker endpoint.
 
+Phase 1b (D2/D3): `download_youtube_to_s3` receives an injected `ObjectStorage`
+(tests/storage_fakes.py) instead of `s3_client`, and no longer takes a bucket:
+the bucket is the central config's (core/storage/factory.py). The endpoint
+builds its storage through `main.create_object_storage` and ignores any bucket
+sent by the client. Tests that exercise the new wiring are RED until Fase 2.
+"""
+
+import inspect
 import os
-import shutil
-import tempfile
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 from yt_dlp.utils import DownloadError
 
+import main
 from core.schemas import DownloadYouTubeRequest, DownloadYouTubeResponse
 from core.youtube_downloader import (
     YouTubeAgeRestrictedError,
@@ -19,6 +26,7 @@ from core.youtube_downloader import (
     get_youtube_video_info,
 )
 from main import download_youtube
+from tests.storage_fakes import FakeObjectStorage
 
 
 @pytest.fixture
@@ -142,7 +150,9 @@ class TestGetYouTubeVideoInfo:
 
 class TestDownloadYouTubeToS3:
     @patch("yt_dlp.YoutubeDL")
-    def test_download_success_with_mock_s3(self, mock_ydl_cls, sample_video_info):
+    def test_download_success_uploads_through_injected_storage(
+        self, mock_ydl_cls, sample_video_info
+    ):
         recorded_temp_dir = []
 
         def side_effect_extract(url, download=True):
@@ -161,13 +171,12 @@ class TestDownloadYouTubeToS3:
         mock_ydl.prepare_filename.return_value = "/some/path/dQw4w9WgXcQ.mp4"
         mock_ydl_cls.return_value = mock_ydl
 
-        mock_s3 = MagicMock()
+        storage = FakeObjectStorage()
 
         result = download_youtube_to_s3(
             url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            s3_bucket="my-test-bucket",
             s3_key="uploads/podcast.mp4",
-            s3_client=mock_s3,
+            storage=storage,
         )
 
         assert result["s3_key"] == "uploads/podcast.mp4"
@@ -175,10 +184,9 @@ class TestDownloadYouTubeToS3:
         assert result["duration"] == 212
         assert result["thumbnail"] == "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
 
-        mock_s3.upload_file.assert_called_once()
-        uploaded_file, bucket, key = mock_s3.upload_file.call_args[0]
+        assert len(storage.uploads) == 1
+        uploaded_file, key = storage.uploads[0]
         assert uploaded_file.endswith("dQw4w9WgXcQ.mp4")
-        assert bucket == "my-test-bucket"
         assert key == "uploads/podcast.mp4"
 
         # Verify temp directory cleanup
@@ -201,21 +209,21 @@ class TestDownloadYouTubeToS3:
         mock_ydl.extract_info.side_effect = side_effect_extract
         mock_ydl_cls.return_value = mock_ydl
 
-        mock_s3 = MagicMock()
+        storage = FakeObjectStorage()
 
         with pytest.raises(YouTubeDownloaderError):
             download_youtube_to_s3(
                 url="https://www.youtube.com/watch?v=fail",
-                s3_bucket="bucket",
                 s3_key="key.mp4",
-                s3_client=mock_s3,
+                storage=storage,
             )
 
         assert len(recorded_temp_dir) == 1
         assert not os.path.exists(recorded_temp_dir[0])
+        assert storage.uploads == []
 
     @patch("yt_dlp.YoutubeDL")
-    def test_download_cleans_up_temp_dir_on_s3_upload_failure(
+    def test_download_cleans_up_temp_dir_on_storage_upload_failure(
         self, mock_ydl_cls, sample_video_info
     ):
         recorded_temp_dir = []
@@ -235,15 +243,13 @@ class TestDownloadYouTubeToS3:
         mock_ydl.extract_info.side_effect = side_effect_extract
         mock_ydl_cls.return_value = mock_ydl
 
-        mock_s3 = MagicMock()
-        mock_s3.upload_file.side_effect = RuntimeError("S3 connection timed out")
+        storage = FakeObjectStorage(upload_error=RuntimeError("S3 connection timed out"))
 
         with pytest.raises(YouTubeDownloaderError) as exc_info:
             download_youtube_to_s3(
                 url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                s3_bucket="bucket",
                 s3_key="key.mp4",
-                s3_client=mock_s3,
+                storage=storage,
             )
 
         assert "s3" in str(exc_info.value).lower()
@@ -269,28 +275,27 @@ class TestDownloadYouTubeToS3:
         mock_ydl.prepare_filename.return_value = "/non/existent/path.mp4"
         mock_ydl_cls.return_value = mock_ydl
 
-        mock_s3 = MagicMock()
+        storage = FakeObjectStorage()
 
         with pytest.raises(YouTubeDownloaderError) as exc_info:
             download_youtube_to_s3(
                 url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                s3_bucket="bucket",
                 s3_key="key.mp4",
-                s3_client=mock_s3,
+                storage=storage,
             )
 
         assert "found" in str(exc_info.value).lower()
         assert len(recorded_temp_dir) == 1
         assert not os.path.exists(recorded_temp_dir[0])
+        assert storage.uploads == []
 
     @patch("boto3.client")
     @patch("yt_dlp.YoutubeDL")
-    def test_download_defaults_to_boto3_client_when_none(
+    def test_download_never_creates_its_own_boto3_client(
         self, mock_ydl_cls, mock_boto3_client, sample_video_info
     ):
-        mock_s3 = MagicMock()
-        mock_boto3_client.return_value = mock_s3
-
+        # D2: the storage is the only source of truth for the S3 config (endpoint,
+        # path-style). A hidden boto3.client("s3") would ignore S3_ENDPOINT_URL.
         def side_effect_extract(url, download=True):
             opts = mock_ydl_cls.call_args[0][0]
             outtmpl = opts["outtmpl"]
@@ -305,16 +310,25 @@ class TestDownloadYouTubeToS3:
         mock_ydl.extract_info.side_effect = side_effect_extract
         mock_ydl_cls.return_value = mock_ydl
 
+        storage = FakeObjectStorage()
+
         result = download_youtube_to_s3(
             url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            s3_bucket="default-bucket",
             s3_key="default-key.mp4",
-            s3_client=None,
+            storage=storage,
         )
 
-        mock_boto3_client.assert_called_once_with("s3")
-        mock_s3.upload_file.assert_called_once()
+        mock_boto3_client.assert_not_called()
+        assert len(storage.uploads) == 1
         assert result["s3_key"] == "default-key.mp4"
+
+    def test_bucket_is_not_a_parameter_of_download_youtube_to_s3(self):
+        # D3: the destination bucket comes only from the central config, never from
+        # the caller. The storage parameter replaces s3_client.
+        parameters = inspect.signature(download_youtube_to_s3).parameters
+        assert "s3_bucket" not in parameters
+        assert "s3_client" not in parameters
+        assert "storage" in parameters
 
     @patch("yt_dlp.YoutubeDL")
     def test_yt_dlp_format_configuration(self, mock_ydl_cls, sample_video_info):
@@ -332,13 +346,12 @@ class TestDownloadYouTubeToS3:
 
         mock_ydl.extract_info.side_effect = side_effect_extract
         mock_ydl_cls.return_value = mock_ydl
-        mock_s3 = MagicMock()
+        storage = FakeObjectStorage()
 
         download_youtube_to_s3(
             url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-            s3_bucket="b",
             s3_key="k.mp4",
-            s3_client=mock_s3,
+            storage=storage,
         )
 
         call_opts = mock_ydl_cls.call_args[0][0]
@@ -375,16 +388,15 @@ class TestHostValidation:
 
     @patch("yt_dlp.YoutubeDL")
     def test_download_rejects_non_youtube_host(self, mock_ydl_cls):
-        mock_s3 = MagicMock()
+        storage = FakeObjectStorage()
         with pytest.raises(YouTubeInvalidHostError):
             download_youtube_to_s3(
                 url="https://attacker.example.com/video",
-                s3_bucket="bucket",
                 s3_key="key.mp4",
-                s3_client=mock_s3,
+                storage=storage,
             )
         mock_ydl_cls.assert_not_called()
-        mock_s3.upload_file.assert_not_called()
+        assert storage.uploads == []
 
     @patch("yt_dlp.YoutubeDL")
     def test_get_info_accepts_youtu_be_short_link(self, mock_ydl_cls, sample_video_info):
@@ -407,7 +419,23 @@ class TestHostValidation:
         assert info["id"] == "dQw4w9WgXcQ"
 
 
+class TestDownloadYouTubeRequestSchema:
+    def test_request_schema_has_no_client_supplied_bucket(self):
+        # D3: the bucket is no longer a request field. Pydantic ignores unknown
+        # keys by default, so old clients that still send s3_bucket keep working
+        # and the value is simply not used.
+        assert "s3_bucket" not in DownloadYouTubeRequest.model_fields
+
+
 class TestDownloadYouTubeEndpoint:
+    @pytest.fixture
+    def endpoint_storage(self, monkeypatch: pytest.MonkeyPatch) -> FakeObjectStorage:
+        """The endpoint builds its storage from the central config
+        (main.create_object_storage). Replaced here by an in-memory fake."""
+        storage = FakeObjectStorage()
+        monkeypatch.setattr(main, "create_object_storage", MagicMock(return_value=storage))
+        return storage
+
     def _get_raw_endpoint(self):
         if hasattr(download_youtube, "local"):
             return download_youtube.local
@@ -416,7 +444,7 @@ class TestDownloadYouTubeEndpoint:
         return download_youtube
 
     @patch("main.download_youtube_to_s3")
-    def test_endpoint_success(self, mock_download):
+    def test_endpoint_success(self, mock_download, endpoint_storage: FakeObjectStorage):
         mock_download.return_value = {
             "s3_key": "youtube/vid123/original.mp4",
             "title": "Exciting Podcast",
@@ -431,7 +459,6 @@ class TestDownloadYouTubeEndpoint:
         with patch.dict(os.environ, {"AUTH_TOKEN": "valid_secret"}):
             req = DownloadYouTubeRequest(
                 url="https://www.youtube.com/watch?v=vid123",
-                s3_bucket="custom-bucket",
                 s3_key="youtube/vid123/original.mp4",
             )
             resp = endpoint_fn(request=req, token=token)
@@ -443,8 +470,39 @@ class TestDownloadYouTubeEndpoint:
             assert resp.duration == 360
             assert resp.thumbnail == "https://img.youtube.com/vi/vid123/hqdefault.jpg"
 
+            assert mock_download.call_args.kwargs["storage"] is endpoint_storage
+
     @patch("main.download_youtube_to_s3")
-    def test_endpoint_generates_s3_key_if_omitted(self, mock_download):
+    def test_endpoint_ignores_bucket_sent_by_client(
+        self, mock_download, endpoint_storage: FakeObjectStorage
+    ):
+        # D3: a client-supplied bucket must not reach the download use case.
+        mock_download.return_value = {
+            "s3_key": "youtube/vid123/original.mp4",
+            "title": "t",
+            "duration": 1,
+            "thumbnail": None,
+        }
+
+        endpoint_fn = self._get_raw_endpoint()
+        token = MagicMock()
+        token.credentials = "secret"
+
+        with patch.dict(os.environ, {"AUTH_TOKEN": "secret"}):
+            req = DownloadYouTubeRequest(
+                url="https://www.youtube.com/watch?v=vid123",
+                s3_bucket="attacker-controlled-bucket",
+                s3_key="youtube/vid123/original.mp4",
+            )
+            endpoint_fn(request=req, token=token)
+
+        assert "s3_bucket" not in mock_download.call_args.kwargs
+        assert mock_download.call_args.kwargs["storage"] is endpoint_storage
+
+    @patch("main.download_youtube_to_s3")
+    def test_endpoint_generates_s3_key_if_omitted(
+        self, mock_download, endpoint_storage: FakeObjectStorage
+    ):
         mock_download.return_value = {
             "s3_key": "auto-generated-key",
             "title": "Auto Key Podcast",

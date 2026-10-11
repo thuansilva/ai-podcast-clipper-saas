@@ -191,10 +191,6 @@ class DownloadYouTubeRequest(BaseModel):
     """Request payload to download a YouTube video and upload it to S3."""
 
     url: str = Field(..., description="YouTube video URL to download")
-    s3_bucket: str = Field(
-        default="ai-podcast-clipper",
-        description="Target S3 bucket name",
-    )
     s3_key: Optional[str] = Field(
         default=None,
         description="Target S3 key. If not provided, a unique key will be generated.",

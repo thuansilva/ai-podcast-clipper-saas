@@ -12,11 +12,10 @@ import shutil
 import subprocess
 import time
 
-import boto3
-
 from core.active_speaker_detection import run_active_speaker_detection
 from core.s3_paths import compute_clip_output_s3_key
 from core.schemas import ClipItem, ManualCut
+from core.storage.ports import ObjectStorage
 from core.subtitles import create_subtitles_with_ffmpeg
 from core.vertical_video import create_vertical_video
 
@@ -29,9 +28,9 @@ def process_clip(
     end_time: float,
     clip_index: int,
     transcript_segments: list,
+    storage: ObjectStorage,
     preset: str = "HORMOZI",
     clip_item: ClipItem | ManualCut | None = None,
-    s3_bucket: str = "ai-podcast-clipper",
     asd_dir: str = "/asd",
 ) -> dict:
     """Process a single candidate clip end-to-end and upload it to S3.
@@ -103,8 +102,7 @@ def process_clip(
         max_words=5,
     )
 
-    s3_client = boto3.client("s3")
-    s3_client.upload_file(str(subtitle_output_path), s3_bucket, output_s3_key)
+    storage.upload_file(str(subtitle_output_path), output_s3_key)
 
     clip_metadata = {
         "clip_index": clip_index,
