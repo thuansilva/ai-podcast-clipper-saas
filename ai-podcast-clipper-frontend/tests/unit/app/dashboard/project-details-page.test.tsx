@@ -130,6 +130,7 @@ describe("ProjectDetailsPage", () => {
           id: "clip-2",
           title: "Momento 2",
           viralityScore: null,
+          hook: "gancho sem nota",
         },
         {
           id: "clip-3",
@@ -147,5 +148,32 @@ describe("ProjectDetailsPage", () => {
     expect(await screen.findByText("92%")).toBeDefined();
     expect(await screen.findByText("--")).toBeDefined();
     expect(await screen.findByText("85%")).toBeDefined();
+  });
+
+  it("rotula como 'Corte Manual' os clipes de projeto com manualCutsJson, sem porcentagem", async () => {
+    vi.mocked(makeAuthGateway).mockReturnValue({
+      getUserId: vi.fn().mockResolvedValue("user-1"),
+    } as any);
+
+    vi.mocked(db.uploadedFile.findUnique).mockResolvedValue({
+      id: "proj-3",
+      userId: "user-1",
+      displayName: "Podcast Manual",
+      durationSeconds: 600,
+      status: "processed",
+      manualCutsJson: JSON.stringify([{ title: "c", startTime: 0, endTime: 10 }]),
+      _count: { clips: 1 },
+      clips: [
+        { id: "clip-m", title: "Corte A", viralityScore: null, hook: null, reason: null },
+      ],
+    } as any);
+
+    const result = await ProjectDetailsPage({
+      params: Promise.resolve({ id: "proj-3" }), searchParams: Promise.resolve({}),
+    });
+
+    render(result);
+    expect(await screen.findByText("Corte Manual")).toBeDefined();
+    expect(screen.queryByText("--")).toBeNull();
   });
 });

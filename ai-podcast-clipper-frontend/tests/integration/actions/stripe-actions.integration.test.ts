@@ -35,6 +35,16 @@ vi.mock("~/infrastructure/factories/auth-factory", () => ({
   makeAuthGateway: () => ({ getUserId: mockGetUserId }),
 }));
 
+// Rate limiting has its own dedicated integration coverage in
+// tests/integration/actions/stripe-actions-rate-limit.integration.test.ts.
+// Here we keep it unlimited so these business-logic tests (which reuse the
+// same userId across many calls) don't depend on call order/count.
+vi.mock("~/infrastructure/factories/rate-limiter-factory", () => ({
+  makeBillingActionRateLimiter: () => ({
+    consume: vi.fn().mockResolvedValue(true),
+  }),
+}));
+
 const mockRedirect = vi.fn((url: string) => {
   throw new Error(`NEXT_REDIRECT:${url}`);
 });

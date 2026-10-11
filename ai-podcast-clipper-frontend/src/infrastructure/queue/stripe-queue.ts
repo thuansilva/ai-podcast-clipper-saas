@@ -55,6 +55,32 @@ export interface StripeBillingEventNotification {
   amountCents?: number;
 }
 
+/**
+ * Guard de produção da fila em memória (RNF-IDEM-05).
+ *
+ * A fila em memória é só uma conveniência de dev local: ela vive no
+ * processo, então um cold start/restart/scale-down de instância serverless
+ * descarta o que estiver pendente. Em produção, se `INNGEST_EVENT_KEY`
+ * faltar por engano, cair nela faria o webhook do Stripe responder 200 e
+ * marcar o evento como processado enquanto o crédito pago pode se perder
+ * silenciosamente — o mesmo bug de perda silenciosa de crédito que levou a
+ * remover o fallback em caso de falha do `inngest.send` (ver
+ * {@link StripeBackgroundQueue.enqueue}). Por isso, com
+ * `NODE_ENV=production`, a ausência da key é tratada como falha de dispatch:
+ * o erro propaga pro chamador, a rota do webhook responde 503 sem marcar o
+ * evento como processado e o Stripe reentrega depois. A validação central
+ * em `src/env.js` (`assertInngestProductionEnv`) já impede o boot sem a key;
+ * este guard é a segunda camada para quando a validação de env é pulada
+ * (`SKIP_ENV_VALIDATION`).
+ */
+function assertInMemoryFallbackAllowed(eventName: string): void {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      `INNGEST_EVENT_KEY ausente em produção: recusando enfileirar "${eventName}" na fila em memória (não sobrevive a cold start serverless). Configure INNGEST_EVENT_KEY.`
+    );
+  }
+}
+
 export class StripeBackgroundQueue {
   private checkoutQueue: StripeCheckoutPayload[] = [];
   private subscriptionQueue: StripeSubscriptionPayload[] = [];
@@ -74,7 +100,9 @@ export class StripeBackgroundQueue {
    * que o evento fosse marcado como processado no banco mesmo sem nunca
    * ter sido de fato enfileirado (bug de perda silenciosa de crédito). A
    * fila em memória continua existindo apenas para quando o Inngest não
-   * está configurado (dev local sem Inngest Cloud/dev server).
+   * está configurado (dev local sem Inngest Cloud/dev server) — em
+   * `NODE_ENV=production` sem `INNGEST_EVENT_KEY` o enqueue LANÇA em vez de
+   * usá-la (ver `assertInMemoryFallbackAllowed`).
    */
   async enqueue(
     payload: StripeCheckoutPayload,
@@ -93,7 +121,9 @@ export class StripeBackgroundQueue {
     }
 
     // 2. In-process queue com limite de concorrência (apenas quando o
-    // Inngest não está configurado nesse ambiente).
+    // Inngest não está configurado nesse ambiente — e nunca em produção,
+    // ver `assertInMemoryFallbackAllowed`).
+    assertInMemoryFallbackAllowed("stripe/checkout.completed");
     this.checkoutQueue.push(payload);
     this.processNext();
   }
@@ -117,6 +147,7 @@ export class StripeBackgroundQueue {
       return;
     }
 
+    assertInMemoryFallbackAllowed("stripe/subscription.event");
     this.subscriptionQueue.push(payload);
     this.processNextSubscription();
   }

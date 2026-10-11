@@ -19,18 +19,15 @@ Run with: `python local_server.py` (uvicorn on 0.0.0.0:8000).
 
 import hmac
 import os
-import sys
 import uuid
 
 os.environ.setdefault("TORCH_HOME", "/tmp/ai-podcast-clipper-models")
 
-import subprocess
 from typing import Optional
 
 import uvicorn
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel
 
 auth_scheme = HTTPBearer()
 
@@ -122,11 +119,22 @@ load_dotenv()
 from google import genai
 
 from core.moments_factory import create_moments_provider
-from core.schemas import ProcessVideoRequest, ProcessVideoResponse
+from core.schemas import (
+    DownloadYouTubeRequest,
+    DownloadYouTubeResponse,
+    ProcessVideoRequest,
+    ProcessVideoResponse,
+)
 from core.storage.factory import create_object_storage
 from core.transcription import WhisperTranscriber
 from core.video_pipeline import run_video_processing_pipeline
 from core.video_probe import ManualCutExceedsVideoDurationError
+from core.youtube_downloader import (
+    YouTubeAgeRestrictedError,
+    YouTubeInvalidHostError,
+    YouTubeVideoUnavailableError,
+    download_youtube_to_s3,
+)
 
 import pathlib
 import shutil
@@ -137,54 +145,55 @@ ASD_DIR = os.environ.get("ASD_DIR", "/asd")
 app = FastAPI(title="Local Podcast Clipper Backend")
 
 
-class DownloadRequest(BaseModel):
-    url: str
-    uploaded_file_id: Optional[str] = None
-    s3_bucket: Optional[str] = "ai-podcast-clipper"
-    s3_key: Optional[str] = None
-
-
 @app.get("/")
 def health_check():
     return {"status": "ok"}
 
 
 @app.post("/download_youtube")
-def download_youtube(req: DownloadRequest, _: None = Depends(verify_auth_token)):
-    # Local convenience: skip the S3 round-trip during dev iteration and
-    # just keep the downloaded file on disk, so this intentionally diverges
-    # from main.py's download_youtube (which always uploads to S3) — that's
-    # a deploy/infra difference, not pipeline logic.
-    output_dir = "/tmp/ai-podcast-clipper"
-    os.makedirs(output_dir, exist_ok=True)
-    temp_filename = f"{uuid.uuid4().hex}.mp4"
-    temp_filepath = os.path.join(output_dir, temp_filename)
+def download_youtube(
+    req: DownloadYouTubeRequest, _: None = Depends(verify_auth_token)
+) -> DownloadYouTubeResponse:
+    # Same contract and same shared logic as main.py's download_youtube
+    # (RNF-SEC-06/18): `download_youtube_to_s3` validates the host (SSRF),
+    # downloads with yt-dlp and uploads through the pluggable storage (MinIO
+    # in local dev, see core/storage/factory.py). No local-file shortcut: the
+    # returned s3_key is always a real storage key, never a /tmp path.
+    s3_key = req.s3_key or f"youtube/{uuid.uuid4()}/original.mp4"
 
-    cmd = [
-        sys.executable, "-m", "yt_dlp",
-        "-f",
-        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-        "-o",
-        temp_filepath,
-        req.url,
-    ]
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"yt-dlp download failed: {e.stderr or e.stdout or str(e)}",
+        result = download_youtube_to_s3(
+            url=req.url,
+            s3_key=s3_key,
+            storage=create_object_storage(),
         )
-
-    return {
-        "success": True,
-        "s3_key": temp_filepath,
-        "video_url": temp_filepath,
-        "title": "Local Video",
-        "duration": 60,
-        "durationSeconds": 60,
-        "thumbnail": None,
-    }
+        return DownloadYouTubeResponse(
+            success=True,
+            s3_key=result["s3_key"],
+            title=result["title"],
+            duration=result["duration"],
+            thumbnail=result.get("thumbnail"),
+        )
+    except YouTubeInvalidHostError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+    except YouTubeVideoUnavailableError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"YouTube video unavailable: {str(e)}",
+        )
+    except YouTubeAgeRestrictedError as e:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"YouTube video is age-restricted: {str(e)}",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to download YouTube video: {str(e)}",
+        )
 
 
 class LocalVideoProcessor:

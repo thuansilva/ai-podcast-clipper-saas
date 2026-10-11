@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from yt_dlp.utils import DownloadError
 
 import main
@@ -421,9 +422,8 @@ class TestHostValidation:
 
 class TestDownloadYouTubeRequestSchema:
     def test_request_schema_has_no_client_supplied_bucket(self):
-        # D3: the bucket is no longer a request field. Pydantic ignores unknown
-        # keys by default, so old clients that still send s3_bucket keep working
-        # and the value is simply not used.
+        # D3: the bucket is no longer a request field (and, since RNF-SEC-18,
+        # sending it is a 422 — extra="forbid").
         assert "s3_bucket" not in DownloadYouTubeRequest.model_fields
 
 
@@ -446,7 +446,7 @@ class TestDownloadYouTubeEndpoint:
     @patch("main.download_youtube_to_s3")
     def test_endpoint_success(self, mock_download, endpoint_storage: FakeObjectStorage):
         mock_download.return_value = {
-            "s3_key": "youtube/vid123/original.mp4",
+            "s3_key": "youtube/3f2b8c1e-9a4d-4e6b-8f1a-2c3d4e5f6a7b/original.mp4",
             "title": "Exciting Podcast",
             "duration": 360,
             "thumbnail": "https://img.youtube.com/vi/vid123/hqdefault.jpg",
@@ -459,45 +459,30 @@ class TestDownloadYouTubeEndpoint:
         with patch.dict(os.environ, {"AUTH_TOKEN": "valid_secret"}):
             req = DownloadYouTubeRequest(
                 url="https://www.youtube.com/watch?v=vid123",
-                s3_key="youtube/vid123/original.mp4",
+                s3_key="youtube/3f2b8c1e-9a4d-4e6b-8f1a-2c3d4e5f6a7b/original.mp4",
             )
             resp = endpoint_fn(request=req, token=token)
 
             assert isinstance(resp, DownloadYouTubeResponse)
             assert resp.success is True
-            assert resp.s3_key == "youtube/vid123/original.mp4"
+            assert resp.s3_key == "youtube/3f2b8c1e-9a4d-4e6b-8f1a-2c3d4e5f6a7b/original.mp4"
             assert resp.title == "Exciting Podcast"
             assert resp.duration == 360
             assert resp.thumbnail == "https://img.youtube.com/vi/vid123/hqdefault.jpg"
 
             assert mock_download.call_args.kwargs["storage"] is endpoint_storage
 
-    @patch("main.download_youtube_to_s3")
-    def test_endpoint_ignores_bucket_sent_by_client(
-        self, mock_download, endpoint_storage: FakeObjectStorage
-    ):
-        # D3: a client-supplied bucket must not reach the download use case.
-        mock_download.return_value = {
-            "s3_key": "youtube/vid123/original.mp4",
-            "title": "t",
-            "duration": 1,
-            "thumbnail": None,
-        }
-
-        endpoint_fn = self._get_raw_endpoint()
-        token = MagicMock()
-        token.credentials = "secret"
-
-        with patch.dict(os.environ, {"AUTH_TOKEN": "secret"}):
-            req = DownloadYouTubeRequest(
+    def test_endpoint_rejects_bucket_sent_by_client(self):
+        # D3 + RNF-SEC-18: a client-supplied bucket used to be silently
+        # ignored; with extra="forbid" it is now rejected at the contract
+        # (422 at the HTTP layer, see tests/test_download_youtube_hardening.py)
+        # and therefore can never reach the download use case.
+        with pytest.raises(ValidationError):
+            DownloadYouTubeRequest(
                 url="https://www.youtube.com/watch?v=vid123",
                 s3_bucket="attacker-controlled-bucket",
-                s3_key="youtube/vid123/original.mp4",
+                s3_key="youtube/3f2b8c1e-9a4d-4e6b-8f1a-2c3d4e5f6a7b/original.mp4",
             )
-            endpoint_fn(request=req, token=token)
-
-        assert "s3_bucket" not in mock_download.call_args.kwargs
-        assert mock_download.call_args.kwargs["storage"] is endpoint_storage
 
     @patch("main.download_youtube_to_s3")
     def test_endpoint_generates_s3_key_if_omitted(

@@ -1,12 +1,14 @@
 "use client";
 
 import type { Clip } from "@prisma/client";
-import { Info, Loader2, Play, Flame, X, Check, Lightbulb } from "lucide-react";
+import { Info, Loader2, Play, Flame, Hand, X, Check, Lightbulb } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { CustomVideoPlayer } from "./custom-video-player";
 
 export interface ClipDetailsModalProps {
   clip: Clip;
+  /** Corte manual: sem nota de viralização nem "Por que é viral?". */
+  isManual?: boolean;
   playUrl: string | null;
   isLoadingUrl: boolean;
   isOpen: boolean;
@@ -15,6 +17,7 @@ export interface ClipDetailsModalProps {
 
 export function ClipDetailsModal({
   clip,
+  isManual = false,
   playUrl,
   isLoadingUrl,
   isOpen,
@@ -109,7 +112,12 @@ export function ClipDetailsModal({
                 <h3 className="text-xl font-bold leading-tight text-[var(--marfim)]">
                   {clip.title}
                 </h3>
-                {clip.viralityScore !== null && clip.viralityScore !== undefined && (
+                {isManual ? (
+                  <div className="flex items-center gap-1.5 text-base font-semibold text-[var(--ouro)] whitespace-nowrap shrink-0">
+                    <Hand className="h-5 w-5" aria-hidden="true" />
+                    <span>Corte Manual</span>
+                  </div>
+                ) : clip.viralityScore !== null && clip.viralityScore !== undefined && (
                   <div className="flex items-center gap-1.5 text-[24px] font-bold text-[var(--ouro)] whitespace-nowrap shrink-0">
                     <Flame className="h-6 w-6" />
                     {Math.round(clip.viralityScore * 10)}%
@@ -122,7 +130,7 @@ export function ClipDetailsModal({
             </div>
 
             {/* Reason */}
-            {clip.reason && (
+            {!isManual && clip.reason && (
               <div className="space-y-1.5">
                 <h4 className="text-sm font-semibold uppercase tracking-wider text-[var(--fumaca)] flex items-center gap-1.5">
                   <Lightbulb className="h-4 w-4" />

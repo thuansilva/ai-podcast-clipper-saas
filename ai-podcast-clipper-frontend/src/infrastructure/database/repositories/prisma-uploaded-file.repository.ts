@@ -200,6 +200,9 @@ export class PrismaUploadedFileRepository implements IUploadedFileRepository {
         aspectRatio: input.aspectRatio,
         autoZoom: input.autoZoom,
         subtitlePreset: input.subtitlePreset,
+        ...(input.manualCutsJson != null && {
+          manualCutsJson: input.manualCutsJson,
+        }),
       },
     });
 

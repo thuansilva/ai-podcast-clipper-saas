@@ -15,11 +15,57 @@ venv/packages) as an argument list, not a shell string — avoiding both the
 PATH-dependent lookup and (as a side effect) a shell-injection surface.
 """
 
+import pathlib
 import pickle
+import subprocess
 import sys
 from unittest.mock import patch
 
+import pytest
+
+from core import asd_runner
 from core.active_speaker_detection import run_active_speaker_detection
+
+
+def _write_pickles(base_dir, clip_name):
+    clip_dir = base_dir / clip_name / "pywork"
+    clip_dir.mkdir(parents=True)
+    with open(clip_dir / "tracks.pckl", "wb") as f:
+        pickle.dump(["track"], f)
+    with open(clip_dir / "scores.pckl", "wb") as f:
+        pickle.dump(["score"], f)
+
+
+class TestRunActiveSpeakerDetectionUsesLauncher:
+    def test_runs_columbia_through_core_asd_runner(self, tmp_path):
+        _write_pickles(tmp_path, "clip_0")
+
+        with patch("core.active_speaker_detection.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess([], 0)
+            run_active_speaker_detection("clip_0", tmp_path, asd_dir="/asd")
+
+        args, kwargs = mock_run.call_args
+        command = args[0]
+        assert command[0] == sys.executable
+        assert pathlib.Path(command[1]) == pathlib.Path(asd_runner.__file__)
+        assert command[2] == "Columbia_test.py"
+        assert kwargs["cwd"] == "/asd"
+
+    def test_nonzero_exit_without_output_names_exit_code(self, tmp_path):
+        with patch("core.active_speaker_detection.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess([], 1)
+            with pytest.raises(FileNotFoundError, match="exit code 1"):
+                run_active_speaker_detection("clip_0", tmp_path, asd_dir="/asd")
+
+    def test_nonzero_exit_after_writing_output_still_returns_results(self, tmp_path):
+        _write_pickles(tmp_path, "clip_0")
+
+        with patch("core.active_speaker_detection.subprocess.run") as mock_run:
+            mock_run.return_value = subprocess.CompletedProcess([], 1)
+            tracks, scores = run_active_speaker_detection("clip_0", tmp_path, asd_dir="/asd")
+
+        assert tracks == ["track"]
+        assert scores == ["score"]
 
 
 class TestRunActiveSpeakerDetectionInvocation:

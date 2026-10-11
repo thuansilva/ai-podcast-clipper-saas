@@ -8,6 +8,8 @@ import {
   makeRenameProjectUseCase,
 } from "~/infrastructure/factories/use-case-factories";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
+import { makeProjectActionRateLimiter } from "~/infrastructure/factories/rate-limiter-factory";
+import { RateLimitExceededError } from "~/domain/errors/rate-limit-exceeded-error";
 import { getProcessingOptions } from "~/application/services/processing-options.service";
 import {
   renameProjectSchema,
@@ -50,6 +52,13 @@ export async function deleteProjectAction(id: string) {
       return { success: false, error: "Não autorizado." };
     }
 
+    const allowed = await makeProjectActionRateLimiter().consume(userId);
+    if (!allowed) {
+      throw new RateLimitExceededError(
+        "Too many requests. Please wait a minute before trying again."
+      );
+    }
+
     const parsed = deleteProjectSchema.safeParse({ projectId: id });
     if (!parsed.success) {
       return {
@@ -78,6 +87,13 @@ export async function renameProjectAction(id: string, newName: string) {
     const userId = await makeAuthGateway().getUserId();
     if (!userId) {
       return { success: false, error: "Não autorizado." };
+    }
+
+    const allowed = await makeProjectActionRateLimiter().consume(userId);
+    if (!allowed) {
+      throw new RateLimitExceededError(
+        "Too many requests. Please wait a minute before trying again."
+      );
     }
 
     const parsed = renameProjectSchema.safeParse({ projectId: id, newName });
@@ -130,6 +146,13 @@ export async function retryProjectAction(
   }
 
   try {
+    const allowed = await makeProjectActionRateLimiter().consume(userId);
+    if (!allowed) {
+      throw new RateLimitExceededError(
+        "Too many requests. Please wait a minute before trying again."
+      );
+    }
+
     // clipModel e aspectRatio são opções administráveis via ProcessingOption
     // (banco de dados), não um enum fixo no código — mesma regra de negócio já
     // aplicada em src/actions/youtube.ts (importYouTubeVideo).

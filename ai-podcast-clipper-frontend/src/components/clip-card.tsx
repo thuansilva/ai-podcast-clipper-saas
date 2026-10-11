@@ -12,6 +12,7 @@ import {
   Scissors,
   Trash2,
   Flame,
+  Hand,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "~/components/ui/badge";
@@ -23,10 +24,12 @@ import { CustomVideoPlayer } from "./custom-video-player";
 
 export interface ClipCardProps {
   clip: Clip;
+  /** Corte definido manualmente pelo usuário (sem nota de viralização). */
+  isManual?: boolean;
   onDelete?: (clipId: string) => void;
 }
 
-export function ClipCard({ clip, onDelete }: ClipCardProps) {
+export function ClipCard({ clip, isManual = false, onDelete }: ClipCardProps) {
   const [playUrl, setPlayUrl] = useState<string | null>(null);
   const [isLoadingUrl, setIsLoadingUrl] = useState(true);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
@@ -150,13 +153,20 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
         <div className="flex flex-col gap-2 mt-3">
           {/* Linha 1: Score e Ações */}
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-[22px] font-bold text-[var(--ouro)]" title="Potencial Viral">
-              <Flame className="h-5 w-5" />
-              {clip.viralityScore !== null && clip.viralityScore !== undefined 
-                ? `${Math.round(clip.viralityScore * 10)}%` 
-                : "--"}
-            </div>
-            
+            {isManual ? (
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-[var(--ouro)]">
+                <Hand className="h-4 w-4" aria-hidden="true" />
+                <span>Corte Manual</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-[22px] font-bold text-[var(--ouro)]" title="Potencial Viral">
+                <Flame className="h-5 w-5" />
+                {clip.viralityScore !== null && clip.viralityScore !== undefined
+                  ? `${Math.round(clip.viralityScore * 10)}%`
+                  : "--"}
+              </div>
+            )}
+
             <div className="flex items-center gap-1.5">
               <button
                 aria-label="Agendar publicação"
@@ -219,6 +229,7 @@ export function ClipCard({ clip, onDelete }: ClipCardProps) {
       {/* Modal de Detalhes (Info) */}
       <ClipDetailsModal
         clip={clip}
+        isManual={isManual}
         playUrl={playUrl}
         isLoadingUrl={isLoadingUrl}
         isOpen={isDetailsOpen}

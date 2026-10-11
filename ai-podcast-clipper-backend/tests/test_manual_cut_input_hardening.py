@@ -51,7 +51,7 @@ class TestManualCutRejectsNonFiniteTimestamps:
 
     def test_nan_end_from_raw_json_is_rejected(self):
         # Pydantic's own JSON parser path (also used by some callers/tests).
-        raw = '{"s3_key": "a.mp4", "mode": "manual", "manual_cuts": [{"start": 0, "end": NaN}]}'
+        raw = '{"s3_key": "youtube/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/original.mp4", "mode": "manual", "manual_cuts": [{"start": 0, "end": NaN}]}'
         with pytest.raises(ValidationError):
             ProcessVideoRequest.model_validate_json(raw)
 

@@ -147,12 +147,12 @@ class TestMomentsExtraction:
 
 class TestEndpointsSchemas:
     def test_process_video_request_defaults(self):
-        req = ProcessVideoRequest(s3_key="podcasts/episode_1.mp4")
-        assert req.s3_key == "podcasts/episode_1.mp4"
+        req = ProcessVideoRequest(s3_key="uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/episode_1.mp4")
+        assert req.s3_key == "uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/episode_1.mp4"
         assert req.preset == "HORMOZI"
 
     def test_process_video_request_custom_preset(self):
-        req = ProcessVideoRequest(s3_key="podcasts/ep2.mp4", preset="NEON")
+        req = ProcessVideoRequest(s3_key="uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/ep2.mp4", preset="NEON")
         assert req.preset == "NEON"
 
     def test_process_video_response(self):

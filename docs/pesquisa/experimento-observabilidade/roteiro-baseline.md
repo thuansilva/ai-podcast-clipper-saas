@@ -215,15 +215,24 @@ rodando visível — ele será sua fonte de "logs" neste cenário (equivalente a
 
 ### Passo 1 — Preparar o payload assinado (antes de injetar a falha)
 
-Este endpoint de debug assina um payload de teste do Stripe localmente (sem
-chamar a API real do Stripe), para você poder disparar o webhook manualmente.
-Rode:
+O script `scripts/sign-stripe-test-payload.js` do frontend assina um payload
+de teste do Stripe localmente e offline (sem chamar a API real do Stripe e sem
+bater em nenhuma rota do app — usa `stripe.webhooks.generateTestHeaderString`
+com o `STRIPE_WEBHOOK_SECRET` do `.env` do frontend), para você poder disparar
+o webhook manualmente. Rode, **de dentro de `ai-podcast-clipper-frontend/`**:
 ```bash
 BODY='{"id":"evt_baseline_manual","object":"event","api_version":"2025-04-30.basil","created":1735689600,"type":"customer.subscription.deleted","data":{"object":{"id":"sub_experimento","object":"subscription","customer":"cus_experimento"}}}'
 
-SIGN_RESP=$(curl -sf -X POST http://localhost:3000/api/dev-sign-stripe-payload --data-raw "$BODY")
+SIGN_RESP=$(node scripts/sign-stripe-test-payload.js "$BODY")
 echo "$SIGN_RESP"
 ```
+> Até 2026-10-11 este passo usava o endpoint de debug
+> `POST /api/dev-sign-stripe-payload`; ele foi **removido** por segurança
+> (RNF-SEC-10: permitia forjar webhooks Stripe válidos em qualquer ambiente
+> com `NODE_ENV != production`). O script tem a mesma saída JSON
+> (`header` + `stripeSecretKeyMode`), então o resto do roteiro não muda.
+> Não foi usado `stripe trigger`/`stripe listen` porque o Stripe CLI não está
+> instalado/autenticado neste ambiente (premissa do experimento).
 Confirme na saída que `stripeSecretKeyMode` é `"test"` (se não for, **pare
 aqui** — não prossiga fora do modo de teste do Stripe). Extraia o header de
 assinatura:

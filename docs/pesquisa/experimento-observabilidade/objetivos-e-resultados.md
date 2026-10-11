@@ -139,7 +139,9 @@ Observações registradas durante a execução:
   tentativa de confirmar o T2, uma assinatura de webhook reaproveitada expirou
   (tolerância padrão de 5 minutos do `stripe.webhooks.constructEvent`,
   `route.ts:35`) e gerou `HTTP 400` por alguns ciclos — resolvido re-assinando
-  o payload (`/api/dev-sign-stripe-payload`) antes do disparo final; isso não
+  o payload (na época via `/api/dev-sign-stripe-payload`, endpoint removido em
+  2026-10-11 por RNF-SEC-10 — hoje: `node scripts/sign-stripe-test-payload.js`
+  no frontend) antes do disparo final; isso não
   afeta o T1 já capturado, só adiou a confirmação do T2.
 
 ## 4. Comparação final e conclusão

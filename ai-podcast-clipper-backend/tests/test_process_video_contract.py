@@ -22,7 +22,7 @@ from tests.manual_cuts_fixture import FIXTURE_CUT_COUNT, load_manual_cuts_payloa
 
 def _legacy_payload() -> Dict[str, Any]:
     """Payload sent by callers that predate the v2 contract (only s3_key/preset)."""
-    return {"s3_key": "uploads/user_123/8f14e45f/podcast.mp4", "preset": "HORMOZI"}
+    return {"s3_key": "uploads/user_123/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4", "preset": "HORMOZI"}
 
 
 def _cuts(count: int, length: float = 5.0) -> List[Dict[str, Any]]:
@@ -36,7 +36,7 @@ class TestProcessVideoRequestBackwardCompatibility:
     def test_legacy_payload_with_only_s3_key_and_preset_is_still_valid(self):
         # Green guard: this already works today and must keep working.
         request = ProcessVideoRequest.model_validate(_legacy_payload())
-        assert request.s3_key == "uploads/user_123/8f14e45f/podcast.mp4"
+        assert request.s3_key == "uploads/user_123/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4"
         assert request.preset == "HORMOZI"
 
     def test_mode_defaults_to_auto_when_omitted(self):

@@ -301,7 +301,7 @@ export AWS_SECRET_ACCESS_KEY="mock_secret"
 export AWS_REGION="us-east-1"
 export S3_BUCKET_NAME="mock-bucket"
 export PROCESS_VIDEO_ENDPOINT="https://mock.modal.run/process_video"
-export AUTH_TOKEN"mock-auth-token"
+export AUTH_TOKEN="mock-auth-token"
 export STRIPE_SECRET_KEY="sk_test_mock"
 export STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY="price_starter_monthly_mock"
 export STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL="price_starter_annual_mock"
@@ -315,6 +315,18 @@ export NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_mock"
 export NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA"
 export CLERK_SECRET_KEY="sk_test_YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY3ODkw"
 export CLERK_WEBHOOK_SECRET="whsec_mock_clerk"
+# Inngest (RNF-IDEM-05 / RNF-SEC-04): `next start` roda com NODE_ENV=production, e em
+# produção o StripeBackgroundQueue se RECUSA a usar a fila em memória sem
+# INNGEST_EVENT_KEY (o webhook responderia 503 e o smoke de carga falharia).
+# Aqui apontamos o app pro Inngest dev server local que este script sobe no
+# passo 5 (INNGEST_DEV=1 => SDK em dev mode, envia eventos para
+# localhost:8288 e deixa o dev server sincronizar as funções). Isso é uma
+# exceção deliberada DESTE harness local: em produção real INNGEST_DEV é
+# proibido pela validação central de src/env.js (dev mode desliga a
+# verificação de assinatura em /api/inngest) — aqui a validação está
+# desligada via SKIP_ENV_VALIDATION=1, como no CI.
+export INNGEST_DEV="1"
+export INNGEST_EVENT_KEY="local-test-event-key"
 
 if ! npm run build; then
   fail_step "Build do Next.js (npm run build) falhou."

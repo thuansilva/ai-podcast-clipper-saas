@@ -111,4 +111,28 @@ describe("ImportYouTubeVideoUseCase", () => {
     expect(queueGateway.sentEvents).toHaveLength(1);
     expect(queueGateway.sentEvents[0]?.preset).toBe("NONE");
   });
+
+  it("persiste manualCutsJson na criação quando há cortes manuais (base do rótulo 'Corte Manual' e do retry)", async () => {
+    const manualCuts = [{ title: "Corte 1", startTime: 0, endTime: 20 }];
+    const result = await useCase.execute({
+      userId: "user-1",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      preset: "HORMOZI",
+      mode: "manual",
+      manualCuts,
+    } as never);
+    const file = await fileRepo.findById(result.uploadedFileId);
+    // Mesma convenção do trigger-video-processing e do retry (JSON.parse): string JSON.
+    expect(file?.manualCutsJson).toBe(JSON.stringify(manualCuts));
+  });
+
+  it("não persiste manualCutsJson em projeto automático", async () => {
+    const result = await useCase.execute({
+      userId: "user-1",
+      url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      preset: "HORMOZI",
+    });
+    const file = await fileRepo.findById(result.uploadedFileId);
+    expect(file?.manualCutsJson ?? null).toBeNull();
+  });
 });

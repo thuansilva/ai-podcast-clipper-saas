@@ -43,6 +43,11 @@ export class ImportYouTubeVideoUseCase {
       autoZoom: input.autoZoom,
       subtitlePreset: input.preset,
       thumbnailUrl: input.thumbnailUrl,
+      // Persistido na criação (como o trigger do upload local) para que o
+      // retry reprocesse em modo manual e o clipe seja rotulado "Corte Manual".
+      ...(input.manualCuts && input.manualCuts.length > 0
+        ? { manualCutsJson: JSON.stringify(input.manualCuts) }
+        : {}),
     });
 
     await this.queueGateway.sendProcessVideoEvent({

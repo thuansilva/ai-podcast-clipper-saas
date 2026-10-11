@@ -164,7 +164,7 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
     expect(mockHoldCreditsExecute).toHaveBeenCalledTimes(1);
     expect(mockHoldCreditsExecute).toHaveBeenCalledWith({
       userId: "user-456",
-      durationSeconds: 600,
+      durationSeconds: 100, // soma dos cortes (30s + 70s), não o vídeo inteiro
       fileId: "file-123",
       amount: 3,
     });
@@ -460,7 +460,7 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
     // Cobrança: reserva no preço manual (3 créditos).
     expect(mockHoldCreditsExecute).toHaveBeenCalledWith({
       userId: "user-456",
-      durationSeconds: 600,
+      durationSeconds: 100, // soma dos cortes (30s + 70s), não o vídeo inteiro
       fileId: "file-123",
       amount: calculateManualCutsCredits(manualCuts),
     });

@@ -34,10 +34,32 @@ Env vars:
   - `S3_BUCKET_NAME` (default `"ai-podcast-clipper"`): bucket bound to the
     `S3ObjectStorage` instance. Always comes from this central config, never
     from a per-request value.
+  - `APP_ENV` (default `"development"`): this backend's equivalent of the
+    frontend's `NODE_ENV` for the same purpose — there is no `NODE_ENV` in a
+    plain Python/Modal process, so `APP_ENV` is introduced here specifically
+    to gate the guard below. Not read anywhere else in the backend yet; this
+    is a new convention, open to revisiting. Only `"production"` activates
+    the guard; any other value (including unset) keeps today's permissive
+    dev behavior.
+  - Production guard on `S3_ENDPOINT_URL` (only when `APP_ENV == "production"`,
+    `"minio"` branch only — `"s3"` never accepts an endpoint at all): rejects
+    a dev-only endpoint being inherited by mistake into a production secret
+    (e.g. the Modal secret `ai-podcast-clipper-secret` keeping
+    `S3_ENDPOINT_URL=http://localhost:9000` from local MinIO), which would
+    otherwise make every production run fail trying to reach an unreachable
+    host. Same rule set as the frontend's `assertStorageEndpointAllowed`
+    (`ai-podcast-clipper-frontend/src/infrastructure/storage/storage-endpoint-guard.ts`):
+    rejects `localhost`, loopback/private/link-local IPs, internal hostname
+    suffixes (`.local`/`.internal`/`.localhost`), a bare hostname with no dot
+    (e.g. the docker-compose service name `minio`), and any non-`https://`
+    scheme. Raises `ValueError` with an actionable message, mirroring the
+    style already used throughout this factory.
 """
 
+import ipaddress
 import os
-from typing import Mapping
+from typing import Mapping, Optional
+from urllib.parse import urlparse
 
 import boto3
 from botocore.config import Config
@@ -46,6 +68,60 @@ from core.storage.ports import ObjectStorage
 from core.storage.s3_object_storage import S3ObjectStorage
 
 DEFAULT_BUCKET = "ai-podcast-clipper"
+
+_INTERNAL_HOST_SUFFIXES = (".localhost", ".local", ".internal")
+
+
+def _is_private_or_loopback_ip(host: str) -> bool:
+    """Mirrors the frontend's IPv4/IPv6 private/loopback/link-local checks.
+
+    `urlparse(...).hostname` already strips IPv6 brackets and lowercases the
+    host, so IPv4 and IPv6 literals are told apart by the presence of `:`.
+    """
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return address.is_private or address.is_loopback or address.is_link_local
+
+
+def _unsafe_storage_endpoint_reason(hostname: str) -> Optional[str]:
+    host = hostname.lower()
+    if host == "localhost":
+        return "host é localhost"
+    if any(host.endswith(suffix) for suffix in _INTERNAL_HOST_SUFFIXES):
+        return "host é um nome interno/de rede local"
+    if _is_private_or_loopback_ip(host):
+        return "host é um IP de loopback/privado/link-local"
+    if ":" not in host and "." not in host:
+        # e.g. "minio" (docker-compose service name) — never a real public
+        # domain.
+        return "host é um nome sem domínio (ex.: serviço do docker-compose)"
+    return None
+
+
+def _assert_storage_endpoint_allowed_in_production(
+    endpoint: str, app_env: Optional[str]
+) -> None:
+    if app_env != "production":
+        return
+
+    parsed = urlparse(endpoint)
+    reason: Optional[str]
+    if not parsed.scheme or not parsed.hostname:
+        reason = "não é uma URL válida"
+    else:
+        reason = _unsafe_storage_endpoint_reason(parsed.hostname)
+        if reason is None and parsed.scheme != "https":
+            reason = "protocolo precisa ser https"
+
+    if reason is not None:
+        raise ValueError(
+            f"APP_ENV=\"production\": S3_ENDPOINT_URL inválido ({endpoint!r}): "
+            f"{reason}. Em produção, use um endpoint público com https:// (ou "
+            'remova S3_ENDPOINT_URL e use STORAGE_PROVIDER="s3" para o AWS S3 '
+            "real)."
+        )
 
 
 def create_object_storage(env: Mapping[str, str] = os.environ) -> ObjectStorage:
@@ -78,6 +154,9 @@ def create_object_storage(env: Mapping[str, str] = os.environ) -> ObjectStorage:
                 "to the MinIO server's URL (e.g. http://localhost:9000 for "
                 "local Docker, or a real host in production)."
             )
+        _assert_storage_endpoint_allowed_in_production(
+            endpoint_url, env.get("APP_ENV")
+        )
         client = boto3.client(
             "s3",
             endpoint_url=endpoint_url,

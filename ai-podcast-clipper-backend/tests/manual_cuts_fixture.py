@@ -5,8 +5,9 @@ The payload lives in `tests/fixtures/manual_cuts_payload.json`. It is the
 exact wire format the frontend sends for `mode="manual"` (see spec
 `docs/historico/superpowers/specs/2026-10-09-manual-cuts-process-video-contract-v2-spec.md`,
 sections 3 and 8). Keep it free of implementation details so an e2e test can
-reuse it as-is: only `s3_key` is environment-specific, and tests that run
-against a local file replace it explicitly (never by editing the JSON).
+reuse it as-is: only `s3_key` is environment-specific (it must stay in a
+format `ProcessVideoRequest` accepts, RNF-SEC-19), and tests that need a
+different object replace it explicitly (never by editing the JSON).
 """
 
 import json

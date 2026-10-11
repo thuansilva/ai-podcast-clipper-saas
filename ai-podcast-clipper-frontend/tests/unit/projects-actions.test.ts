@@ -18,6 +18,15 @@ vi.mock("~/infrastructure/factories/auth-factory", () => ({
   makeAuthGateway: vi.fn(),
 }));
 
+// Rate limiting has its own dedicated coverage in
+// tests/unit/actions/projects-actions-rate-limit.test.ts. Here we keep it
+// unlimited so these business-logic tests don't depend on call order/count.
+vi.mock("~/infrastructure/factories/rate-limiter-factory", () => ({
+  makeProjectActionRateLimiter: () => ({
+    consume: vi.fn().mockResolvedValue(true),
+  }),
+}));
+
 vi.mock("~/infrastructure/factories/use-case-factories", () => ({
   makeListUserVideosUseCase: vi.fn(),
   makeDeleteProjectUseCase: vi.fn(),

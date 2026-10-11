@@ -20,6 +20,37 @@ from core.subtitles import create_subtitles_with_ffmpeg
 from core.vertical_video import create_vertical_video
 
 
+def extract_clip_words(
+    transcript_segments: list, clip_start: float, clip_end: float
+) -> list[dict]:
+    """Words of the clip as `{word, start, end}` with times RELATIVE to the clip.
+
+    Same selection rule as `generate_ass_subtitles` (overlap with
+    `[clip_start, clip_end]`, `word`/`text` key, blank or untimed items
+    skipped), so the stored transcript matches the burned subtitles. Times are
+    shifted so the clip video starts at 0 (what `clip-editor-modal` expects)
+    and clamped to `[0, clip_end - clip_start]`.
+    """
+    duration = clip_end - clip_start
+    words: list[dict] = []
+    for segment in transcript_segments:
+        seg_start = segment.get("start")
+        seg_end = segment.get("end")
+        if seg_start is None or seg_end is None:
+            continue
+        if not (float(seg_end) > clip_start and float(seg_start) < clip_end):
+            continue
+        word = str(segment.get("word") or segment.get("text") or "").strip()
+        if not word:
+            continue
+        words.append({
+            "word": word,
+            "start": max(0.0, float(seg_start) - clip_start),
+            "end": min(duration, float(seg_end) - clip_start),
+        })
+    return words
+
+
 def process_clip(
     base_dir: pathlib.Path,
     original_video_path: pathlib.Path,
@@ -35,7 +66,8 @@ def process_clip(
 ) -> dict:
     """Process a single candidate clip end-to-end and upload it to S3.
 
-    Returns the clip metadata dict (S3 key, timing, preset, and title/hook/
+    Returns the clip metadata dict (S3 key, timing, preset, `words` (clip-relative
+    transcript, see `extract_clip_words`), and title/hook/
     virality_score/reason, whose shape depends on the origin of `clip_item`:
 
     - `ClipItem` (automatic/Gemini mode): title/hook/virality_score/reason all
@@ -111,6 +143,7 @@ def process_clip(
         "end": end_time,
         "duration": duration,
         "preset": preset,
+        "words": extract_clip_words(transcript_segments, start_time, end_time),
     }
     if isinstance(clip_item, ClipItem):
         clip_metadata.update({

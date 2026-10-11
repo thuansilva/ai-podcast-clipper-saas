@@ -186,4 +186,91 @@ describe("processVideoHandler — coerência cobrança × modo efetivamente proc
     );
     expect(body.mode).toBe("auto");
   });
+
+  describe("duração efetiva no modo manual (limite do plano × soma dos cortes)", () => {
+    const fiveHourVideo = () =>
+      mockUploadedFileFindUniqueOrThrow.mockResolvedValue({
+        id: "file-1",
+        userId: "user-1",
+        s3Key: "uploads/file-1/video.mp4",
+        durationSeconds: 5 * 3600,
+        sourceType: "UPLOAD",
+        status: "queued",
+        displayName: "podcast.mp4",
+        sliceStartTime: 0,
+        sliceEndTime: 0,
+        manualCutsJson: null,
+        subtitlePreset: "HORMOZI",
+        genre: null,
+        aspectRatio: null,
+        autoZoom: null,
+        clipModel: null,
+        user: { id: "user-1", plan: "STARTER" },
+      });
+
+    it("vídeo de 5h + 1 corte de 40s no plano normal: passa no limite e reserva 1 crédito", async () => {
+      fiveHourVideo();
+      const result = await processVideoHandler({
+        event: {
+          data: {
+            uploadedFileId: "file-1",
+            userId: "user-1",
+            preset: "HORMOZI",
+            mode: "manual",
+            manualCuts: [{ startTime: 100, endTime: 140 }],
+          },
+        },
+        step: createStep(),
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockHoldCreditsExecute).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 1, durationSeconds: 40 }),
+      );
+    });
+
+    it("corte além do fim do vídeo: erro antes do hold, sem crédito reservado nem GPU", async () => {
+      mockUploadedFileFindUniqueOrThrow.mockResolvedValue({
+        id: "file-1",
+        userId: "user-1",
+        s3Key: "k",
+        durationSeconds: 120,
+        sourceType: "UPLOAD",
+        status: "queued",
+        displayName: "p.mp4",
+        sliceStartTime: 0,
+        sliceEndTime: 0,
+        user: { id: "user-1", plan: "STARTER" },
+      });
+      const result = await processVideoHandler({
+        event: {
+          data: {
+            uploadedFileId: "file-1",
+            userId: "user-1",
+            mode: "manual",
+            manualCuts: [{ startTime: 100, endTime: 130 }],
+          },
+        },
+        step: createStep(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(/al[eé]m|dura[cç][aã]o do v[ií]deo/i);
+      expect(mockHoldCreditsExecute).not.toHaveBeenCalled();
+      expect(undiciFetch).not.toHaveBeenCalled();
+    });
+
+    it("regressão: automático continua recusando vídeo de 5h acima do plano", async () => {
+      fiveHourVideo();
+      const result = await processVideoHandler({
+        event: {
+          data: { uploadedFileId: "file-1", userId: "user-1", mode: "auto" },
+        },
+        step: createStep(),
+      });
+
+      expect(result.success).toBe(false);
+      expect(mockHoldCreditsExecute).not.toHaveBeenCalled();
+    });
+  });
 });

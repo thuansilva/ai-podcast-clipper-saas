@@ -35,6 +35,12 @@ TRANSCRIPT_SEGMENTS: List[Dict[str, Any]] = [
 ]
 
 
+# One word per second across the whole fixture video (absolute times).
+ABSOLUTE_WORDS: List[Dict[str, Any]] = [
+    {"start": float(i), "end": i + 0.8, "word": f"w{i}"} for i in range(0, 60)
+]
+
+
 def _gemini_extraction() -> MomentsExtraction:
     return MomentsExtraction(
         clips=[
@@ -81,6 +87,14 @@ def _fake_process_clip(**kwargs: Any) -> Dict[str, Any]:
 def transcriber() -> WhisperTranscriber:
     mock_transcriber = MagicMock(spec=WhisperTranscriber)
     mock_transcriber.transcribe.return_value = json.dumps(TRANSCRIPT_SEGMENTS)
+
+    def _fake_transcribe_range(base_dir, video_path, start, end):
+        # Behaves like the real method: absolute times, only words in [start, end].
+        return json.dumps(
+            [w for w in ABSOLUTE_WORDS if w["end"] > start and w["start"] < end]
+        )
+
+    mock_transcriber.transcribe_range.side_effect = _fake_transcribe_range
     return mock_transcriber
 
 
@@ -133,13 +147,68 @@ class TestManualMode:
         _run(request, tmp_path, transcriber)
         deps["identify"].assert_not_called()
 
-    def test_still_transcribes_the_video(
+    def test_never_transcribes_the_whole_video(
         self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
     ):
-        # RN-PIPE-MANUAL-08: subtitles depend on the transcript.
+        # RN-PIPE-MANUAL-08: only the cut ranges are transcribed.
         request = ProcessVideoRequest.model_validate(load_manual_cuts_payload())
         _run(request, tmp_path, transcriber)
-        transcriber.transcribe.assert_called_once()
+        transcriber.transcribe.assert_not_called()
+        transcriber.transcribe_range.assert_called()
+
+    def test_overlapping_cuts_are_merged_into_a_single_range(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        # Fixture cuts (0,4), (4,9.5), (8,12) overlap/touch -> one range with
+        # 0.5s margin clamped to 0 at the start: (0, 12.5).
+        request = ProcessVideoRequest.model_validate(load_manual_cuts_payload())
+        _run(request, tmp_path, transcriber)
+        calls = transcriber.transcribe_range.call_args_list
+        assert [(c.args[2], c.args[3]) for c in calls] == [(0.0, 12.5)]
+
+    def test_distant_cuts_are_transcribed_separately_with_margin(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        deps["duration"].return_value = 60.0
+        payload = load_manual_cuts_payload()
+        payload["manual_cuts"] = [{"start": 40.0, "end": 50.0}, {"start": 10.0, "end": 20.0}]
+        request = ProcessVideoRequest.model_validate(payload)
+        _run(request, tmp_path, transcriber)
+        calls = transcriber.transcribe_range.call_args_list
+        assert [(c.args[2], c.args[3]) for c in calls] == [(9.5, 20.5), (39.5, 50.5)]
+
+    def test_margin_is_clamped_to_video_duration(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        deps["duration"].return_value = 50.2
+        payload = load_manual_cuts_payload()
+        payload["manual_cuts"] = [{"start": 40.0, "end": 50.0}]
+        request = ProcessVideoRequest.model_validate(payload)
+        _run(request, tmp_path, transcriber)
+        call = transcriber.transcribe_range.call_args_list[0]
+        assert (call.args[2], call.args[3]) == (39.5, 50.2)
+
+    def test_merged_transcript_has_no_duplicate_words_and_is_sorted(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        payload = load_manual_cuts_payload()
+        payload["manual_cuts"] = [
+            {"start": 30.0, "end": 40.0},
+            {"start": 5.0, "end": 15.0},
+            {"start": 12.0, "end": 20.0},
+        ]
+        request = ProcessVideoRequest.model_validate(payload)
+        _run(request, tmp_path, transcriber)
+
+        passed = deps["process_clip"].call_args_list[0].kwargs["transcript_segments"]
+        words = [w["word"] for w in passed]
+        assert len(words) == len(set(words))
+        assert [w["start"] for w in passed] == sorted(w["start"] for w in passed)
+        assert words[0] == "w5" or words[0] == "w4"  # 4.8 > 4.5 margin start
+        assert "w25" not in words  # gap between ranges is not transcribed
+        # every clip receives the same merged absolute-time transcript
+        for call in deps["process_clip"].call_args_list:
+            assert call.kwargs["transcript_segments"] == passed
 
     def test_processes_one_clip_per_manual_cut_with_exact_timestamps(
         self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
@@ -227,10 +296,12 @@ class TestAutoModeRegression:
         self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
     ):
         # Regression guard for the automatic path: behaviour must not change.
-        request = ProcessVideoRequest(s3_key="uploads/user_1/abc/podcast.mp4", mode="auto")
+        request = ProcessVideoRequest(s3_key="uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4", mode="auto")
         _run(request, tmp_path, transcriber, clips_limit=2, moments_provider=deps["moments_provider"])
 
         deps["identify"].assert_called_once()
+        transcriber.transcribe.assert_called_once()
+        transcriber.transcribe_range.assert_not_called()
         assert deps["process_clip"].call_count == 2
         processed_titles = [
             call.kwargs["clip_item"].title for call in deps["process_clip"].call_args_list
@@ -245,7 +316,7 @@ class TestAutoModeRegression:
         self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
     ):
         # Only manual mode needs the real duration (RN-PIPE-MANUAL-06).
-        request = ProcessVideoRequest(s3_key="uploads/user_1/abc/podcast.mp4", mode="auto")
+        request = ProcessVideoRequest(s3_key="uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4", mode="auto")
         _run(request, tmp_path, transcriber)
         deps["duration"].assert_not_called()
 
@@ -253,7 +324,7 @@ class TestAutoModeRegression:
         self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
     ):
         # RN-PIPE-MANUAL-14: legacy caller (only s3_key/preset) keeps the automatic path.
-        request = ProcessVideoRequest(s3_key="uploads/user_1/abc/podcast.mp4", preset="NEON")
+        request = ProcessVideoRequest(s3_key="uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4", preset="NEON")
         response = _run(
             request, tmp_path, transcriber, clips_limit=5, moments_provider=deps["moments_provider"]
         )
@@ -309,7 +380,7 @@ class TestMomentsProviderInjection:
         self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
     ):
         fake_provider = FakeMomentsProvider(_gemini_extraction())
-        request = ProcessVideoRequest(s3_key="uploads/user_1/abc/podcast.mp4", mode="auto")
+        request = ProcessVideoRequest(s3_key="uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4", mode="auto")
 
         _run(request, tmp_path, transcriber, moments_provider=fake_provider)
 
@@ -335,12 +406,14 @@ class TestMomentsProviderInjection:
 
 
 class TestResolveInputVideoPath:
-    """Preserves core/video_pipeline.py::resolve_input_video_path behaviour
-    (refactor only): an s3_key that is an existing local file is copied as-is,
-    anything else is downloaded through the storage port into base_dir/input.mp4."""
+    """RNF-SEC-19: core/video_pipeline.py::resolve_input_video_path always
+    downloads `s3_key` through the storage port into base_dir/input.mp4. The
+    old local-file shortcut (`os.path.exists(s3_key)` -> `shutil.copy`) let a
+    caller read arbitrary files from the container (`s3_key="/etc/passwd"`)
+    and is gone: a key that happens to match a file on disk is NOT copied."""
 
     def test_downloads_through_storage_when_key_is_not_a_local_file(self, tmp_path: Path):
-        key = "uploads/test-user/does-not-exist-locally/podcast.mp4"
+        key = "uploads/user_test/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4"
         storage = FakeObjectStorage(files={key: b"remote-video-bytes"})
         base_dir = tmp_path / "run"
         base_dir.mkdir()
@@ -351,17 +424,31 @@ class TestResolveInputVideoPath:
         assert storage.downloads == [(key, str(base_dir / "input.mp4"))]
         assert resolved.read_bytes() == b"remote-video-bytes"
 
-    def test_existing_local_path_is_copied_without_touching_storage(self, tmp_path: Path):
+    def test_existing_local_path_is_never_copied_only_storage_is_used(self, tmp_path: Path):
         source = tmp_path / "local-podcast.mp4"
-        source.write_bytes(b"local-video-bytes")
+        source.write_bytes(b"local-secret-bytes")
+        key = str(source)
+        storage = FakeObjectStorage(files={key: b"storage-bytes"})
+        base_dir = tmp_path / "run"
+        base_dir.mkdir()
+
+        resolved = video_pipeline.resolve_input_video_path(key, base_dir, storage=storage)
+
+        assert resolved == base_dir / "input.mp4"
+        assert storage.downloads == [(key, str(base_dir / "input.mp4"))]
+        assert resolved.read_bytes() == b"storage-bytes"
+
+    def test_local_file_missing_from_storage_fails_instead_of_being_copied(
+        self, tmp_path: Path
+    ):
+        source = tmp_path / "passwd"
+        source.write_bytes(b"root:x:0:0")
         base_dir = tmp_path / "run"
         base_dir.mkdir()
         storage = FakeObjectStorage()
 
-        resolved = video_pipeline.resolve_input_video_path(
-            str(source), base_dir, storage=storage
-        )
+        with pytest.raises(FileNotFoundError):
+            video_pipeline.resolve_input_video_path(str(source), base_dir, storage=storage)
 
-        assert resolved == base_dir / "input.mp4"
-        assert resolved.read_bytes() == b"local-video-bytes"
-        assert storage.downloads == []
+        assert storage.downloads == [(str(source), str(base_dir / "input.mp4"))]
+        assert not (base_dir / "input.mp4").exists()

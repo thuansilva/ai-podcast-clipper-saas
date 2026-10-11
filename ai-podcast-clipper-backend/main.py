@@ -34,6 +34,7 @@ from core.video_pipeline import run_video_processing_pipeline
 from core.video_probe import ManualCutExceedsVideoDurationError
 from core.youtube_downloader import (
     YouTubeAgeRestrictedError,
+    YouTubeInvalidHostError,
     YouTubeVideoUnavailableError,
     download_youtube_to_s3,
 )
@@ -51,7 +52,17 @@ image = (modal.Image.from_registry(
     .run_commands(["mkdir -p /usr/share/fonts/truetype/custom",
                    "wget -O /usr/share/fonts/truetype/custom/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
                    "fc-cache -f -v"])
-    .add_local_dir("asd", "/asd", copy=True))
+    .add_local_dir("asd", "/asd", copy=True)
+    # Bake the LR-ASD face detector weights into the image (the vendored code
+    # would otherwise fetch them from Google Drive on every cold start, with a
+    # gdown CLI flag that no longer exists). core/asd_runner.py still retries
+    # at runtime if this download fails.
+    .run_commands([
+        "test -s /asd/model/faceDetector/s3fd/sfd_face.pth || "
+        "python -c \"import gdown; gdown.download(id='1KafnHz7ccT-3IyddBsL5yi2xGtxAKypt', "
+        "output='/asd/model/faceDetector/s3fd/sfd_face.pth', quiet=False)\" || "
+        "echo 'WARN: sfd_face.pth download failed at build; asd_runner will retry at runtime'"
+    ]))
 
 cpu_image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -193,6 +204,13 @@ def download_youtube(
             title=result["title"],
             duration=result["duration"],
             thumbnail=result.get("thumbnail"),
+        )
+    except YouTubeInvalidHostError as e:
+        # RNF-SEC-06 (SSRF): non-YouTube host is a client error, rejected
+        # before yt-dlp ever runs — not a generic 500.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
         )
     except YouTubeVideoUnavailableError as e:
         raise HTTPException(

@@ -4,6 +4,7 @@ import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
 import { ArrowLeft, Clock, Film } from "lucide-react";
 import { Card, CardContent } from "~/components/ui/card";
+import { isManualCut } from "~/domain/services/clip-origin.service";
 import { ClipCard } from "~/components/clip-card";
 import {
   Pagination,
@@ -87,7 +88,11 @@ export default async function ProjectDetailsPage(props: {
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
               {project.clips.map((clip) => (
-                <ClipCard key={clip.id} clip={clip} />
+                <ClipCard
+                  key={clip.id}
+                  clip={clip}
+                  isManual={isManualCut(clip, project)}
+                />
               ))}
             </div>
 

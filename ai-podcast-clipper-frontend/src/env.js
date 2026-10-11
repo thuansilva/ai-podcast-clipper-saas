@@ -1,5 +1,6 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
+import { assertInngestProductionEnv } from "./inngest-env-guard.js";
 
 export const env = createEnv({
   server: {
@@ -51,6 +52,14 @@ export const env = createEnv({
 
     BASE_URL: z.string(),
     STRIPE_WEBHOOK_SECRET: z.string(),
+
+    // Inngest (RNF-SEC-04). Opcionais no schema porque dev local roda sem
+    // Inngest Cloud; em NODE_ENV=production a obrigatoriedade (e a
+    // proibição de INNGEST_DEV) é aplicada por `assertInngestProductionEnv`
+    // logo abaixo do `createEnv`.
+    INNGEST_EVENT_KEY: z.string().optional(),
+    INNGEST_SIGNING_KEY: z.string().optional(),
+    INNGEST_DEV: z.string().optional(),
   },
 
   client: {
@@ -93,7 +102,25 @@ export const env = createEnv({
 
     BASE_URL: process.env.BASE_URL,
     STRIPE_WEBHOOK_SECRET: process.env.STRIPE_WEBHOOK_SECRET,
+
+    INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
+    INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
+    INNGEST_DEV: process.env.INNGEST_DEV,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   emptyStringAsUndefined: true,
 });
+
+// Validação cruzada que o schema por variável não expressa ("obrigatória só
+// em produção"). Roda no mesmo momento que o `createEnv` (next build via
+// next.config.js e boot do servidor) e respeita o mesmo SKIP_ENV_VALIDATION.
+// Lê de `process.env` (e não do objeto `env`) porque, no client, o proxy do
+// `env` lança ao acessar variáveis de servidor.
+if (!process.env.SKIP_ENV_VALIDATION && typeof window === "undefined") {
+  assertInngestProductionEnv({
+    NODE_ENV: process.env.NODE_ENV,
+    INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
+    INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
+    INNGEST_DEV: process.env.INNGEST_DEV,
+  });
+}

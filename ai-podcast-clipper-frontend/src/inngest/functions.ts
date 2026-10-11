@@ -17,6 +17,10 @@ import { calculateManualCutsCredits } from "~/domain/services/credit-pricing.ser
 import { validateVideoDuration } from "~/domain/services/plan-policy.service";
 import { ManualCutsRequiredError } from "~/domain/errors/manual-cuts-required-error";
 import { ManualCutsModeMismatchError } from "~/domain/errors/manual-cuts-mode-mismatch-error";
+import {
+  assertManualCutsWithinVideo,
+  computeEffectiveProcessingDuration,
+} from "~/domain/services/processing-duration.service";
 import { buildProcessVideoPayload } from "~/application/services/process-video-payload.service";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 import { fetch as undiciFetch, Agent } from "undici";
@@ -95,9 +99,11 @@ export async function downloadYouTubeVideo({
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.AUTH_TOKEN}`,
     }),
+    // Only `url` + `s3_key`: the backend contract (DownloadYouTubeRequest)
+    // is extra="forbid" (RNF-SEC-18) and the bucket comes from the backend's
+    // own config — any other field is a 422.
     body: JSON.stringify({
       url,
-      s3_bucket: env.S3_BUCKET_NAME,
       s3_key: s3Key,
     }),
   });
@@ -199,19 +205,6 @@ export async function processVideoHandler({
           });
         }
 
-        const effectiveDuration =
-          uploadedFile.sliceEndTime && uploadedFile.sliceEndTime > uploadedFile.sliceStartTime
-            ? uploadedFile.sliceEndTime - uploadedFile.sliceStartTime
-            : durationSeconds;
-
-        const durationValidation = validateVideoDuration(
-          effectiveDuration,
-          uploadedFile.user?.plan
-        );
-        if (!durationValidation.valid) {
-          throw new Error(durationValidation.error);
-        }
-
         const hasManualCuts =
           Array.isArray(event.data.manualCuts) && event.data.manualCuts.length > 0;
 
@@ -230,6 +223,28 @@ export async function processVideoHandler({
         }
 
         const isManual = event.data.mode === "manual" && hasManualCuts;
+
+        // RN-PIPE-MANUAL-17: corte além do fim do vídeo falha antes do hold.
+        if (isManual) {
+          assertManualCutsWithinVideo(event.data.manualCuts!, durationSeconds);
+        }
+
+        // No modo manual o limite do plano vale para a soma dos cortes.
+        const effectiveDuration = computeEffectiveProcessingDuration({
+          isManual,
+          manualCuts: event.data.manualCuts,
+          sliceStartTime: uploadedFile.sliceStartTime,
+          sliceEndTime: uploadedFile.sliceEndTime,
+          videoDurationSeconds: durationSeconds,
+        });
+
+        const durationValidation = validateVideoDuration(
+          effectiveDuration,
+          uploadedFile.user?.plan
+        );
+        if (!durationValidation.valid) {
+          throw new Error(durationValidation.error);
+        }
 
         const holdCreditsUseCase = makeHoldCreditsUseCase();
         const holdResult = await holdCreditsUseCase.execute({

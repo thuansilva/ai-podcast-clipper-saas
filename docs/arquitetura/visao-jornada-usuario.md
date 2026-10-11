@@ -88,7 +88,7 @@ flowchart TD
     YouTubeSection --> FetchMeta["API: /api/youtube/info<br/>Busca metadata: título, duração"]
     FetchMeta --> MetadataLoaded["Thumbnail + Duração exibidos"]
     
-    MetadataLoaded --> SliceConfig["Slice Configuration:<br/>Slider range (min/max) em minutos"]
+    MetadataLoaded --> SliceConfig["Slice Configuration:<br/>Slider range (início/fim) em segundos, rótulos mm:ss ou h:mm:ss"]
     SliceConfig --> Options["Opções Dinâmicas:<br/>- GENRE (dropdown)<br/>- CLIP_MODEL (dropdown)<br/>- ASPECT_RATIO (dropdown)<br/>- AUTO_ZOOM (toggle)"]
     Options --> CreditEstimate["Estimativa de Créditos a Debitar"]
     
@@ -204,7 +204,11 @@ flowchart TD
 **Componentes**:
 - `CreateProjectClient` (modo config, `isConfigRoute=true`)
 - Input URL YouTube com debounce
-- API: `/api/youtube/info` → fetch de metadata (título, duração, thumbnail)
+- API: `/api/youtube/info` → fetch de metadata (título, duração, thumbnail).
+  Exige sessão autenticada (`401 Unauthorized` sem Clerk session) e aplica
+  rate limit de 20 req/min por usuário (`429 Too many requests`) — ver
+  RF-SEC-02. Nos dois casos, `CreateProjectClient.handleFetchMeta` exibe um
+  toast com a mensagem de erro retornada pela API.
 
 **Opções Dinâmicas**:
 ```
@@ -220,8 +224,58 @@ AUTO_ZOOM
 
 (Busca de opções: `getProcessingOptions()` → `ProcessingOption` tabela)
 
-#### 2.3 Configuração do Slice
-- **Slider Range**: min = 0, max = duração do vídeo (em minutos)
+#### 2.2.1 Modo dos cortes: Automático ou Manual (RF-PIPE-08)
+No topo do card "Configurações do Corte" (`CreateProjectClient`) há um radio group
+"Como os cortes serão definidos":
+- **Automático (padrão)**: "a IA escolhe os melhores momentos". Mostra o
+  Fatiador Inteligente (seção 2.3) e envia `mode: "auto"` com
+  `sliceStartTime`/`sliceEndTime`. Comportamento inalterado.
+- **Manual**: "eu defino os cortes". O Fatiador é **escondido** (ele serve para a
+  IA escolher dentro de um trecho; no manual o usuário já escolheu os cortes) e
+  aparece o editor de cortes:
+  - Uma linha vazia ao entrar; cada linha tem um **slider de dois pontos** (início e
+    fim, de 0 até a duração real, passo de 1s; setas movem 1s) **sincronizado** com os
+    campos de texto: mover o slider preenche os dois campos; digitar um par válido
+    move o slider; texto inválido/incompleto não move o slider e mostra o erro como
+    antes. O limite de 60s vale ao arrastar: o ponto que não foi movido acompanha
+    (janela arrastável). O slider de uma linha nova sugere 0:00-0:30 (ou 30s logo
+    depois do fim do último corte válido, sem passar do fim do vídeo), mas os campos
+    ficam vazios até o usuário interagir. Pontos nomeados "Início do corte N
+    (deslizante)"/"Fim do corte N (deslizante)" com `aria-valuetext` em tempo. Cada
+    linha tem ainda Início, Fim (`mm:ss` ou `h:mm:ss`,
+    convertidos por `src/lib/time-format.ts`) e Título opcional (até 200 caracteres),
+    mais botão "Remover corte N" (na última linha restante ele só limpa os campos).
+  - Validação por linha (`src/lib/manual-cut-rows.ts`, reaproveitando
+    `MAX_MANUAL_CUTS` = 50 e `MAX_MANUAL_CUT_DURATION_SECONDS` = 60 de
+    `manual-cut.schema.ts`): formato inválido, fim <= início, corte > 60s, início
+    ou fim além da duração do vídeo (`metadata.durationSeconds`; o backend só
+    rejeitaria isso com 422 depois do download). Mensagens com `role="alert"`
+    ligadas ao campo por `aria-invalid` + `aria-describedby`. Campo vazio não
+    mostra erro, mas bloqueia o envio.
+  - Sobreposição entre cortes vira **aviso não bloqueante** (`role="status"`).
+  - "Adicionar corte" desabilita em 50 cortes, com texto explicando o limite.
+  - Custo mostrado com `calculateManualCutsCredits` sobre os cortes válidos (mesmo
+    cálculo que o Inngest usa na reserva); `cost > userCredits` usa o custo do modo
+    ativo. O botão "Confirmar e Processar" fica desabilitado sem cortes, com corte
+    inválido/incompleto ou sem créditos.
+  - Envio: `importYouTubeVideo({ mode: "manual", manualCuts })` com tempos absolutos
+    em segundos e **sem** `sliceStartTime`/`sliceEndTime`.
+- **Limitações conhecidas**: (1) o seletor **não aparece em modo edição/retry**
+  (`editMode`, `retryProjectAction`); o fluxo de retry segue como antes. (2) O vídeo
+  inteiro ainda é baixado do YouTube e guardado no storage, mesmo que só alguns
+  segundos sejam cortados; baixar só os trechos é uma etapa futura. Desde
+  2026-10-11 (RN-PIPE-MANUAL-16/17, `src/domain/services/processing-duration.service.ts`),
+  o limite do plano no modo manual é aplicado à **soma dos cortes**, não ao vídeo
+  inteiro, e um corte além do fim do vídeo falha antes da reserva de créditos.
+
+#### 2.3 Configuração do Slice (modo Automático)
+- **Slider Range**: min = 0, max = duração real do vídeo, **em segundos** (passo de
+  1s; antes era em minutos inteiros e os últimos segundos de um vídeo como 10:50 eram
+  inalcançáveis). Rótulos de início/fim e "Duração total" em `mm:ss`/`h:mm:ss`.
+- **Trecho mínimo**: 1s. `sliceStartTime`/`sliceEndTime` são enviados em segundos
+  exatos (também no retry em modo edição, que lê o trecho salvo já em segundos).
+- **Custo**: `calculateVideoCredits(fim - início)` (1 crédito por minuto ou fração,
+  mínimo 1), igual à reserva do Inngest.
 - **Padrão**: primeiros 5 minutos ou duração do vídeo, se menor
 
 #### 2.4 Estimativa de Créditos
@@ -256,6 +310,16 @@ AUTO_ZOOM
   - Título (gerado automaticamente ou editável)
   - Hook (trecho inicial, para social)
   - Virality Score (0.0–1.0, calculado pelo Gemini)
+  - **Clipe de corte manual (RF-PIPE-08)**: no lugar da porcentagem de viralização
+    (que vem do Gemini, que não roda no modo manual) o card mostra o texto
+    **"Corte Manual"** (ícone decorativo `aria-hidden`; o rótulo é texto real, lido
+    por leitor de tela). `ClipDetailsModal` mostra o mesmo rótulo e omite a seção
+    "Por que é viral?". Regra em `src/domain/services/clip-origin.service.ts`
+    (`isManualCut`): manual se `UploadedFile.manualCutsJson != null`, com fallback
+    legado para clipe sem nota, gancho e motivo (projetos YouTube manuais criados
+    antes de `manualCutsJson` ser persistido na importação). A página
+    `/dashboard/projects/[id]` calcula e passa `isManual` ao `ClipCard`. Clipe
+    automático sem nota (ex.: falha do Gemini, mas com gancho) continua mostrando `--`.
   - Botão: Download (MP4, sem marca d'água → S3)
   - Botão: "Ver Detalhes"
 

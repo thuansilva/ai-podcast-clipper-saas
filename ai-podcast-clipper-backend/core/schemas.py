@@ -84,12 +84,60 @@ class ManualCut(BaseModel):
         return self
 
 
+# Canonical UUID (8-4-4-4-12), as produced by `uuidv4()` in the frontend and
+# `uuid.uuid4()` in the backend.
+_UUID_PATTERN = (
+    r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+)
+
+# RNF-SEC-18: the only object key the frontend ever generates for a YouTube
+# import (import-youtube-video.use-case.ts: `youtube/${uuidv4()}/original.mp4`),
+# and the same shape the backend generates when the key is omitted. Anything
+# else (`clips/<other user>/...`, `../`, absolute/local paths) would let a
+# caller holding AUTH_TOKEN overwrite arbitrary objects in the bucket.
+# Pydantic v2's default (Rust) regex engine anchors `$` at the true end of the
+# string, so a trailing newline doesn't sneak through.
+_YOUTUBE_S3_KEY_BODY = r"youtube/" + _UUID_PATTERN + r"/original\.mp4"
+YOUTUBE_S3_KEY_PATTERN = r"^" + _YOUTUBE_S3_KEY_BODY + r"$"
+
+# RNF-SEC-19: direct-upload key, generate-upload-url.use-case.ts:
+# `uploads/${userId}/${uuidv4()}/${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`.
+# userId is a Clerk id (`user_2abc...`). The file name may contain dots, but a
+# name segment that is exactly `.` or `..` is rejected (defense in depth). The
+# Rust regex engine has no lookahead, so "any [A-Za-z0-9._-]+ except `.`/`..`"
+# is spelled out as: starts with a non-dot, or `.` + non-dot, or `..` + 1+ chars.
+_UPLOAD_FILENAME_PATTERN = (
+    r"(?:[A-Za-z0-9_-][A-Za-z0-9._-]*"
+    r"|\.[A-Za-z0-9_-][A-Za-z0-9._-]*"
+    r"|\.\.[A-Za-z0-9._-]+)"
+)
+_UPLOAD_S3_KEY_BODY = (
+    r"uploads/[A-Za-z0-9_-]+/" + _UUID_PATTERN + r"/" + _UPLOAD_FILENAME_PATTERN
+)
+
+# RNF-SEC-19: `ProcessVideoRequest.s3_key` must be one of the two formats the
+# system generates. Anything else (absolute/local paths such as `/etc/passwd`,
+# `../`, `clips/...`, trailing `\n`) is a 422 before any download — the input
+# video always comes from storage, never from the container's filesystem.
+PROCESS_VIDEO_S3_KEY_PATTERN = (
+    r"^(?:" + _YOUTUBE_S3_KEY_BODY + r"|" + _UPLOAD_S3_KEY_BODY + r")$"
+)
+
+
 class ProcessVideoRequest(BaseModel):
     """Request payload to initiate podcast video processing."""
 
     model_config = ConfigDict(extra="forbid")  # D2: unknown field -> 422, never silently dropped
 
-    s3_key: str = Field(..., description="S3 storage key of the input video file")
+    s3_key: str = Field(
+        ...,
+        pattern=PROCESS_VIDEO_S3_KEY_PATTERN,
+        description=(
+            "Storage key of the input video. Strictly `youtube/<uuid>/original.mp4` "
+            "or `uploads/<userId>/<uuid>/<name>` (RNF-SEC-19; anything else, incl. "
+            "local paths, -> 422)."
+        ),
+    )
     preset: SubtitlePreset = Field(
         default="HORMOZI",
         description=(
@@ -190,10 +238,18 @@ class ProcessVideoResponse(BaseModel):
 class DownloadYouTubeRequest(BaseModel):
     """Request payload to download a YouTube video and upload it to S3."""
 
+    # Unknown field (e.g. the legacy `s3_bucket`) -> 422, never silently dropped.
+    model_config = ConfigDict(extra="forbid")
+
     url: str = Field(..., description="YouTube video URL to download")
     s3_key: Optional[str] = Field(
         default=None,
-        description="Target S3 key. If not provided, a unique key will be generated.",
+        pattern=YOUTUBE_S3_KEY_PATTERN,
+        description=(
+            "Target object key, strictly `youtube/<uuid>/original.mp4` "
+            "(RNF-SEC-18; anything else -> 422). If omitted, the server "
+            "generates one in the same format."
+        ),
     )
 
 

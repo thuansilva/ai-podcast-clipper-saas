@@ -190,4 +190,88 @@ describe("importYouTubeVideo - Integração (schema real + value object real + u
       }),
     );
   });
+  it("modo manual como enviado pela UI: vários cortes em segundos, sem slice, persiste o UploadedFile e enfileira o evento com os cortes", async () => {
+    mockGetUserId.mockResolvedValue(userId);
+    mockInngestSend.mockResolvedValueOnce({});
+
+    // Payload idêntico ao que `CreateProjectClient` monta no modo manual:
+    // tempos absolutos em segundos, título opcional, sem sliceStartTime/EndTime.
+    const manualCuts = [
+      { id: "cut-1", title: "Abertura", startTime: 60, endTime: 120 },
+      { id: "cut-2", startTime: 3600, endTime: 3615 },
+    ];
+    const { importYouTubeVideo } = await import("~/actions/youtube");
+    const result = await importYouTubeVideo({
+      url: validUrl,
+      preset: "HORMOZI",
+      mode: "manual",
+      manualCuts,
+      genre: "humor",
+      clipModel: "face_focus",
+      aspectRatio: "9:16",
+      autoZoom: true,
+      thumbnailUrl: "https://img.youtube.com/vi/test/hqdefault.jpg",
+    });
+
+    expect(result.success).toBe(true);
+
+    const created = await db.uploadedFile.findUnique({
+      where: { id: result.uploadedFileId! },
+    });
+    expect(created?.sourceType).toBe("YOUTUBE");
+    expect(created?.status).toBe("queued");
+    // Sem slice: a reserva de créditos usa a duração do vídeo inteiro
+    // (inngest/functions.ts), então nada de slice é persistido.
+    expect(created?.sliceStartTime).toBe(0);
+    expect(created?.sliceEndTime).toBe(0);
+
+    expect(mockInngestSend).toHaveBeenCalledTimes(1);
+    expect(mockInngestSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "process-video-events",
+        data: expect.objectContaining({
+          uploadedFileId: result.uploadedFileId,
+          userId,
+          preset: "HORMOZI",
+          mode: "manual",
+          manualCuts,
+        }),
+      }),
+    );
+  });
+  it("modo automático como enviado pela UI: trecho do Fatiador em segundos exatos (não múltiplos de 60) é persistido e enfileirado", async () => {
+    mockGetUserId.mockResolvedValue(userId);
+    mockInngestSend.mockResolvedValueOnce({});
+
+    // Vídeo de 10:50: o Fatiador agora permite escolher até 650s e envia
+    // segundos exatos (antes era arredondado para minutos inteiros).
+    const { importYouTubeVideo } = await import("~/actions/youtube");
+    const result = await importYouTubeVideo({
+      url: validUrl,
+      preset: "HORMOZI",
+      mode: "auto",
+      sliceStartTime: 45,
+      sliceEndTime: 650,
+      genre: "humor",
+      clipModel: "face_focus",
+      aspectRatio: "9:16",
+      autoZoom: true,
+    });
+
+    expect(result.success).toBe(true);
+    const created = await db.uploadedFile.findUnique({
+      where: { id: result.uploadedFileId! },
+    });
+    expect(created?.sliceStartTime).toBe(45);
+    expect(created?.sliceEndTime).toBe(650);
+    expect(mockInngestSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "process-video-events",
+        data: expect.objectContaining({
+          uploadedFileId: result.uploadedFileId,
+          mode: "auto",
+        }),
+      }),
+    );
+  });
 });

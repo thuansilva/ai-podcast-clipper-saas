@@ -9,7 +9,7 @@ flowchart TD
     A["👤 Usuário importa vídeo do YouTube"] -->|Frontend| B["CreateProjectClient: gera S3 key + cria UploadedFile"]
     B -->|status: queued| C["Inngest recebe ProcessVideoEvent"]
     
-    C -->|Step 1: validate-and-reserve-credits| D{["Baixar do YouTube (se aplicável)<br/>Validar duração do plano<br/>mode=manual sem cortes: erro, sem hold<br/>Reservar créditos (HOLD)<br/>manual: preço por cortes / auto: preço por duração"]}
+    C -->|Step 1: validate-and-reserve-credits| D{["Baixar do YouTube (se aplicável)<br/>Validar duração do plano (manual: soma dos cortes)<br/>mode=manual sem cortes ou corte além do vídeo: erro, sem hold<br/>Reservar créditos (HOLD)<br/>manual: preço por cortes / auto: preço por duração"]}
     D -->|Hold bem-sucedido| E["Step 2: mark-processing"]
     D -->|Insuficiente de créditos| F["❌ Status: no credits"]
     
@@ -23,7 +23,7 @@ flowchart TD
     A1 --> A2["2. moments_provider.identify_moments<br/>(porta MomentsProvider)<br/>clips[:5] (clips_limit)"]
     I1 -->|"manual"| M1["1. ffprobe: duração real do vídeo"]
     M1 -->|"algum corte end > duração"| MX["HTTP 422: requisição inteira rejeitada<br/>sem transcrição e sem clipes"]
-    M1 -->|"todos os cortes dentro da duração"| M2["2. Transcrição (WhisperX)<br/>serve às legendas"]
+    M1 -->|"todos os cortes dentro da duração"| M2["2. Transcrição (WhisperX) só dos cortes<br/>(margem 0,5s, intervalos sobrepostos mesclados)<br/>serve às legendas"]
     M2 --> M3["Gemini PULADO<br/>clipes = manual_cuts (todos, sem limite de 5)"]
     A2 --> K["Para cada clipe"]
     M3 --> K
@@ -159,7 +159,7 @@ O pipeline não usa `boto3` diretamente: recebe um `storage: ObjectStorage` inje
 - No frontend, a mesma seleção fica em `src/infrastructure/factories/storage-gateway.factory.ts`, e com `NODE_ENV=production` um `S3_ENDPOINT_URL` de dev é recusado pelo guard `storage-endpoint-guard.ts`.
 - **MinIO não é um provider separado:** é `STORAGE_PROVIDER=s3` + `S3_ENDPOINT_URL`. Ver `../operacao/minio-dev-local.md`.
 - **Limitação:** o Modal roda na nuvem e não alcança `localhost:9000`. MinIO só serve ao `local_server.py` (GPU local) e ao frontend em dev.
-- **Ressalva de segurança:** a checagem `os.path.exists(s3_key)` em `resolve_input_video_path` continua inline e não depende de `STORAGE_PROVIDER`; a restrição desse fallback segue como item aberto no `../operacao/checklist-go-live.md`.
+- **Sem atalho de arquivo local (RNF-SEC-19, 2026-10-11):** `resolve_input_video_path` sempre baixa o vídeo de entrada pela porta `ObjectStorage`, em qualquer `STORAGE_PROVIDER`. O antigo ramo `os.path.exists(s3_key)` → `shutil.copy` foi removido; ele permitia ler qualquer arquivo do container (ex.: `s3_key="/etc/passwd"`).
 
 ## Identificação de Momentos: porta `MomentsProvider`
 
@@ -198,12 +198,15 @@ Os dois adapters usam o mesmo texto de regras (`_IDENTIFY_MOMENTS_PROMPT_TEMPLAT
 1. Busca o `UploadedFile` do banco
 2. Se `sourceType === "YOUTUBE"`, baixa o vídeo via `downloadYouTubeVideo()` (chama `YOUTUBE_DOWNLOAD_ENDPOINT`)
 3. Atualiza `s3Key` e `durationSeconds` no banco
-4. Valida duração máxima conforme o plano do usuário (`validateVideoDuration`)
-5. Se `mode === "manual"` e não há cortes, lança `ManualCutsRequiredError` (`src/domain/errors/manual-cuts-required-error.ts`) **antes** de qualquer hold: nenhum crédito é reservado e não há fallback silencioso para o preço automático (RN-PIPE-MANUAL-02 / D5). Se há cortes e `mode !== "manual"`, lança `ManualCutsModeMismatchError` (`src/domain/errors/manual-cuts-mode-mismatch-error.ts`), também antes do hold (RN-PIPE-MANUAL-15)
-6. Calcula créditos necessários:
+4. Valida a consistência `mode` × cortes (`ManualCutsRequiredError`, `ManualCutsModeMismatchError`), sempre antes de qualquer hold
+   - **Modo manual** (RN-PIPE-MANUAL-17): se algum corte tem `endTime` maior que a duração do vídeo (conhecida após o download), lança `ManualCutBeyondVideoError` (`src/domain/errors/manual-cut-beyond-video-error.ts`) antes do hold. O handler captura o erro, marca o arquivo `failed` e não relança, então o Inngest não reexecuta o passo (o projeto não usa `NonRetriableError`)
+   - Calcula a duração efetiva (`computeEffectiveProcessingDuration`, `src/domain/services/processing-duration.service.ts`): manual = soma das durações dos cortes (RN-PIPE-MANUAL-16); automático = trecho do Fatiador, senão vídeo inteiro
+   - Valida o limite do plano (`validateVideoDuration`) sobre a duração efetiva
+   - Guard de cortes ausentes: se `mode === "manual"` e não há cortes, lança `ManualCutsRequiredError` (`src/domain/errors/manual-cuts-required-error.ts`) **antes** de qualquer hold: nenhum crédito é reservado e não há fallback silencioso para o preço automático (RN-PIPE-MANUAL-02 / D5). Se há cortes e `mode !== "manual"`, lança `ManualCutsModeMismatchError` (`src/domain/errors/manual-cuts-mode-mismatch-error.ts`), também antes do hold (RN-PIPE-MANUAL-15)
+5. Calcula créditos necessários:
    - Modo **manual** (manual cuts): usa `calculateManualCutsCredits(manualCuts)`
    - Modo **auto** (clipe automático): usa duração do vídeo como base
-7. **Reserva créditos** via `HoldCreditsUseCase` (cria `CreditTransaction` com `type: HOLD`)
+6. **Reserva créditos** via `HoldCreditsUseCase` (cria `CreditTransaction` com `type: HOLD`)
    - Se insuficiente, lança erro → capturado no `.catch()` → status fica `"no credits"`
    - Se bem-sucedido, retorna `heldCredits` para próximas etapas
 
@@ -251,15 +254,18 @@ Ambos (Modal e GPU local) recebem esse payload. `core/schemas.py::ProcessVideoRe
 ```python
 video_path = resolve_input_video_path(s3_key, base_dir, storage)
 ```
-- Se `s3_key` é um path local que existe no disco (útil para dev), copia direto. Essa checagem `os.path.exists` continua **inline** em `core/video_pipeline.py`, independente de `STORAGE_PROVIDER` — ver a seção "Armazenamento: porta ObjectStorage" abaixo
-- Senão, baixa via `storage.download_file(s3_key, ...)` (porta `ObjectStorage`, adapter conforme `STORAGE_PROVIDER`)
+- Sempre baixa via `storage.download_file(s3_key, base_dir/input.mp4)` (porta `ObjectStorage`, adapter conforme `STORAGE_PROVIDER`). Não existe mais atalho de arquivo local: um `s3_key` igual a um caminho existente no disco **não** é copiado (RNF-SEC-19)
+- Antes disso, o contrato já barrou o formato: `ProcessVideoRequest.s3_key` (`core/schemas.py::PROCESS_VIDEO_S3_KEY_PATTERN`) só aceita `youtube/<uuid>/original.mp4` ou `uploads/<userId>/<uuid>/<nome>` (nome `[A-Za-z0-9._-]+`, nunca `.`/`..`). Caminho absoluto, `../`, `clips/...` ou `\n` no fim → 422 nos dois runners, antes de qualquer download/transcrição
 - Se `request.mode == "manual"`: logo após resolver o caminho, `get_video_duration_seconds` (ffprobe, `core/video_probe.py`) lê a duração real e `validate_manual_cuts_against_duration` rejeita a requisição inteira (HTTP 422) se qualquer corte tiver `end` maior que essa duração (RN-PIPE-MANUAL-06). Isso acontece antes da transcrição.
 
 #### 2. Transcrição (WhisperX)
 ```python
+# modo auto: vídeo inteiro (o Gemini precisa da transcrição completa)
 transcript_segments_json = transcriber.transcribe(base_dir, video_path)
 transcript_segments = json.loads(transcript_segments_json)
 ```
+
+**Modo manual (RN-PIPE-MANUAL-08):** só o áudio dos cortes é transcrito. `merge_time_ranges` (`core/transcription.py`) expande cada corte em 0,5s (limitado a `[0, duração real]`) e mescla os intervalos que se sobrepõem ou se tocam, para que nenhuma palavra seja transcrita duas vezes. Para cada intervalo, `WhisperTranscriber.transcribe_range(base_dir, video_path, start, end)` extrai só aquele trecho com `ffmpeg -ss <start> -i <vídeo> -t <duração>` (lista de argumentos, `shell=False`, arquivo `audio_<start_ms>_<end_ms>.wav` único), roda WhisperX e soma `start` aos tempos das palavras, que continuam absolutos no vídeo original. As listas são concatenadas e ordenadas por `start`, no mesmo formato do modo auto, então `process_clip` e as legendas funcionam sem mudança (a margem só traz palavras extras que `generate_ass_subtitles` descarta por filtrar pelo intervalo do clipe). Limitação: o idioma é detectado por trecho pelo WhisperX, mas o modelo de alinhamento é carregado para `language_code` fixo; trechos muito curtos ou silenciosos podem ter detecção de idioma menos confiável.
 
 **Resultado**: lista de segmentos com estrutura (por palavra):
 ```json
@@ -274,7 +280,7 @@ transcript_segments = json.loads(transcript_segments_json)
 
 #### 3. Identificação de Momentos Virais (`MomentsProvider`: Gemini ou Claude)
 
-Só executa no modo `auto`. No modo `manual` esta etapa é pulada e a transcrição (passo 2) continua rodando (RN-PIPE-MANUAL-08).
+Só executa no modo `auto`. No modo `manual` esta etapa é pulada e a transcrição (passo 2) continua existindo, mas só sobre os trechos dos cortes (RN-PIPE-MANUAL-08).
 ```python
 moments_extraction = moments_provider.identify_moments(transcript_segments)
 clips_to_process = moments_extraction.clips[:clips_limit]
@@ -324,10 +330,16 @@ LR-ASD (Light-weight Relation-aware Active Speaker Detection) é um modelo que d
 tracks, scores = run_active_speaker_detection(clip_name, base_dir, asd_dir="/asd")
 ```
 
-**Arquivo**: `ai-podcast-clipper-backend/core/active_speaker_detection.py`
+**Arquivos**: `ai-podcast-clipper-backend/core/active_speaker_detection.py`, `ai-podcast-clipper-backend/core/asd_runner.py`
 
 - Roda o modelo LR-ASD no segmento cortado (não no vídeo inteiro)
 - Retorna `tracks` (rosto/região por frame) e `scores` (confiança de detecção)
+- **Invocação (2026-10-11):** `run_active_speaker_detection` executa `[sys.executable, core/asd_runner.py, "Columbia_test.py", --videoName, --videoFolder, --pretrainModel]` com `cwd=asd_dir` (lista de argumentos, sem shell). O lançador `core/asd_runner.py` prepara o ambiente antes de rodar o script do submódulo `asd/` via `runpy`, sem editar o submódulo:
+  - garante os pesos do detector de rostos (`asd/model/faceDetector/s3fd/sfd_face.pth`, ~90 MB), baixando pela API Python do `gdown` se faltarem. O código do vendor usava `gdown --id`, flag removida no gdown 5, e dependia do `gdown` estar no PATH;
+  - restaura `np.int` (removido no NumPy 1.24/2.x), que `model/faceDetector/s3fd/box_utils.py` ainda usa.
+- **Dependência fixada:** `scenedetect==0.6.7.1` no `requirements.txt`. A 0.5.x quebra com o OpenCV atual (`cv2.split` devolve tupla) e a 0.7.x removeu `scenedetect.video_manager`, que o `Columbia_test.py` importa. Teste: `tests/test_asd_scene_detection_dependency.py`.
+- **Modal:** a imagem baixa o `sfd_face.pth` no build (`main.py`, `run_commands` após o `add_local_dir("asd", ...)`), para não depender do Google Drive a cada cold start; se o download do build falhar, o lançador tenta de novo em runtime.
+- **Falha:** se o script não gerar `pywork/{tracks,scores}.pckl`, o `FileNotFoundError` agora informa o exit code do LR-ASD e aponta para o traceback no log do backend. Exit code ≠ 0 com os arquivos gerados não é fatal, porque o último passo do script (visualização) pode falhar depois deles.
 
 #### 4. Reframe Vertical (FFMPEGCV)
 ```python
@@ -386,8 +398,11 @@ clip_metadata = {
     "end": end_time,
     "duration": duration,
     "preset": preset,
+    "words": extract_clip_words(transcript_segments, start_time, end_time),
 }
 ```
+
+`words` (RF-PIPE-15) é a transcrição do clipe: lista de `{word, start, end}` com tempos **relativos ao início do clipe** (o vídeo do clipe começa em 0; limitados a `[0, duração]`), selecionada pelo mesmo critério das legendas (`generate_ass_subtitles`). Vale para os dois modos; sem fala vira `[]`. No modo manual, a base são as palavras de `transcribe_range` (só os cortes, com margem de 0,5s). Os campos `hook`/`virality_score`/`reason` são `None` no modo manual.
 
 ---
 
@@ -419,7 +434,7 @@ O Modal retorna `ModalProcessVideoResponse`:
 1. Para cada clipe no response:
    - Cria `Clip` row no banco com metadados
    - Mapeia campo `s3_key` (snake_case) → `s3Key` (camelCase) conforme Prisma
-   - Armazena `transcriptWords` (opcional, para future replay/editing)
+   - Armazena `words` do clipe em `Clip.transcriptWords` (tempos relativos ao clipe; consumido por `clip-editor-modal` e `clip-details-modal`)
 
 2. Chama `ConsumeCreditsUseCase`:
    - Cria `CreditTransaction` com `type: CONSUME`
@@ -473,20 +488,22 @@ Usuário clica **"Reprocessar"** na Dashboard:
 | **GPU** | Modal GPU (NVIDIA L40S) | GPU local (ex.: RTX 4090) |
 | **Lógica pipeline** | `core/video_pipeline.py` + módulos | Mesmo `core/video_pipeline.py` + módulos |
 | **S3 access** | AWS credentials via Modal secrets | AWS credentials via env var `AWS_*` |
-| **Input video** | S3 path | S3 path OU local path (fallback em dev) |
+| **Download YouTube (`/download_youtube`)** | `main.py::download_youtube` → `core/youtube_downloader.py::download_youtube_to_s3` + `create_object_storage()` | **Mesmo caminho (2026-10-11):** `local_server.py::download_youtube` → `download_youtube_to_s3` + `create_object_storage()` (MinIO em dev). Antes rodava `yt_dlp` via `subprocess` sem validar host e devolvia caminho em `/tmp` |
+| **Contrato do download** | `DownloadYouTubeRequest` (`extra="forbid"`, `s3_key` só `youtube/<uuid>/original.mp4`); host fora de YouTube → 400; indisponível → 404; restrição de idade → 403; resto → 500 | Idêntico (mesmo schema e mesmo mapeamento de erros) |
+| **Input video** | Chave de storage, baixada pelo `ObjectStorage` | Idêntico: chave de storage (MinIO em dev). Sem atalho de arquivo local nos dois ambientes desde 2026-10-11 (RNF-SEC-19, ver risco 2) |
 | **S3 bucket** | Hardcoded: `"ai-podcast-clipper"` | Hardcoded: `"ai-podcast-clipper"` |
 
 **Resultado**: ambos produzem exatamente os mesmos clipes, na mesma ordem, com a mesma qualidade. Não há surpresas ao fazer deploy em produção.
 
 **⚠️ Riscos Conhecidos:**
 
-1. **Chave S3 gerada pelo frontend (inseguro)**: O `s3_key` é gerado no frontend por `CreateProjectClient` (via `utils/generate-upload-path.ts`). O backend não redireciona — apenas processa a chave recebida. Quem tiver o token de autenticação pode processar qualquer `s3_key` no bucket alcançável.
+1. **Chave S3 gerada pelo frontend (inseguro)**: O `s3_key` é gerado no frontend por `CreateProjectClient` (via `utils/generate-upload-path.ts`). O backend não redireciona — apenas processa a chave recebida. Quem tiver o token de autenticação pode processar qualquer `s3_key` no bucket alcançável. Desde 2026-10-11 (RNF-SEC-19) isso fica restrito a chaves `youtube/<uuid>/original.mp4` e `uploads/<userId>/<uuid>/<nome>`; o backend não confere se o `userId` da chave é o dono da requisição (o frontend é a única origem dessas chaves).
 
-2. **Fallback local em produção (SSRF possível)**: `core/video_pipeline.py::resolve_input_video_path` (linhas 37-38) aceita caminho de arquivo local mesmo no Modal em produção. Se um `s3_key` coincide com um arquivo existente no container, lê local em vez de baixar S3. Essa não é uma feature explícita de dev — é um comportamento residual.
+2. ~~**Fallback local em produção (leitura de arquivo arbitrário)**~~ — **resolvido (2026-10-11, RNF-SEC-19).** `core/video_pipeline.py::resolve_input_video_path` copiava `s3_key` do disco quando `os.path.exists(s3_key)` era verdadeiro, inclusive no Modal. O ramo foi removido (o vídeo sempre vem do storage) e `ProcessVideoRequest.s3_key` passou a aceitar só os 2 formatos gerados pelo sistema. Testes: `tests/test_process_video_s3_key_hardening.py`, `tests/test_video_pipeline.py::TestResolveInputVideoPath`, `tests/test_local_server.py::TestLocalProcessVideoS3KeyHardening`.
 
-3. **Download YouTube aceita bucket e chave arbitrários**: `download_youtube` do Modal recebe `s3_bucket` e `s3_key` do chamador (`core/schemas.py:77-84`, `main.py:156-162`). Quem tiver token pode escrever em qualquer bucket alcançável pelas credenciais AWS, inclusive sobrescrever clipes de outros usuários.
+3. ~~**Download YouTube aceita bucket e chave arbitrários**~~ — **resolvido.** O bucket saiu do contrato em 2026-10-10. Em 2026-10-11 entraram `extra="forbid"` e `s3_key` restrito a `youtube/<uuid>/original.mp4` (RNF-SEC-18, `core/schemas.py::DownloadYouTubeRequest`), o que vale para os dois runners. Residual: o chamador com token ainda escolhe qual UUID escrever.
 
 4. **Sem timeout em chamadas ao Modal**: Frontend faz POST ao `PROCESS_VIDEO_ENDPOINT` com `headersTimeout: 0, bodyTimeout: 0` (`src/inngest/functions.ts:85,266`) — sem timeout configurado. Se o backend Modal congelar, Inngest fica bloqueado indefinidamente.
 
-5. **SSRF em local_server.py**: `local_server.py:143-160` passa URL direto ao yt-dlp sem validar host, diferente de `main.py` que chama `_assert_youtube_host()`. Alguém com token pode forçar download de URLs privadas (intranet, localhost, etc.).
+5. ~~**SSRF em local_server.py**~~ — **resolvido (2026-10-11, RNF-SEC-06).** `local_server.py::download_youtube` agora usa `download_youtube_to_s3` (valida o host com `_assert_youtube_host` antes do yt-dlp) com o storage plugável, igual a `main.py`. Host inválido → 400 nos dois runners.
 

@@ -5,7 +5,7 @@ ffmpegcv
 numpy
 python_speech_features
 scipy
-scenedetect
+scenedetect==0.6.7.1
 scikit-learn
 gdown
 torchvision

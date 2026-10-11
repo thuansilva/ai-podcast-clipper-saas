@@ -264,3 +264,168 @@ class TestCustomEndpointMinIO:
         boto3_client_factory.return_value.upload_file.assert_called_once_with(
             "/tmp/work/clip.mp4", TEST_BUCKET, "clips/u/x/clip_0.mp4"
         )
+
+
+class TestProductionEndpointGuard:
+    """`APP_ENV="production"` is this backend's equivalent of the frontend's
+    `NODE_ENV` for `assertStorageEndpointAllowed`
+    (src/infrastructure/storage/storage-endpoint-guard.ts): it guards against
+    a dev-only `S3_ENDPOINT_URL` (MinIO via `docker-compose.yml`,
+    `http://localhost:9000`) being inherited by mistake into the Modal
+    secret, which would make every production run fail trying to reach an
+    unreachable host.
+
+    `APP_ENV` does not exist anywhere else in this backend yet (there is no
+    `NODE_ENV` equivalent in a plain Python/Modal process) — this is a new
+    env var introduced specifically for this guard, defaulting to permissive
+    (dev) behavior when unset, matching the frontend's "only enforce in
+    production" posture.
+
+    Same rule set as the frontend guard: reject `localhost`, loopback/
+    private/link-local IPs, internal hostname suffixes
+    (`.local`/`.internal`/`.localhost`), a bare hostname with no dot (e.g.
+    the docker-compose service name `minio`), and any non-`https://` scheme.
+    The guard only applies inside the `"minio"` branch — `"s3"` never accepts
+    `S3_ENDPOINT_URL` at all (see `TestProviderSelection`), so there is
+    nothing to validate there.
+    """
+
+    @pytest.mark.parametrize(
+        "endpoint",
+        [
+            "http://localhost:9000",
+            "http://127.0.0.1:9000",
+            "http://0.0.0.0:9000",
+            "http://10.0.0.5:9000",
+            "http://172.20.0.3:9000",
+            "http://192.168.1.10:9000",
+            "http://169.254.169.254:9000",
+            "http://minio.internal:9000",
+            "http://minio.local:9000",
+            "http://minio.localhost:9000",
+            "http://minio:9000",
+            "https://minio:9000",
+        ],
+        ids=[
+            "localhost",
+            "loopback-ip",
+            "0.0.0.0",
+            "private-10",
+            "private-172",
+            "private-192",
+            "link-local",
+            "internal-suffix",
+            "local-suffix",
+            "localhost-suffix",
+            "bare-hostname-http",
+            "bare-hostname-https",
+        ],
+    )
+    def test_production_rejects_dev_like_endpoint(
+        self, boto3_client_factory: MagicMock, endpoint: str
+    ):
+        with pytest.raises(ValueError, match=re.escape("S3_ENDPOINT_URL")):
+            _create_object_storage(
+                _env(
+                    STORAGE_PROVIDER="minio",
+                    S3_ENDPOINT_URL=endpoint,
+                    APP_ENV="production",
+                )
+            )
+
+        boto3_client_factory.assert_not_called()
+
+    def test_production_rejects_public_host_over_plain_http(
+        self, boto3_client_factory: MagicMock
+    ):
+        with pytest.raises(ValueError, match=re.escape("https")):
+            _create_object_storage(
+                _env(
+                    STORAGE_PROVIDER="minio",
+                    S3_ENDPOINT_URL="http://minio.minhaempresa.com",
+                    APP_ENV="production",
+                )
+            )
+
+        boto3_client_factory.assert_not_called()
+
+    def test_production_accepts_public_https_endpoint(
+        self, boto3_client_factory: MagicMock
+    ):
+        from core.storage.s3_object_storage import S3ObjectStorage
+
+        storage = _create_object_storage(
+            _env(
+                STORAGE_PROVIDER="minio",
+                S3_ENDPOINT_URL="https://minio.minhaempresa.com",
+                APP_ENV="production",
+            )
+        )
+
+        assert isinstance(storage, S3ObjectStorage)
+        boto3_client_factory.assert_called_once()
+        _, kwargs = boto3_client_factory.call_args
+        assert kwargs.get("endpoint_url") == "https://minio.minhaempresa.com"
+
+    def test_development_app_env_keeps_dev_endpoint_allowed(
+        self, boto3_client_factory: MagicMock
+    ):
+        from core.storage.s3_object_storage import S3ObjectStorage
+
+        storage = _create_object_storage(
+            _env(
+                STORAGE_PROVIDER="minio",
+                S3_ENDPOINT_URL=MINIO_ENDPOINT,
+                APP_ENV="development",
+            )
+        )
+
+        assert isinstance(storage, S3ObjectStorage)
+        boto3_client_factory.assert_called_once()
+
+    def test_missing_app_env_keeps_dev_endpoint_allowed(
+        self, boto3_client_factory: MagicMock
+    ):
+        from core.storage.s3_object_storage import S3ObjectStorage
+
+        storage = _create_object_storage(
+            _env(STORAGE_PROVIDER="minio", S3_ENDPOINT_URL=MINIO_ENDPOINT)
+        )
+
+        assert isinstance(storage, S3ObjectStorage)
+        boto3_client_factory.assert_called_once()
+
+    def test_production_guard_does_not_apply_to_real_aws_s3(
+        self, boto3_client_factory: MagicMock
+    ):
+        # STORAGE_PROVIDER="s3" never reads S3_ENDPOINT_URL at all (forbidden
+        # outright, see TestProviderSelection.test_s3_with_endpoint_raises_
+        # clear_value_error), so the production guard has nothing to check
+        # on this branch regardless of APP_ENV.
+        from core.storage.s3_object_storage import S3ObjectStorage
+
+        storage = _create_object_storage(
+            _env(STORAGE_PROVIDER="s3", APP_ENV="production")
+        )
+
+        assert isinstance(storage, S3ObjectStorage)
+        boto3_client_factory.assert_called_once_with("s3")
+
+
+class TestProductionEndpointGuardIntegration:
+    """Integration-level check with the real `boto3` import (no mocking of
+    `boto3.client`): proves the guard raises *before* botocore ever attempts
+    to build a client for the dev endpoint, exactly as would happen on a
+    Modal container boot with a wrongly-inherited dev secret."""
+
+    def test_dev_endpoint_in_production_fails_before_touching_boto3(self):
+        from core.storage.factory import create_object_storage
+
+        with pytest.raises(ValueError, match=re.escape("S3_ENDPOINT_URL")):
+            create_object_storage(
+                _env(
+                    STORAGE_PROVIDER="minio",
+                    S3_ENDPOINT_URL=MINIO_ENDPOINT,
+                    APP_ENV="production",
+                )
+            )

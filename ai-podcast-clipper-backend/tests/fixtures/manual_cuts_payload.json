@@ -1,5 +1,5 @@
 {
-  "s3_key": "uploads/test-user/manual-cuts-fixture/sample-podcast.mp4",
+  "s3_key": "uploads/user_test-fixture/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/sample-podcast.mp4",
   "preset": "HORMOZI",
   "mode": "manual",
   "manual_cuts": [

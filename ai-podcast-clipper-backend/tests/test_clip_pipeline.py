@@ -47,6 +47,7 @@ def _process(
     start_time: float,
     end_time: float,
     storage: FakeObjectStorage,
+    transcript_segments: Any = None,
 ) -> Dict[str, Any]:
     return clip_pipeline.process_clip(
         base_dir=base_dir,
@@ -55,7 +56,7 @@ def _process(
         start_time=start_time,
         end_time=end_time,
         clip_index=clip_index,
-        transcript_segments=[],
+        transcript_segments=transcript_segments or [],
         preset="HORMOZI",
         clip_item=clip_item,
         storage=storage,
@@ -194,3 +195,70 @@ class TestClipUploadThroughInjectedStorage:
                 tmp_path, cut, clip_index=0, start_time=12.5, end_time=32.5,
                 storage=storage,
             )
+
+
+# Words with ABSOLUTE times in the original video (as WhisperX/transcribe_range
+# return them). The clip video starts at 0, so the UI (clip-editor-modal
+# {word,start,end}) needs times RELATIVE to the clip start.
+ABSOLUTE_SEGMENTS = [
+    {"start": 8.0, "end": 9.0, "word": "antes"},      # ends before the clip
+    {"start": 9.5, "end": 10.4, "word": "borda"},     # straddles clip start
+    {"start": 11.0, "end": 11.5, "word": "meio"},
+    {"start": 14.0, "end": 14.6, "word": "fim"},
+    {"start": 14.6, "end": 15.5, "word": "borda2"},   # straddles clip end
+    {"start": 20.0, "end": 20.5, "word": "depois"},   # starts after the clip
+    {"start": 12.0, "end": None, "word": "sem_fim"},  # malformed, ignored
+    {"start": 12.0, "end": 12.5, "word": "  "},       # blank, ignored
+]
+
+
+class TestClipWords:
+    def _expected(self):
+        return [
+            {"word": "borda", "start": 0.0, "end": pytest.approx(0.4)},
+            {"word": "meio", "start": 1.0, "end": 1.5},
+            {"word": "fim", "start": 4.0, "end": pytest.approx(4.6)},
+            {"word": "borda2", "start": pytest.approx(4.6), "end": 5.0},
+        ]
+
+    def test_manual_cut_returns_only_words_in_range_with_clip_relative_times(
+        self, tmp_path: Path, mocked_side_effects: Dict[str, Any]
+    ):
+        cut = schemas.ManualCut(start=10.0, end=15.0)
+        metadata = _process(
+            tmp_path, cut, 0, 10.0, 15.0, mocked_side_effects["storage"],
+            transcript_segments=ABSOLUTE_SEGMENTS,
+        )
+        assert metadata["words"] == self._expected()
+
+    def test_automatic_clip_returns_same_words_format(
+        self, tmp_path: Path, mocked_side_effects: Dict[str, Any]
+    ):
+        item = ClipItem(
+            title="t", hook="h", start=10.0, end=15.0, virality_score=5, reason="r"
+        )
+        metadata = _process(
+            tmp_path, item, 0, 10.0, 15.0, mocked_side_effects["storage"],
+            transcript_segments=ABSOLUTE_SEGMENTS,
+        )
+        assert metadata["words"] == self._expected()
+
+    def test_clip_without_speech_returns_empty_list(
+        self, tmp_path: Path, mocked_side_effects: Dict[str, Any]
+    ):
+        cut = schemas.ManualCut(start=30.0, end=40.0)
+        metadata = _process(
+            tmp_path, cut, 0, 30.0, 40.0, mocked_side_effects["storage"],
+            transcript_segments=ABSOLUTE_SEGMENTS,
+        )
+        assert metadata["words"] == []
+
+    def test_accepts_text_key_like_the_subtitle_generator(
+        self, tmp_path: Path, mocked_side_effects: Dict[str, Any]
+    ):
+        cut = schemas.ManualCut(start=10.0, end=15.0)
+        metadata = _process(
+            tmp_path, cut, 0, 10.0, 15.0, mocked_side_effects["storage"],
+            transcript_segments=[{"start": 11.0, "end": 11.5, "text": "oi"}],
+        )
+        assert metadata["words"] == [{"word": "oi", "start": 1.0, "end": 1.5}]

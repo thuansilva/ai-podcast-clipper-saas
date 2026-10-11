@@ -23,6 +23,15 @@ vi.mock("~/infrastructure/factories/auth-factory", () => ({
   }),
 }));
 
+// Rate limiting has its own dedicated coverage in
+// tests/unit/actions/stripe-actions-rate-limit.test.ts. Here we keep it
+// unlimited so these business-logic tests don't depend on call order/count.
+vi.mock("~/infrastructure/factories/rate-limiter-factory", () => ({
+  makeBillingActionRateLimiter: () => ({
+    consume: vi.fn().mockResolvedValue(true),
+  }),
+}));
+
 const mockFindById = vi.fn();
 const mockCreateCheckoutSession = vi.fn();
 const mockCreateBillingPortalSession = vi.fn();

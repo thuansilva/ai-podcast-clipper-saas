@@ -1,22 +1,45 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
-import {   } from "~/components/ui/input";
+import { Input } from "~/components/ui/input";
+import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Label } from "~/components/ui/label";
 import { Switch } from "~/components/ui/switch";
 import {
   Loader2,
+  PlusIcon,
   ScissorsIcon,
   SlidersHorizontalIcon,
-
+  Trash2Icon,
   YoutubeIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { importYouTubeVideo } from "~/actions/youtube";
 import { Slider } from "~/components/ui/slider";
 import type { ProcessingOption } from "~/application/services/processing-options.service";
+import {
+  MAX_MANUAL_CUTS,
+  MAX_MANUAL_CUT_DURATION_SECONDS,
+  manualCutsArraySchema,
+} from "~/domain/schemas/manual-cut.schema";
+import {
+  calculateManualCutsCredits,
+  calculateVideoCredits,
+} from "~/domain/services/credit-pricing.service";
+import { formatTimeInput, parseTimeInput } from "~/lib/time-format";
+import {
+  defaultCutRange,
+  normalizeRange,
+  type SecondsRange,
+} from "~/lib/cut-slider";
+import {
+  analyzeManualCutRows,
+  type ManualCutRow,
+} from "~/lib/manual-cut-rows";
+
+type CutMode = "auto" | "manual";
 
 interface VideoMetadata {
   title: string;
@@ -44,6 +67,13 @@ interface CreateProjectClientProps {
   };
 }
 
+/** Trecho inicial padrão do Fatiador: 5 minutos (ou o vídeo inteiro, se menor). */
+const DEFAULT_SLICE_SECONDS = 5 * 60;
+
+function formatDurationLabel(totalSeconds: number): string {
+  return formatTimeInput(totalSeconds);
+}
+
 function getDefaultOptionValue(options?: ProcessingOption[]): string {
   if (!options || options.length === 0) return "";
   const defaultOption = options.find((o) => o.isDefault);
@@ -65,18 +95,18 @@ export function CreateProjectClient({
   const [metadata, setMetadata] = useState<VideoMetadata | null>(initialMetadata);
   const [loadingMeta, setLoadingMeta] = useState(false);
 
-  const [range, setRange] = useState<[number, number]>(() => {
-    if (initialSettings?.sliceStartTime !== undefined && initialSettings?.sliceEndTime !== undefined) {
-      return [
-        Math.floor(initialSettings.sliceStartTime / 60),
-        Math.floor(initialSettings.sliceEndTime / 60)
-      ];
+  // Trecho do Fatiador em SEGUNDOS (o banco e as actions também usam segundos).
+  const [range, setRange] = useState<SecondsRange>(() => {
+    const total = initialMetadata?.durationSeconds
+      ? Math.floor(initialMetadata.durationSeconds)
+      : undefined;
+    const savedStart = initialSettings?.sliceStartTime;
+    const savedEnd = initialSettings?.sliceEndTime;
+    // 0/0 (ou fim <= início) significa "sem trecho salvo", ex. projeto manual.
+    if (savedStart !== undefined && savedEnd !== undefined && savedEnd > savedStart) {
+      return [savedStart, total ? Math.min(savedEnd, total) : savedEnd];
     }
-    if (initialMetadata?.durationSeconds) {
-      const defaultDuration = Math.min(5 * 60, initialMetadata.durationSeconds);
-      return [0, Math.floor(defaultDuration / 60)];
-    }
-    return [0, 5];
+    return [0, Math.min(DEFAULT_SLICE_SECONDS, total ?? DEFAULT_SLICE_SECONDS)];
   });
   const [preset, setPreset] = useState(initialSettings?.preset || "HORMOZI");
   // `genre`/`clipModel`/`aspectRatio` guardam apenas a escolha explícita do
@@ -105,6 +135,79 @@ export function CreateProjectClient({
 
   const [processing, setProcessing] = useState(false);
 
+  // Modo de definição dos cortes (só no fluxo de criação; em `editMode` o
+  // seletor não é exibido e o fluxo de retry segue como antes).
+  const [cutMode, setCutMode] = useState<CutMode>("auto");
+  const rowCounter = useRef(1);
+  const newRow = (): ManualCutRow => ({
+    id: `cut-${rowCounter.current++}`,
+    start: "",
+    end: "",
+    title: "",
+  });
+  const [cutRows, setCutRows] = useState<ManualCutRow[]>(() => [newRow()]);
+  const isManual = !editMode && cutMode === "manual";
+
+  // Posição do slider de cada corte (segundos), separada do texto digitado:
+  // enquanto o texto está inválido/incompleto o slider fica onde estava.
+  // Linhas sem entrada usam o padrão (0..30s).
+  const [sliderPos, setSliderPos] = useState<Record<string, SecondsRange>>({});
+  const videoSeconds = Math.floor(metadata?.durationSeconds ?? 0);
+  const sliderOf = (id: string): SecondsRange =>
+    sliderPos[id] ?? defaultCutRange(0, videoSeconds);
+
+  const updateRow = (id: string, patch: Partial<ManualCutRow>) => {
+    setCutRows((rows) => rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    if (patch.start === undefined && patch.end === undefined) return;
+    // Digitar um par válido (início < fim, <= 60s, dentro do vídeo) move o slider.
+    const row = cutRows.find((r) => r.id === id);
+    if (!row) return;
+    const s0 = parseTimeInput(patch.start ?? row.start);
+    const e0 = parseTimeInput(patch.end ?? row.end);
+    if (
+      s0 !== null &&
+      e0 !== null &&
+      e0 > s0 &&
+      e0 - s0 <= MAX_MANUAL_CUT_DURATION_SECONDS &&
+      e0 <= videoSeconds
+    ) {
+      setSliderPos((pos) => ({ ...pos, [id]: [s0, e0] }));
+    }
+  };
+  // Arrastar o slider preenche os dois campos (a linha passa a estar completa).
+  const moveSlider = (id: string, values: number[]) => {
+    const next = normalizeRange(
+      sliderOf(id),
+      values,
+      videoSeconds,
+      MAX_MANUAL_CUT_DURATION_SECONDS,
+    );
+    setSliderPos((pos) => ({ ...pos, [id]: next }));
+    setCutRows((rows) =>
+      rows.map((r) =>
+        r.id === id
+          ? { ...r, start: formatTimeInput(next[0]), end: formatTimeInput(next[1]) }
+          : r,
+      ),
+    );
+  };
+  const addRow = () => {
+    if (cutRows.length >= MAX_MANUAL_CUTS) return;
+    const row = newRow();
+    // Corte novo: sugestão logo depois do fim do último corte válido.
+    const lastEnd = manualAnalysis.cuts.reduce((m, c) => Math.max(m, c.endTime), 0);
+    setSliderPos((pos) => ({ ...pos, [row.id]: defaultCutRange(lastEnd, videoSeconds) }));
+    setCutRows((rows) => [...rows, row]);
+  };
+  const removeRow = (id: string) => {
+    setSliderPos(({ [id]: _removed, ...rest }) => rest);
+    setCutRows((rows) =>
+      rows.length <= 1
+        ? [{ ...rows[0]!, start: "", end: "", title: "" }]
+        : rows.filter((r) => r.id !== id),
+    );
+  };
+
   const router = useRouter();
 
   const handleFetchMeta = async (targetUrl: string) => {
@@ -125,8 +228,9 @@ export function CreateProjectClient({
       if (!res.ok) throw new Error(data.error || "Failed to fetch metadata");
 
       setMetadata(data as VideoMetadata);
-      const defaultDuration = Math.min(5 * 60, data.durationSeconds || 300);
-      setRange([0, Math.floor(defaultDuration / 60)]);
+      const total = Math.floor(data.durationSeconds || DEFAULT_SLICE_SECONDS);
+      setRange([0, Math.min(DEFAULT_SLICE_SECONDS, total)]);
+      setSliderPos({});
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Erro desconhecido");
     } finally {
@@ -150,9 +254,22 @@ export function CreateProjectClient({
     }
   }, [url, metadata, initialUrl]);
 
-  const startMin = range[0] || 0;
-  const endMin = range[1] || 5;
-  const cost = Math.max(1, endMin - startMin);
+  const startSec = range[0];
+  const endSec = range[1];
+  // Mesma regra do Inngest (hold usa o tamanho do trecho em segundos):
+  // 1 crédito por minuto ou fração, mínimo 1.
+  const autoCost = calculateVideoCredits(endSec - startSec);
+
+  const manualAnalysis = useMemo(
+    () => analyzeManualCutRows(cutRows, metadata?.durationSeconds ?? 0),
+    [cutRows, metadata?.durationSeconds],
+  );
+  const manualCost = calculateManualCutsCredits(manualAnalysis.cuts);
+  const cost = isManual ? manualCost : autoCost;
+  const insufficientCredits = !editMode && cost > userCredits;
+  const hasIncompleteRow = manualAnalysis.rows.some((r) => r.incomplete);
+  const submitBlocked =
+    processing || insufficientCredits || (isManual && !manualAnalysis.allValid);
 
   const handleSubmit = async () => {
     if (!editMode && (!url || !metadata)) return;
@@ -167,6 +284,14 @@ export function CreateProjectClient({
       return;
     }
 
+    if (isManual) {
+      const check = manualCutsArraySchema.safeParse(manualAnalysis.cuts);
+      if (!manualAnalysis.allValid || !check.success) {
+        toast.error("Corrija os cortes manuais antes de enviar.");
+        return;
+      }
+    }
+
     setProcessing(true);
     try {
       if (editMode && editProjectId) {
@@ -176,8 +301,8 @@ export function CreateProjectClient({
           clipModel,
           aspectRatio,
           autoZoom,
-          sliceStartTime: startMin * 60,
-          sliceEndTime: endMin * 60,
+          sliceStartTime: startSec,
+          sliceEndTime: endSec,
         });
 
         if (!res.success) {
@@ -190,18 +315,27 @@ export function CreateProjectClient({
         return;
       }
 
-      const result = await importYouTubeVideo({
+      const commonInput = {
         url,
         preset,
-        sliceStartTime: startMin * 60,
-        sliceEndTime: endMin * 60,
-        mode: "auto",
         genre: genre || undefined,
         clipModel: clipModel || undefined,
         aspectRatio: aspectRatio || undefined,
         autoZoom,
         thumbnailUrl: metadata?.thumbnailUrl,
-      });
+      };
+      // Modo manual: tempos absolutos em segundos e SEM slice (o Fatiador é
+      // para a IA escolher dentro de um trecho; aqui o usuário já escolheu).
+      const result = await importYouTubeVideo(
+        isManual
+          ? { ...commonInput, mode: "manual", manualCuts: manualAnalysis.cuts }
+          : {
+              ...commonInput,
+              sliceStartTime: startSec,
+              sliceEndTime: endSec,
+              mode: "auto",
+            },
+      );
 
       if (!result.success) {
         throw new Error(result.error);
@@ -280,7 +414,9 @@ export function CreateProjectClient({
               Configurar Projeto
             </h1>
             <p className="text-sm text-[var(--fumaca)]">
-              Ajuste os parâmetros de corte e deixe a IA fazer o resto.
+              {isManual
+                ? "Defina os cortes, o formato e o estilo das legendas."
+                : "Ajuste os parâmetros de corte e deixe a IA fazer o resto."}
             </p>
           </div>
           <div className="animate-in fade-in slide-in-from-bottom-4 space-y-8 duration-500">
@@ -298,13 +434,14 @@ export function CreateProjectClient({
                     {metadata.title}
                   </p>
                   <p className="mt-1 text-xs text-[var(--fumaca)]">
-                    {Math.floor(metadata.durationSeconds / 60)} minutos totais
+                    Duração total: {formatDurationLabel(metadata.durationSeconds)}
                   </p>
                 </div>
               </div>
             </div>
 
             <div className="space-y-6 md:col-span-8">
+              {!isManual && (
               <div className="space-y-6 rounded-xl border border-[var(--linha)] bg-[var(--superficie)] p-6">
                 <div>
                   <h2 className="flex items-center gap-2 text-lg font-semibold text-[var(--marfim)]">
@@ -318,30 +455,26 @@ export function CreateProjectClient({
                 <div className="space-y-8">
                   <div className="px-2 pt-4 pb-2">
                     <Slider
+                      data-testid="range-slider"
                       value={range}
                       min={0}
-                      max={Math.floor(metadata.durationSeconds / 60)}
+                      max={Math.floor(metadata.durationSeconds)}
                       step={1}
-                      onValueChange={(val) => {
-                        const v0 = val[0] || 0;
-                        const v1 = val[1] || v0 + 1;
-                        const maxMinutes = Math.floor(
-                          metadata.durationSeconds / 60,
-                        );
-                        if (v1 > v0) {
-                          setRange([v0, v1]);
-                        } else if (v1 === v0) {
-                          if (v1 < maxMinutes) {
-                            setRange([v0, v1 + 1]);
-                          } else {
-                            setRange([Math.max(0, v0 - 1), v1]);
-                          }
-                        }
-                      }}
+                      minStepsBetweenThumbs={1}
+                      thumbLabels={["Início do trecho a analisar", "Fim do trecho a analisar"]}
+                      thumbValueText={(v) => formatTimeInput(v)}
+                      onValueChange={(val) =>
+                        setRange((prev) =>
+                          normalizeRange(prev, val, Math.floor(metadata.durationSeconds)),
+                        )
+                      }
                     />
-                    <div className="mt-4 flex justify-between text-xs font-medium text-[var(--fumaca)]">
-                      <span>{startMin} min</span>
-                      <span>{endMin} min</span>
+                    <div
+                      data-testid="range-labels"
+                      className="mt-4 flex justify-between text-xs font-medium text-[var(--fumaca)]"
+                    >
+                      <span>{formatTimeInput(startSec)}</span>
+                      <span>{formatTimeInput(endSec)}</span>
                     </div>
                   </div>
 
@@ -354,13 +487,17 @@ export function CreateProjectClient({
                         Você será cobrado apenas pelo trecho fatiado.
                       </p>
                     </div>
-                    <div className="font-mono text-2xl font-bold text-[var(--ouro)]">
+                    <div
+                      data-testid="processing-cost"
+                      className="font-mono text-2xl font-bold text-[var(--ouro)]"
+                    >
                       {cost}{" "}
                       <span className="text-sm font-normal">Créditos</span>
                     </div>
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Opções de Processamento Dinâmicas */}
               <div className="space-y-6 rounded-xl border border-[var(--linha)] bg-[var(--superficie)] p-6">
@@ -370,11 +507,230 @@ export function CreateProjectClient({
                     Configurações do Corte
                   </h2>
                   <p className="mt-1 text-sm text-[var(--fumaca)]">
-                    Personalize o formato, foco e estilo dos seus cortes
-                    gerados por IA
+                    {isManual
+                      ? "Personalize o formato, foco e estilo dos seus cortes"
+                      : "Personalize o formato, foco e estilo dos seus cortes gerados por IA"}
                   </p>
                 </div>
                 <div className="space-y-6">
+                  {!editMode && (
+                    <RadioGroup
+                      aria-label="Como os cortes serão definidos"
+                      value={cutMode}
+                      onValueChange={(v) => setCutMode(v as CutMode)}
+                      className="grid-cols-1 gap-3 sm:grid-cols-2"
+                    >
+                      {(
+                        [
+                          { value: "auto", label: "Automático: a IA escolhe os melhores momentos", desc: "Você escolhe só o trecho do vídeo a analisar." },
+                          { value: "manual", label: "Manual: eu defino os cortes", desc: "Você informa início e fim de cada corte (até 60s cada)." },
+                        ] as const
+                      ).map((m) => (
+                        <div
+                          key={m.value}
+                          className={`flex items-start gap-3 rounded-xl border p-4 transition-all focus-within:ring-2 focus-within:ring-[var(--ouro)]/60 ${cutMode === m.value ? "border-[var(--ouro)] bg-[var(--superficie-2)]" : "border-[var(--linha)] hover:border-[var(--linha-2)]"}`}
+                        >
+                          <RadioGroupItem
+                            id={`cut-mode-${m.value}`}
+                            value={m.value}
+                            aria-describedby={`cut-mode-${m.value}-desc`}
+                            className="mt-0.5"
+                          />
+                          <div className="space-y-1">
+                            <Label
+                              htmlFor={`cut-mode-${m.value}`}
+                              className="cursor-pointer text-sm font-medium text-[var(--marfim)]"
+                            >
+                              {m.label}
+                            </Label>
+                            <p
+                              id={`cut-mode-${m.value}-desc`}
+                              className="text-xs text-[var(--fumaca)]"
+                            >
+                              {m.desc}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  )}
+
+                  {isManual && (
+                    <div className="space-y-4" data-testid="manual-cuts-editor">
+                      <p id="manual-cuts-help" className="text-xs text-[var(--fumaca)]">
+                        Use mm:ss (ou h:mm:ss em vídeos longos), contados a partir
+                        do início do vídeo de {formatDurationLabel(metadata.durationSeconds)}.
+                        Cada corte pode ter no máximo {MAX_MANUAL_CUT_DURATION_SECONDS}s.
+                      </p>
+                      <div className="space-y-3">
+                        {cutRows.map((row, i) => {
+                          const a = manualAnalysis.rows[i]!;
+                          const n = i + 1;
+                          const startErrId = `cut-${row.id}-start-error`;
+                          const endErrId = `cut-${row.id}-end-error`;
+                          const titleErrId = `cut-${row.id}-title-error`;
+                          const warnId = `cut-${row.id}-warning`;
+                          const describe = (...ids: (string | false)[]) =>
+                            ids.filter(Boolean).join(" ") || undefined;
+                          return (
+                            <fieldset
+                              key={row.id}
+                              className="space-y-3 rounded-xl border border-[var(--linha)] p-4"
+                            >
+                              <legend className="px-1 text-sm font-medium text-[var(--marfim)]">
+                                Corte {n}
+                              </legend>
+                              <div className="px-2 pt-2 pb-1">
+                                <Slider
+                                  data-testid={`cut-slider-${row.id}`}
+                                  value={sliderOf(row.id)}
+                                  min={0}
+                                  max={videoSeconds}
+                                  step={1}
+                                  minStepsBetweenThumbs={1}
+                                  thumbLabels={[
+                                    `Início do corte ${n} (deslizante)`,
+                                    `Fim do corte ${n} (deslizante)`,
+                                  ]}
+                                  thumbValueText={(v) => formatTimeInput(v)}
+                                  onValueChange={(val) => moveSlider(row.id, val)}
+                                />
+                              </div>
+                              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div className="space-y-1">
+                                  <Label htmlFor={`cut-${row.id}-start`} className="text-xs text-[var(--marfim)]">
+                                    Início<span className="sr-only"> do corte {n}</span>
+                                  </Label>
+                                  <Input
+                                    id={`cut-${row.id}-start`}
+                                    value={row.start}
+                                    onChange={(e) => updateRow(row.id, { start: e.target.value })}
+                                    placeholder="mm:ss"
+                                    autoComplete="off"
+                                    inputMode="numeric"
+                                    aria-invalid={!!a.startError}
+                                    aria-describedby={describe(!!a.startError && startErrId, !!a.overlapWarning && warnId, "manual-cuts-help")}
+                                  />
+                                  {a.startError && (
+                                    <p id={startErrId} role="alert" className="text-xs text-red-400">
+                                      {a.startError}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="space-y-1">
+                                  <Label htmlFor={`cut-${row.id}-end`} className="text-xs text-[var(--marfim)]">
+                                    Fim<span className="sr-only"> do corte {n}</span>
+                                  </Label>
+                                  <Input
+                                    id={`cut-${row.id}-end`}
+                                    value={row.end}
+                                    onChange={(e) => updateRow(row.id, { end: e.target.value })}
+                                    placeholder="mm:ss"
+                                    autoComplete="off"
+                                    inputMode="numeric"
+                                    aria-invalid={!!a.endError}
+                                    aria-describedby={describe(!!a.endError && endErrId, !!a.overlapWarning && warnId, "manual-cuts-help")}
+                                  />
+                                  {a.endError && (
+                                    <p id={endErrId} role="alert" className="text-xs text-red-400">
+                                      {a.endError}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-end gap-3">
+                                <div className="flex-1 space-y-1">
+                                  <Label htmlFor={`cut-${row.id}-title`} className="text-xs text-[var(--marfim)]">
+                                    Título<span className="sr-only"> do corte {n}</span> (opcional)
+                                  </Label>
+                                  <Input
+                                    id={`cut-${row.id}-title`}
+                                    value={row.title}
+                                    onChange={(e) => updateRow(row.id, { title: e.target.value })}
+                                    maxLength={200}
+                                    autoComplete="off"
+                                    aria-invalid={!!a.titleError}
+                                    aria-describedby={describe(!!a.titleError && titleErrId)}
+                                  />
+                                  {a.titleError && (
+                                    <p id={titleErrId} role="alert" className="text-xs text-red-400">
+                                      {a.titleError}
+                                    </p>
+                                  )}
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => removeRow(row.id)}
+                                  aria-label={`Remover corte ${n}`}
+                                  className="border-[var(--linha-2)] bg-transparent text-[var(--marfim-2)]"
+                                >
+                                  <Trash2Icon className="h-4 w-4" aria-hidden="true" />
+                                </Button>
+                              </div>
+                              {a.overlapWarning && (
+                                <p id={warnId} role="status" className="text-xs text-[var(--ouro)]">
+                                  Aviso: {a.overlapWarning}
+                                </p>
+                              )}
+                            </fieldset>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={addRow}
+                          disabled={cutRows.length >= MAX_MANUAL_CUTS}
+                          aria-describedby={cutRows.length >= MAX_MANUAL_CUTS ? "manual-cuts-limit" : undefined}
+                          className="border-[var(--linha-2)] bg-transparent text-[var(--marfim-2)] hover:bg-[var(--superficie)] hover:text-[var(--marfim)]"
+                        >
+                          <PlusIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+                          Adicionar corte
+                        </Button>
+                        <span className="text-xs text-[var(--fumaca)]">
+                          {cutRows.length} de {MAX_MANUAL_CUTS} cortes
+                        </span>
+                      </div>
+                      {cutRows.length >= MAX_MANUAL_CUTS && (
+                        <p id="manual-cuts-limit" className="text-xs text-[var(--ouro)]">
+                          Você atingiu o limite de {MAX_MANUAL_CUTS} cortes por vídeo.
+                        </p>
+                      )}
+                      {hasIncompleteRow && (
+                        <p role="status" className="text-xs text-[var(--fumaca)]">
+                          Preencha início e fim de todos os cortes (ou remova os vazios) para continuar.
+                        </p>
+                      )}
+
+                      <div className="flex items-center justify-between rounded-xl border border-[var(--ouro)]/30 bg-[var(--ouro)]/10 p-4">
+                        <div>
+                          <p className="text-sm font-medium text-[var(--ouro)]">
+                            Custo do Processamento
+                          </p>
+                          <p className="text-xs text-[var(--ouro)]/70">
+                            1 crédito por corte válido (até 60s cada).
+                          </p>
+                        </div>
+                        <div
+                          data-testid="processing-cost"
+                          className="font-mono text-2xl font-bold text-[var(--ouro)]"
+                        >
+                          {manualCost}{" "}
+                          <span className="text-sm font-normal">Créditos</span>
+                        </div>
+                      </div>
+                      {insufficientCredits && (
+                        <p role="alert" className="text-xs text-red-400">
+                          Créditos insuficientes: você precisa de {manualCost} e tem {userCredits}.
+                        </p>
+                      )}
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {/* Gênero */}
                     <div className="space-y-2">
@@ -565,7 +921,7 @@ export function CreateProjectClient({
                 </Button>
                 <Button
                   onClick={handleSubmit}
-                  disabled={processing || cost > userCredits}
+                  disabled={submitBlocked}
                   className="w-full flex-2 bg-[var(--ouro)] text-[var(--tinta)] hover:bg-[var(--ouro)]/90"
                 >
                   {processing ? (

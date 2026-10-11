@@ -91,3 +91,97 @@ describe("Inngest — coerência cobrança × modo manual (integração)", () =>
     },
   );
 });
+
+describe("Inngest — duração efetiva no modo manual (integração)", () => {
+  useRollbackTransactionPerTest();
+
+  const createStep = (): PipelineStep => ({
+    run: vi.fn(async (_name: string, fn: () => any) => await fn()),
+  });
+
+  const setup = async (durationSeconds: number) => {
+    const suffix = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const user = await db.user.create({
+      data: {
+        id: `user_manual_dur_${suffix}`,
+        email: `manual-dur-${suffix}@example.com`,
+        password: "hashedpassword123",
+        credits: 100,
+        reservedCredits: 0,
+      },
+    });
+    const file = await db.uploadedFile.create({
+      data: {
+        userId: user.id,
+        s3Key: `uploads/manual-dur-${suffix}/original.mp4`,
+        displayName: "podcast-longo.mp4",
+        status: "queued",
+        durationSeconds,
+        sourceType: "UPLOAD",
+      },
+    });
+    return { user, file };
+  };
+
+  it("vídeo de 5h + 1 corte de 40s no plano normal: reserva 1 crédito e chama o GPU", async () => {
+    vi.mocked(undiciFetch).mockImplementation((async () =>
+      new Response(JSON.stringify({ success: true, clips: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })) as any);
+    const { user, file } = await setup(5 * 3600);
+
+    const result = await processVideoHandler({
+      event: {
+        data: {
+          uploadedFileId: file.id,
+          userId: user.id,
+          mode: "manual",
+          manualCuts: [{ startTime: 100, endTime: 140 }],
+        },
+      },
+      step: createStep(),
+    });
+
+    expect(result.success).toBe(true);
+    expect(undiciFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("corte além do fim do vídeo: sem reserva de crédito, GPU não chamado, arquivo failed", async () => {
+    vi.mocked(undiciFetch).mockClear();
+    const { user, file } = await setup(120);
+
+    const result = await processVideoHandler({
+      event: {
+        data: {
+          uploadedFileId: file.id,
+          userId: user.id,
+          mode: "manual",
+          manualCuts: [{ startTime: 100, endTime: 130 }],
+        },
+      },
+      step: createStep(),
+    });
+
+    expect(result.success).toBe(false);
+    expect(undiciFetch).not.toHaveBeenCalled();
+    const userAfter = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(userAfter.reservedCredits).toBe(0);
+    expect(userAfter.credits).toBe(100);
+    const fileAfter = await db.uploadedFile.findUniqueOrThrow({ where: { id: file.id } });
+    expect(fileAfter.status).toBe("failed");
+  });
+
+  it("regressão: automático com vídeo de 5h continua recusado pelo limite do plano", async () => {
+    vi.mocked(undiciFetch).mockClear();
+    const { user, file } = await setup(5 * 3600);
+
+    const result = await processVideoHandler({
+      event: { data: { uploadedFileId: file.id, userId: user.id, mode: "auto" } },
+      step: createStep(),
+    });
+
+    expect(result.success).toBe(false);
+    expect(undiciFetch).not.toHaveBeenCalled();
+  });
+});

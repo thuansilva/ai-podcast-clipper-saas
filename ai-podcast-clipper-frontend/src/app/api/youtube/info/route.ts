@@ -1,7 +1,19 @@
 import { NextResponse } from "next/server";
 import { YouTubeUrl } from "~/domain/value-objects/youtube-url.vo";
+import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
+import { makeYouTubeInfoRateLimiter } from "~/infrastructure/factories/rate-limiter-factory";
 
 export async function GET(request: Request) {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const allowed = await makeYouTubeInfoRateLimiter().consume(userId);
+  if (!allowed) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const { searchParams } = new URL(request.url);
   const url = searchParams.get("url");
 

@@ -181,6 +181,20 @@ Reversão e confirmação:
 - Único cenário em que o **trace foi encontrado no Tempo** — é o único que gera uma requisição HTTP completa de ponta a ponta (webhook → tentativa de persistência no Postgres) no momento da falha.
 
 ### 4.6 `falha_webhook_stripe` — `baseline` (2026-10-07, medição real do usuário)
+
+> **Nota (2026-10-11) — reprodução:** os comandos abaixo são a transcrição
+> literal da medição de 2026-10-07 e foram mantidos como evidência. O endpoint
+> de debug `POST /api/dev-sign-stripe-payload` usado neles foi **removido**
+> depois (RNF-SEC-10: permitia forjar webhooks Stripe válidos fora de
+> produção). Para reproduzir, troque cada
+> `curl -sf -X POST http://localhost:3000/api/dev-sign-stripe-payload --data-raw "$BODY"`
+> por `node scripts/sign-stripe-test-payload.js "$BODY"` (rodado de dentro de
+> `ai-podcast-clipper-frontend/`): mesma assinatura HMAC
+> (`stripe.webhooks.generateTestHeaderString`, offline) e mesma saída JSON
+> (`header` + `stripeSecretKeyMode`). Ver `roteiro-baseline.md`, Cenário 3,
+> Passo 1. A troca não afeta os tempos medidos (a assinatura acontece antes do
+> T0 e fora do caminho da falha).
+
 Payload assinado localmente (modo teste confirmado):
 ```
 $ SIGN_RESP=$(curl -sf -X POST http://localhost:3000/api/dev-sign-stripe-payload --data-raw "$BODY")
@@ -223,7 +237,9 @@ de 5 minutos (`stripe.webhooks.constructEvent`, em
 `ai-podcast-clipper-frontend/src/app/api/webhooks/stripe/route.ts:35`) e esse
 tempo já tinha passado. Resolvido re-assinando o payload antes do disparo
 final — isso não afeta o T1 já capturado (que ocorreu bem dentro da janela
-de 5min), só adiou a confirmação do T2:
+de 5min), só adiou a confirmação do T2 (ao reproduzir hoje, re-assine com
+`node scripts/sign-stripe-test-payload.js "$BODY"`, ver nota no início desta
+seção):
 ```
 $ SIGN_RESP=$(curl -sf -X POST http://localhost:3000/api/dev-sign-stripe-payload --data-raw "$BODY")
 $ HEADER=$(echo "$SIGN_RESP" | python3 -c "import json,sys; print(json.load(sys.stdin)['header'])")

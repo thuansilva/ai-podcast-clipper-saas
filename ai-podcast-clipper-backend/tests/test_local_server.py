@@ -52,40 +52,140 @@ def test_download_youtube_rejects_wrong_auth_token():
         assert response.status_code == 401
 
 
-def test_download_youtube_endpoint():
-    # Use a dummy invalid URL to just check the route existence and validation
-    with patch.dict(os.environ, {"AUTH_TOKEN": "test-secret"}):
-        response = client.post(
-            "/download_youtube",
-            json={"url": "invalid", "uploaded_file_id": "123"},
-            headers=AUTH_HEADERS,
-        )
-        # Assuming it throws an error internally or returns a mock success if we patch it
-        assert response.status_code in [200, 400, 500]
+# ---------------------------------------------------------------------------
+# /download_youtube on the local runner — RNF-SEC-06 (SSRF) / RNF-SEC-18
+# (s3_key contract). Same contract as main.download_youtube: shared
+# core/youtube_downloader.py::download_youtube_to_s3 + pluggable storage
+# (create_object_storage, MinIO in local dev). No more local-file shortcut:
+# the returned s3_key is a storage key, never a /tmp path.
+# ---------------------------------------------------------------------------
+
+LOCAL_VALID_KEY = "youtube/3f2b8c1e-9a4d-4e6b-8f1a-2c3d4e5f6a7b/original.mp4"
+LOCAL_VALID_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 
 
-def test_download_youtube_success_mocked(monkeypatch):
-    import subprocess
+@pytest.fixture
+def download_storage(monkeypatch):
+    monkeypatch.setenv("AUTH_TOKEN", "test-secret")
+    storage = FakeObjectStorage()
+    monkeypatch.setattr(local_server, "create_object_storage", MagicMock(return_value=storage))
+    return storage
 
-    def mock_run(*args, **kwargs):
-        return subprocess.CompletedProcess(args=args[0], returncode=0)
 
-    monkeypatch.setattr(subprocess, "run", mock_run)
+class TestLocalDownloadYouTube:
+    @pytest.mark.parametrize(
+        "ssrf_url",
+        [
+            "http://169.254.169.254/latest/meta-data/",
+            "http://evil.com/video",
+            "https://youtube.com.evil.com/watch?v=x",
+            "invalid",
+        ],
+    )
+    def test_non_youtube_host_is_rejected_without_invoking_yt_dlp(
+        self, download_storage, ssrf_url
+    ):
+        with patch("yt_dlp.YoutubeDL") as ydl, patch("subprocess.run") as run:
+            response = client.post(
+                "/download_youtube", json={"url": ssrf_url}, headers=AUTH_HEADERS
+            )
+        assert response.status_code == 400
+        ydl.assert_not_called()
+        run.assert_not_called()
+        assert download_storage.uploads == []
 
-    with patch.dict(os.environ, {"AUTH_TOKEN": "test-secret"}):
-        response = client.post(
-            "/download_youtube",
-            json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "s3_bucket": "test-bucket"},
-            headers=AUTH_HEADERS,
-        )
-    assert response.status_code == 200
-    data = response.json()
-    assert data["success"] is True
-    assert "s3_key" in data
-    assert "video_url" in data
-    assert data["title"] == "Local Video"
-    assert data["duration"] == 60
-    assert data["durationSeconds"] == 60
+    def test_valid_url_goes_through_shared_downloader_and_returns_storage_key(
+        self, download_storage
+    ):
+        with patch.object(local_server, "download_youtube_to_s3") as download:
+            download.return_value = {
+                "s3_key": LOCAL_VALID_KEY,
+                "title": "Podcast",
+                "duration": 212,
+                "thumbnail": "https://i.ytimg.com/x.jpg",
+            }
+            response = client.post(
+                "/download_youtube",
+                json={"url": LOCAL_VALID_URL, "s3_key": LOCAL_VALID_KEY},
+                headers=AUTH_HEADERS,
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["success"] is True
+        assert data["s3_key"] == LOCAL_VALID_KEY
+        assert not data["s3_key"].startswith("/")
+        assert data["title"] == "Podcast"
+        assert data["duration"] == 212
+        assert download.call_args.kwargs["url"] == LOCAL_VALID_URL
+        assert download.call_args.kwargs["s3_key"] == LOCAL_VALID_KEY
+        assert download.call_args.kwargs["storage"] is download_storage
+
+    def test_omitted_s3_key_is_generated_as_storage_key(self, download_storage):
+        with patch.object(local_server, "download_youtube_to_s3") as download:
+            download.side_effect = lambda url, s3_key, storage: {
+                "s3_key": s3_key,
+                "title": "t",
+                "duration": 1,
+                "thumbnail": None,
+            }
+            response = client.post(
+                "/download_youtube", json={"url": LOCAL_VALID_URL}, headers=AUTH_HEADERS
+            )
+        assert response.status_code == 200
+        key = response.json()["s3_key"]
+        assert key.startswith("youtube/") and key.endswith("/original.mp4")
+        assert "/tmp" not in key
+        # generated key satisfies the same contract a client-sent key must
+        assert schemas.DownloadYouTubeRequest(url=LOCAL_VALID_URL, s3_key=key).s3_key == key
+
+    @pytest.mark.parametrize(
+        "bad_key",
+        [
+            "clips/other-user/video.mp4",
+            "youtube/../clips/x.mp4",
+            "/tmp/ai-podcast-clipper/abc.mp4",
+            "youtube/not-a-uuid/original.mp4",
+        ],
+    )
+    def test_invalid_s3_key_returns_422_before_any_download(self, download_storage, bad_key):
+        with patch.object(local_server, "download_youtube_to_s3") as download:
+            response = client.post(
+                "/download_youtube",
+                json={"url": LOCAL_VALID_URL, "s3_key": bad_key},
+                headers=AUTH_HEADERS,
+            )
+        assert response.status_code == 422
+        download.assert_not_called()
+
+    def test_legacy_s3_bucket_field_returns_422(self, download_storage):
+        with patch.object(local_server, "download_youtube_to_s3") as download:
+            response = client.post(
+                "/download_youtube",
+                json={"url": LOCAL_VALID_URL, "s3_bucket": "test-bucket"},
+                headers=AUTH_HEADERS,
+            )
+        assert response.status_code == 422
+        download.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "error_name,expected_status",
+        [
+            ("YouTubeVideoUnavailableError", 404),
+            ("YouTubeAgeRestrictedError", 403),
+            ("YouTubeDownloaderError", 500),
+        ],
+    )
+    def test_downloader_errors_map_to_same_status_as_main(
+        self, download_storage, error_name, expected_status
+    ):
+        from core import youtube_downloader
+
+        error_cls = getattr(youtube_downloader, error_name)
+        with patch.object(local_server, "download_youtube_to_s3", side_effect=error_cls("x")):
+            response = client.post(
+                "/download_youtube", json={"url": LOCAL_VALID_URL}, headers=AUTH_HEADERS
+            )
+        assert response.status_code == expected_status
 
 
 def test_download_youtube_missing_url():
@@ -129,7 +229,10 @@ def test_process_video_endpoint():
 # vertical reframe, subtitles and S3 upload are mocked. The real video is a
 # short file generated by ffmpeg, so the cut and the ffprobe duration check
 # run for real. The payload comes from tests/fixtures/manual_cuts_payload.json;
-# only `s3_key` is replaced with the local file path (test-only substitution).
+# only `s3_key` is replaced with PROCESS_VIDEO_KEY, a key in the real
+# `youtube/<uuid>/original.mp4` format that the injected FakeObjectStorage
+# serves with the bytes of the generated sample video (RNF-SEC-19: the input
+# video always comes from storage, never from a local path).
 # ---------------------------------------------------------------------------
 
 REQUIRES_FFMPEG = pytest.mark.skipif(
@@ -139,10 +242,19 @@ REQUIRES_FFMPEG = pytest.mark.skipif(
 
 SAMPLE_VIDEO_DURATION_SECONDS = 15
 
+PROCESS_VIDEO_KEY = "youtube/0b6c1a2e-4d5f-4a7b-9c8d-1e2f3a4b5c6d/original.mp4"
+
 TRANSCRIPT_SEGMENTS: List[Dict[str, Any]] = [
     {"start": 0.0, "end": 0.4, "word": "Olá"},
     {"start": 0.5, "end": 0.9, "word": "pessoal"},
     {"start": 1.0, "end": 1.6, "word": "bem-vindos"},
+]
+
+
+# One word per second (absolute times) over the whole sample video.
+ABSOLUTE_WORDS: List[Dict[str, Any]] = [
+    {"start": float(i), "end": i + 0.8, "word": f"w{i}"}
+    for i in range(SAMPLE_VIDEO_DURATION_SECONDS)
 ]
 
 
@@ -176,12 +288,21 @@ def pipeline_env(
 
     transcriber: WhisperTranscriber = MagicMock(spec=WhisperTranscriber)
     transcriber.transcribe.return_value = json.dumps(TRANSCRIPT_SEGMENTS)
+
+    def _fake_transcribe_range(base_dir, video_path, start, end):
+        # Same contract as WhisperTranscriber.transcribe_range: absolute times.
+        return json.dumps(
+            [w for w in ABSOLUTE_WORDS if w["end"] > start and w["start"] < end]
+        )
+
+    transcriber.transcribe_range.side_effect = _fake_transcribe_range
     monkeypatch.setattr(local_server.video_processor, "transcriber", transcriber)
     monkeypatch.setattr(local_server.video_processor, "gemini_client", MagicMock())
 
     # Phase 1b: the local runner gets its ObjectStorage from the shared factory,
     # held by the processor like transcriber/moments_provider. Tests inject a fake.
-    storage = FakeObjectStorage()
+    # RNF-SEC-19: the sample video is served by the storage under a valid key.
+    storage = FakeObjectStorage(files={PROCESS_VIDEO_KEY: sample_video_path.read_bytes()})
     monkeypatch.setattr(local_server.video_processor, "storage", storage)
 
     moments_provider = MagicMock()
@@ -206,9 +327,11 @@ def pipeline_env(
         MagicMock(return_value=([], [])),
     )
     monkeypatch.setattr(clip_pipeline, "create_vertical_video", MagicMock())
-    monkeypatch.setattr(clip_pipeline, "create_subtitles_with_ffmpeg", MagicMock())
+    create_subtitles = MagicMock()
+    monkeypatch.setattr(clip_pipeline, "create_subtitles_with_ffmpeg", create_subtitles)
 
     return {
+        "create_subtitles": create_subtitles,
         "transcriber": transcriber,
         "identify_moments": identify_moments,
         "video_path": sample_video_path,
@@ -218,7 +341,8 @@ def pipeline_env(
 
 def _payload_for_local_file(video_path: pathlib.Path) -> Dict[str, Any]:
     payload = load_manual_cuts_payload()
-    payload["s3_key"] = str(video_path)
+    # `video_path` is what the fake storage serves under PROCESS_VIDEO_KEY.
+    payload["s3_key"] = PROCESS_VIDEO_KEY
     return payload
 
 
@@ -244,6 +368,28 @@ class TestProcessVideoManualCutsIntegration:
         ]
         assert all(clip["virality_score"] is None for clip in clips)
 
+    def test_each_manual_clip_response_carries_its_clip_relative_words(self, pipeline_env):
+        # Bug: the transcript never reached the DB. Words must come back in the
+        # HTTP response of each clip as {word, start, end} relative to clip start.
+        payload = _payload_for_local_file(pipeline_env["video_path"])
+
+        response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
+
+        assert response.status_code == 200
+        clips = response.json()["clips"]
+        # Cuts (0,4), (4,9.5), (8,12); one word per second, 0.8s long, absolute.
+        expected_ranges = [(0.0, 4.0), (4.0, 9.5), (8.0, 12.0)]
+        for clip, (start, end) in zip(clips, expected_ranges):
+            expected = [
+                {"word": w["word"], "start": max(0.0, w["start"] - start),
+                 "end": min(end - start, w["end"] - start)}
+                for w in ABSOLUTE_WORDS
+                if w["end"] > start and w["start"] < end
+            ]
+            assert expected
+            assert clip["words"] == pytest.approx(expected)
+            assert all(0.0 <= w["start"] < w["end"] <= end - start for w in clip["words"])
+
     def test_clips_are_uploaded_through_the_injected_storage(self, pipeline_env):
         # D1: the local runner uploads every rendered clip via the shared
         # ObjectStorage port (not a hidden boto3 client), under clips/.
@@ -256,14 +402,44 @@ class TestProcessVideoManualCutsIntegration:
         assert len(storage.uploads) == FIXTURE_CUT_COUNT
         assert all(key.startswith("clips/") for _, key in storage.uploads)
 
-    def test_manual_mode_skips_gemini_but_still_transcribes(self, pipeline_env):
+    def test_manual_mode_transcribes_only_the_cut_ranges(self, pipeline_env):
+        # RN-PIPE-MANUAL-08: two distant cuts -> two ranges (0.5s margin,
+        # clamped to [0, duration]); the whole video is never transcribed and
+        # each clip's subtitles receive words with absolute times.
+        payload = _payload_for_local_file(pipeline_env["video_path"])
+        payload["manual_cuts"] = [{"start": 8.0, "end": 11.0}, {"start": 0.0, "end": 3.0}]
+
+        response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
+
+        assert response.status_code == 200
+        transcriber = pipeline_env["transcriber"]
+        transcriber.transcribe.assert_not_called()
+        ranges = [(c.args[2], c.args[3]) for c in transcriber.transcribe_range.call_args_list]
+        assert ranges == [(0.0, 3.5), (7.5, 11.5)]
+
+        calls = pipeline_env["create_subtitles"].call_args_list
+        assert len(calls) == 2
+        by_start = {c.kwargs["clip_start"]: c.kwargs for c in calls}
+        for clip_start, clip_end in [(8.0, 11.0), (0.0, 3.0)]:
+            segments = by_start[clip_start]["transcript_segments"]
+            in_clip = [w for w in segments if w["end"] > clip_start and w["start"] < clip_end]
+            assert [w["word"] for w in in_clip] == [
+                f"w{i}" for i in range(int(clip_start), int(clip_end))
+            ]
+            assert all(w["start"] == float(w["word"][1:]) for w in segments)
+        # words from the untranscribed gap never reach the subtitles
+        all_words = {w["word"] for c in calls for w in c.kwargs["transcript_segments"]}
+        assert not all_words & {"w4", "w5", "w6"}
+
+    def test_manual_mode_skips_gemini_and_never_transcribes_whole_video(self, pipeline_env):
         payload = _payload_for_local_file(pipeline_env["video_path"])
 
         response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
 
         assert response.status_code == 200
         pipeline_env["identify_moments"].assert_not_called()
-        pipeline_env["transcriber"].transcribe.assert_called_once()
+        pipeline_env["transcriber"].transcribe.assert_not_called()
+        pipeline_env["transcriber"].transcribe_range.assert_called()
 
     def test_manual_cut_exceeding_real_video_duration_returns_422(self, pipeline_env):
         # RN-PIPE-MANUAL-06: the video is 15s long, the cut ends at 20s.
@@ -319,7 +495,7 @@ class TestProcessVideoManualCutsIntegration:
 
     def test_legacy_payload_without_mode_still_runs_automatic_path(self, pipeline_env):
         # Green guard, RN-PIPE-MANUAL-14: a caller with only s3_key/preset keeps working.
-        payload = {"s3_key": str(pipeline_env["video_path"]), "preset": "HORMOZI"}
+        payload = {"s3_key": PROCESS_VIDEO_KEY, "preset": "HORMOZI"}
 
         response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
 
@@ -330,6 +506,67 @@ class TestProcessVideoManualCutsIntegration:
         assert clips[0]["title"] == "Gancho do Gemini"
         assert clips[0]["start"] == 2.0
         assert clips[0]["end"] == 20.0
+
+    def test_automatic_clip_response_carries_its_clip_relative_words(self, pipeline_env):
+        words = [
+            {"start": 1.0, "end": 1.9, "word": "fora"},
+            {"start": 2.5, "end": 3.0, "word": "dentro"},
+            {"start": 19.5, "end": 21.0, "word": "borda"},
+        ]
+        pipeline_env["transcriber"].transcribe.return_value = json.dumps(words)
+        payload = {"s3_key": PROCESS_VIDEO_KEY, "preset": "HORMOZI"}
+
+        response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
+
+        assert response.status_code == 200
+        assert response.json()["clips"][0]["words"] == [
+            {"word": "dentro", "start": 0.5, "end": 1.0},
+            {"word": "borda", "start": 17.5, "end": 18.0},
+        ]
+
+    def test_input_video_is_downloaded_from_storage_under_the_requested_key(
+        self, pipeline_env
+    ):
+        payload = _payload_for_local_file(pipeline_env["video_path"])
+
+        response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
+
+        assert response.status_code == 200
+        storage: FakeObjectStorage = pipeline_env["storage"]
+        assert [key for key, _ in storage.downloads] == [PROCESS_VIDEO_KEY]
+
+
+# ---------------------------------------------------------------------------
+# RNF-SEC-19 — /process_video on the local runner must never read an arbitrary
+# local file: `s3_key` is restricted to the formats the system generates, and
+# a local path is a 422 before any download/transcription. The main.py half
+# lives in tests/test_process_video_s3_key_hardening.py.
+# ---------------------------------------------------------------------------
+
+
+@REQUIRES_FFMPEG
+class TestLocalProcessVideoS3KeyHardening:
+    @pytest.mark.parametrize(
+        "bad_key",
+        [
+            "/etc/passwd",
+            "../x",
+            "uploads/user_2abc/0b6c1a2e-4d5f-4a7b-9c8d-1e2f3a4b5c6d/..",
+            "clips/user_2abc/abc/clip_0.mp4",
+        ],
+    )
+    def test_local_path_s3_key_returns_422_before_any_download(self, pipeline_env, bad_key):
+        response = client.post(
+            "/process_video",
+            json={"s3_key": bad_key, "preset": "HORMOZI"},
+            headers=AUTH_HEADERS,
+        )
+
+        assert response.status_code == 422
+        storage: FakeObjectStorage = pipeline_env["storage"]
+        assert storage.downloads == []
+        pipeline_env["transcriber"].transcribe.assert_not_called()
+        pipeline_env["identify_moments"].assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -436,7 +673,7 @@ class TestProcessVideoEndpointRejectsHostileCutsWith422:
         client, process_video = client_and_pipeline
         client = TestClient(client.app, raise_server_exceptions=False)
         raw = (
-            '{"s3_key": "uploads/u/x/podcast.mp4", "mode": "manual", '
+            '{"s3_key": "' + PROCESS_VIDEO_KEY + '", "mode": "manual", '
             '"manual_cuts": [{"start": 0, "end": ' + literal + "}]}"
         )
 
@@ -448,7 +685,7 @@ class TestProcessVideoEndpointRejectsHostileCutsWith422:
     def test_oversized_title_returns_422(self, client_and_pipeline):
         client, process_video = client_and_pipeline
         payload = {
-            "s3_key": "uploads/u/x/podcast.mp4",
+            "s3_key": PROCESS_VIDEO_KEY,
             "mode": "manual",
             "manual_cuts": [{"start": 0, "end": 5, "title": "x" * 201}],
         }
@@ -465,7 +702,7 @@ class TestProcessVideoEndpointRejectsHostileCutsWith422:
     def test_more_than_max_cuts_returns_422(self, client_and_pipeline):
         client, process_video = client_and_pipeline
         payload = {
-            "s3_key": "uploads/u/x/podcast.mp4",
+            "s3_key": PROCESS_VIDEO_KEY,
             "mode": "manual",
             "manual_cuts": [
                 {"start": 0, "end": 5} for _ in range(schemas.MAX_MANUAL_CUTS + 1)

@@ -36,6 +36,7 @@ export interface CreateUploadedFileInput {
   aspectRatio?: string | null;
   autoZoom?: boolean | null;
   subtitlePreset?: string | null;
+  manualCutsJson?: unknown;
 }
 
 export interface UpdateUploadedFileInput {

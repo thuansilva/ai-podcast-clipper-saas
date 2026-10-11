@@ -97,6 +97,7 @@ export class InMemoryUploadedFileRepository implements IUploadedFileRepository {
       aspectRatio: input.aspectRatio ?? null,
       autoZoom: input.autoZoom ?? null,
       subtitlePreset: input.subtitlePreset ?? null,
+      manualCutsJson: input.manualCutsJson ?? null,
       createdAt: now,
       updatedAt: now,
     };

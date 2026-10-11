@@ -9,15 +9,13 @@ itself is shared, eliminating drift between environments.
 """
 
 import json
-import os
 import pathlib
-import shutil
 
 from core.clip_pipeline import process_clip
 from core.moments_port import MomentsProvider
 from core.schemas import ProcessVideoRequest, ProcessVideoResponse
 from core.storage.ports import ObjectStorage
-from core.transcription import WhisperTranscriber
+from core.transcription import RANGE_MARGIN_SECONDS, WhisperTranscriber, merge_time_ranges
 from core.video_probe import get_video_duration_seconds, validate_manual_cuts_against_duration
 
 
@@ -26,18 +24,18 @@ def resolve_input_video_path(
     base_dir: pathlib.Path,
     storage: ObjectStorage,
 ) -> pathlib.Path:
-    """Resolve the local path of the source video for `s3_key`.
+    """Download the source video for `s3_key` into `base_dir/input.mp4`.
 
-    If `s3_key` happens to already be a path that exists on the local
-    filesystem (convenient for the local dev runner, which can point
-    straight at a file on disk), it's copied as-is, without touching
-    `storage`; otherwise it's downloaded through the injected `storage`.
+    The input video ALWAYS comes from the injected `storage` (S3 in
+    production, MinIO in local dev). There is deliberately no local-file
+    shortcut (RNF-SEC-19): the old `os.path.exists(s3_key)` -> `shutil.copy`
+    branch let a caller holding AUTH_TOKEN pull any file of the container
+    (e.g. `s3_key="/etc/passwd"`) into the pipeline. `s3_key` itself is also
+    restricted to the formats the system generates at the contract
+    (`core/schemas.py::ProcessVideoRequest`).
     """
     video_path = base_dir / "input.mp4"
-    if os.path.exists(s3_key):
-        shutil.copy(s3_key, str(video_path))
-    else:
-        storage.download_file(s3_key, str(video_path))
+    storage.download_file(s3_key, str(video_path))
     return video_path
 
 
@@ -69,10 +67,27 @@ def run_video_processing_pipeline(
         video_duration = get_video_duration_seconds(video_path)
         validate_manual_cuts_against_duration(request.manual_cuts, video_duration)
 
-    # 1. Transcription always runs — subtitles depend on it even in manual mode
-    # (RN-PIPE-MANUAL-08).
-    transcript_segments_json = transcriber.transcribe(base_dir, video_path)
-    transcript_segments = json.loads(transcript_segments_json)
+    # 1. Transcription — subtitles depend on it even in manual mode
+    # (RN-PIPE-MANUAL-08). Manual mode transcribes ONLY the audio of the cuts
+    # (merged when they overlap, with a small safety margin), never the whole
+    # video; automatic mode needs the full transcript for moment detection.
+    if request.mode == "manual":
+        ranges = merge_time_ranges(
+            [(cut.start, cut.end) for cut in request.manual_cuts],
+            margin=RANGE_MARGIN_SECONDS,
+            duration=video_duration,
+        )
+        transcript_segments = []
+        for range_start, range_end in ranges:
+            print(f"Transcribing range {range_start}s-{range_end}s")
+            transcript_segments.extend(
+                json.loads(
+                    transcriber.transcribe_range(base_dir, video_path, range_start, range_end)
+                )
+            )
+        transcript_segments.sort(key=lambda word: word["start"])
+    else:
+        transcript_segments = json.loads(transcriber.transcribe(base_dir, video_path))
 
     if request.mode == "manual":
         # RN-PIPE-MANUAL-08/09: Gemini is skipped; every cut sent is processed,

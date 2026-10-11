@@ -38,7 +38,9 @@ sequenceDiagram
     alt Inngest configurado
         Server->>Inngest: send({<br/>  id: event.id (idempotency),<br/>  name: "stripe/subscription.event",<br/>  data: payload<br/>})
         Inngest-->>Server: Enqueued
-    else Inngest não configurado
+    else Inngest não configurado + NODE_ENV=production
+        Server->>Server: throw (guard RNF-IDEM-05)<br/>→ cai no "Dispatch falhou" (503)
+    else Inngest não configurado (dev/test)
         Server->>Server: Fila in-memory (dev local)
     end
     alt Dispatch falhou
@@ -64,6 +66,7 @@ sequenceDiagram
 - **Idempotência nativa**: O `event.id` do Stripe é usado como `id` no payload do Inngest, garantindo que Inngest deduque automaticamente retries do mesmo evento.
 - **Ordem crítica**: O evento é marcado como processado **DEPOIS** de confirmar que o dispatch (síncrono ou async) teve sucesso. Se o dispatch falhar, respondemos `503` propositalmente para que o Stripe reentregue — esse era o bug que causava perda silenciosa de créditos pagos.
 - **Dispatch failure handling**: Quando `INNGEST_EVENT_KEY` está configurado, uma falha em `inngest.send()` propaga a exceção para o chamador em vez de cair num fallback silencioso. Isso força o webhook a responder `503` e aguardar retry.
+- **Fila em memória só fora de produção (RNF-IDEM-05, 2026-10-11)**: o fallback em memória do `StripeBackgroundQueue` (não durável — perdido em cold start/restart serverless) só é usado quando `INNGEST_EVENT_KEY` está ausente **e** `NODE_ENV !== "production"`. Em produção sem a key, `enqueue`/`enqueueSubscription` lançam (`assertInMemoryFallbackAllowed` em `stripe-queue.ts`), a rota responde `503` sem marcar o evento como processado e o Stripe reentrega. Primeira camada: `src/env.js` já recusa subir (build/boot) em produção sem `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` ou com `INNGEST_DEV` (RNF-SEC-04, `src/inngest-env-guard.js`); o guard da fila é a segunda camada para quando a validação de env é pulada (`SKIP_ENV_VALIDATION`).
 
 ## Ciclo de Vida da Assinatura
 
@@ -282,9 +285,11 @@ flowchart TD
     C -->|Novo| D["dispatchStripeEventForProcessing"]
     
     D -->|Inngest configurado| E["inngest.send()"]
-    D -->|Inngest não configurado| E2["Fila in-memory"]
+    D -->|"Inngest não configurado (dev/test)"| E2["Fila in-memory"]
+    D -->|"Inngest não configurado + NODE_ENV=production"| F0["throw (guard RNF-IDEM-05)"]
     
     E -->|Erro de rede/timeout| F["Falha no dispatch"]
+    F0 --> F
     E2 -->|Sucesso| G["tryMarkProcessed(event.id)"]
     E -->|Sucesso| G
     
@@ -336,11 +341,13 @@ const refundAmountCents = charge.refunds.data.reduce(
 
 ---
 
-### Fila em Memória Sem Guard de Ambiente
+### Fila em Memória Sem Guard de Ambiente — ✅ RESOLVIDO (2026-10-11)
 
-**Severidade**: HIGH
+**Severidade**: HIGH (resolvido)
 
-Em `src/infrastructure/queue/stripe-queue.ts` (linhas 86-98, 107-122), há um fallback para fila em memória:
+**Resolução:** `stripe-queue.ts::assertInMemoryFallbackAllowed` é chamado antes de qualquer `push` na fila em memória (`enqueue` e `enqueueSubscription`): com `NODE_ENV=production` e sem `INNGEST_EVENT_KEY` ele lança, e a rota responde `503` sem marcar o evento como processado (Stripe reentrega). Além disso, `src/env.js` torna `INNGEST_EVENT_KEY`/`INNGEST_SIGNING_KEY` obrigatórias em produção (falha no `next build`/boot). Testes: `tests/unit/infrastructure/queue/stripe-queue.production-guard.test.ts`, `tests/unit/config/inngest-env-validation.test.ts`. O texto abaixo é o registro histórico do risco.
+
+Em `src/infrastructure/queue/stripe-queue.ts` (linhas 86-98, 107-122, antes da correção), havia um fallback para fila em memória:
 
 ```typescript
 if (INNGEST_EVENT_KEY) {

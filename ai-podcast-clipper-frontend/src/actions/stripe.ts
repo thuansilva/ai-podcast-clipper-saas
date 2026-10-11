@@ -8,8 +8,10 @@ import {
   makeUserRepository,
   makeGetUserBillingDataUseCase,
 } from "~/infrastructure/factories/use-case-factories";
+import { makeBillingActionRateLimiter } from "~/infrastructure/factories/rate-limiter-factory";
 import { NotFoundError } from "~/domain/errors/not-found-error";
 import { DomainError } from "~/domain/errors/domain-error";
+import { RateLimitExceededError } from "~/domain/errors/rate-limit-exceeded-error";
 import {
   createCheckoutSessionSchema,
   createCustomerPortalSessionSchema,
@@ -38,6 +40,13 @@ export async function createCheckoutSession(
   const userId = await makeAuthGateway().getUserId();
   if (!userId) {
     throw new Error("Unauthorized");
+  }
+
+  const allowed = await makeBillingActionRateLimiter().consume(userId);
+  if (!allowed) {
+    throw new RateLimitExceededError(
+      "Too many requests. Please wait a minute before trying again."
+    );
   }
 
   const user = await makeUserRepository().findById(userId);
@@ -93,6 +102,13 @@ export async function createCustomerPortalSession(returnUrl?: string) {
   const userId = await makeAuthGateway().getUserId();
   if (!userId) {
     throw new Error("Unauthorized");
+  }
+
+  const allowed = await makeBillingActionRateLimiter().consume(userId);
+  if (!allowed) {
+    throw new RateLimitExceededError(
+      "Too many requests. Please wait a minute before trying again."
+    );
   }
 
   const user = await makeUserRepository().findById(userId);

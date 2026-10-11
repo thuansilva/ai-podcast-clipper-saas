@@ -40,6 +40,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 GRAFANA_URL="${GRAFANA_URL:-http://localhost:3001}"
 TEMPO_URL="${TEMPO_URL:-http://localhost:3200}"
 FRONTEND_URL="${FRONTEND_URL:-http://localhost:3000}"
+# Script local/offline que assina payloads de teste do webhook Stripe
+# (substitui o endpoint de debug /api/dev-sign-stripe-payload, removido por
+# RNF-SEC-10).
+STRIPE_SIGNER="$REPO_ROOT/ai-podcast-clipper-frontend/scripts/sign-stripe-test-payload.js"
 BACKEND_STUB_URL="${BACKEND_STUB_URL:-http://localhost:8001}"
 BACKEND_STUB_CONTAINER="${BACKEND_STUB_CONTAINER:-ai-podcast-backend-stub}"
 POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-ai-podcast-postgres}"
@@ -341,8 +345,9 @@ scenario_latencia_alta() {
 # Cenário 3: falha_webhook_stripe
 # --------------------------------------------------------------------------
 
-# Assina (localmente, via endpoint de debug do próprio Next.js - nunca
-# expondo o STRIPE_WEBHOOK_SECRET em si) e envia um evento de teste
+# Assina (localmente/offline, via scripts/sign-stripe-test-payload.js do
+# frontend - stripe.webhooks.generateTestHeaderString, nunca expondo o
+# STRIPE_WEBHOOK_SECRET em si) e envia um evento de teste
 # (customer.subscription.deleted, sem nenhuma chamada de rede à API real do
 # Stripe) contra a rota do webhook. Ecoa o código HTTP retornado.
 send_signed_stripe_webhook() {
@@ -368,7 +373,7 @@ print(json.dumps({
 " "$event_id")
 
   local sign_resp header
-  sign_resp=$(curl -sf -X POST "$FRONTEND_URL/api/dev-sign-stripe-payload" --data-raw "$body") || {
+  sign_resp=$(node "$STRIPE_SIGNER" "$body") || {
     echo "000"
     return 0
   }
@@ -392,8 +397,8 @@ check_frontend_prereqs() {
 "Frontend não está respondendo em $FRONTEND_URL/api/health. Rode 'npm run dev' dentro de ai-podcast-clipper-frontend/ antes de rodar o cenário falha_webhook_stripe."
 
   local sign_resp mode
-  sign_resp=$(curl -sf -X POST "$FRONTEND_URL/api/dev-sign-stripe-payload" --data-raw '{"probe":true}') || die \
-"Endpoint de debug $FRONTEND_URL/api/dev-sign-stripe-payload não respondeu. Ele é necessário para assinar o payload de teste do Stripe sem usar o Stripe CLI (não instalado/autenticado neste ambiente)."
+  sign_resp=$(node "$STRIPE_SIGNER" '{"probe":true}') || die \
+"Não foi possível assinar o payload de teste com $STRIPE_SIGNER. Confirme que o node está instalado, que as dependências do frontend foram instaladas (npm install) e que STRIPE_WEBHOOK_SECRET está definido no .env do frontend. Ele substitui o Stripe CLI (não instalado/autenticado neste ambiente)."
   mode=$(echo "$sign_resp" | python3 -c "
 import json, sys
 try:
