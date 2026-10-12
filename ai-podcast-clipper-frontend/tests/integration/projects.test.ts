@@ -4,12 +4,32 @@
 import { describe, it, expect } from "vitest";
 import { db } from "~/server/db";
 import {
-  makeDeleteProjectUseCase,
   makeRenameProjectUseCase,
 } from "~/infrastructure/factories/use-case-factories";
+import { DeleteProjectUseCase } from "~/application/use-cases/delete-project.use-case";
+import { PrismaUploadedFileRepository } from "~/infrastructure/database/repositories/prisma-uploaded-file.repository";
+import { PrismaClipRepository } from "~/infrastructure/database/repositories/prisma-clip.repository";
 import { NotFoundError } from "~/domain/errors/not-found-error";
 import { UnauthorizedError } from "~/domain/errors/unauthorized-error";
 import { useRollbackTransactionPerTest } from "../helpers/with-rollback-transaction";
+import { InMemoryStorageGateway } from "../mocks/in-memory-storage-gateway";
+
+// DeleteProjectUseCase é construído diretamente aqui (em vez de usar
+// `makeDeleteProjectUseCase()`) para injetar um `InMemoryStorageGateway` no
+// lugar do `S3StorageGateway` real que a factory monta via
+// `createStorageGateway()`. Este teste valida a cascata de deleção no
+// Postgres de verdade (repositórios Prisma reais) — não precisa, e não deve
+// precisar, de uma conexão de rede real com MinIO/S3 para isso. Antes desta
+// mudança, este teste quebrava em CI com ECONNREFUSED porque o CI nunca
+// provisionou um serviço MinIO (ver comentário em
+// tests/integration/storage/s3-storage.minio.integration.test.ts).
+function makeDeleteProjectUseCase(): DeleteProjectUseCase {
+  return new DeleteProjectUseCase(
+    new PrismaUploadedFileRepository(),
+    new PrismaClipRepository(),
+    new InMemoryStorageGateway()
+  );
+}
 
 describe("Project Use Cases Integration Tests", () => {
   useRollbackTransactionPerTest();

@@ -92,7 +92,7 @@ AWS_SECRET_ACCESS_KEY=ai-podcast-clipper-app-secret123
 |-------|---------|-------------------------|
 | Backend, só MinIO | `cd ai-podcast-clipper-backend && .venv/bin/python -m pytest -m minio` | Testes marcados `minio` pulam com motivo claro quando o servidor não responde (conforme docstring de `tests/minio_support.py`). Falha de autenticação **não** é pulada — falha, por ser erro de configuração real. |
 | Backend, sem MinIO | `.venv/bin/python -m pytest -m "not minio"` | Não depende do servidor |
-| Frontend, integração | `npm run test:integration` (em `ai-podcast-clipper-frontend/`) | `tests/integration/storage/s3-storage.minio.integration.test.ts` exige o servidor no ar |
+| Frontend, integração | `npm run test:integration` (em `ai-podcast-clipper-frontend/`) | `tests/integration/storage/s3-storage.minio.integration.test.ts` dá skip gracioso na suíte "contra MinIO real" se o servidor não responder (mesmo padrão do backend `-m minio`, ver `probeMinio()` em `tests/helpers/probe-minio.ts`; decisão revisada em 2026-10-12 — antes falhava, mas o CI nunca provisionou MinIO). Com o servidor no ar (como neste compose), a suíte roda de verdade |
 
 O bucket usado pelos testes é `ai-podcast-clipper-test` (criado pelos próprios testes se faltar), separado do bucket de desenvolvimento `ai-podcast-clipper`.
 

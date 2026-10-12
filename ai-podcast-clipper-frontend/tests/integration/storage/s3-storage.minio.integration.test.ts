@@ -11,10 +11,20 @@
  *   - Bucket `ai-podcast-clipper-test`: este teste o cria se não existir
  *     (idempotente), então não depende de provisionamento manual.
  *
- * Se o MinIO não estiver no ar, os testes da suíite "contra MinIO" falham com
- * mensagem explícita. Optamos por falhar (e não dar skip) para que uma
- * ausência de infra não passe despercebida em CI. A suíte de "contrato de
- * URL" não precisa de rede e roda mesmo sem MinIO.
+ * DECISÃO (revisada em 2026-10-12): a suíte "contra MinIO real" faz SKIP
+ * gracioso quando o MinIO não está alcançável, em vez de falhar — o mesmo
+ * padrão já usado pelos testes do backend marcados `-m minio`
+ * (`ai-podcast-clipper-backend/tests/minio_support.py::probe_minio()`). A
+ * versão anterior deste comentário dizia "falhamos de propósito para que
+ * ausência de infra não passe despercebida em CI", mas essa decisão nunca
+ * foi validada contra o CI real: `.github/workflows/ci.yml` nunca
+ * provisionou um serviço MinIO (nem para o backend, nem para o frontend) —
+ * o único `services:` do job `frontend` é o Postgres. Resultado: todo push
+ * quebrava com `ECONNREFUSED localhost:9000`, sendo este o único teste do
+ * monorepo a exigir uma infra que o CI nunca teve. A suíte de "contrato de
+ * URL" não precisa de rede e roda mesmo sem MinIO. Localmente, com o MinIO
+ * do `docker-compose.yml` no ar, a suíte "contra MinIO real" continua
+ * rodando de verdade (não há skip incondicional) — ver `probeMinio()`.
  *
  * Base para e2e futuro: as chaves, o payload e a config estão em constantes
  * determinísticas no topo, sob o prefixo `test-fixtures/s3-storage-minio/`.
@@ -27,6 +37,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { S3StorageGateway } from "~/infrastructure/storage/s3-storage.gateway";
+import { probeMinio } from "../../helpers/probe-minio";
 
 type S3GatewayConfig = ConstructorParameters<typeof S3StorageGateway>[0];
 
@@ -162,82 +173,93 @@ describe("S3StorageGateway: contrato de URL com endpoint MinIO (sem rede)", () =
 
 // --- Fluxo real contra MinIO ------------------------------------------------
 
-describe("S3StorageGateway contra MinIO real (integração)", () => {
-  beforeAll(async () => {
-    try {
-      await ensureBucket();
-    } catch (error: unknown) {
-      throw new Error(
-        `MinIO indisponível em ${MINIO_ENDPOINT} (bucket ${MINIO_BUCKET}). ` +
-          `Suba o serviço MinIO do docker-compose ou ajuste TEST_MINIO_ENDPOINT. ` +
-          `Causa: ${String(error)}`
+// Top-level await: a checagem de reachability precisa resolver ANTES do
+// `describe` abaixo rodar, porque `describe.skipIf` só aceita um boolean
+// síncrono (não uma Promise). O ambiente de teste (Vitest + Vite, ESM,
+// target es2022) suporta top-level await em arquivos de teste.
+const isMinioReachable = await probeMinio(MINIO_ENDPOINT);
+
+describe.skipIf(!isMinioReachable)(
+  "S3StorageGateway contra MinIO real (integração)",
+  () => {
+    beforeAll(async () => {
+      try {
+        await ensureBucket();
+      } catch (error: unknown) {
+        throw new Error(
+          `MinIO indisponível em ${MINIO_ENDPOINT} (bucket ${MINIO_BUCKET}). ` +
+            `Suba o serviço MinIO do docker-compose ou ajuste TEST_MINIO_ENDPOINT. ` +
+            `Causa: ${String(error)}`
+        );
+      }
+    });
+
+    beforeEach(async () => {
+      await removeKeys(ALL_KEYS);
+    });
+
+    afterAll(async () => {
+      await removeKeys(ALL_KEYS);
+    });
+
+    it("PUT com o tamanho exato assinado é aceito (200) e o objeto fica disponível", async () => {
+      const uploadUrl = await gateway.createUploadPresignedUrl(
+        KEYS.upload,
+        CONTENT_TYPE,
+        PAYLOAD.length
       );
-    }
-  });
+      expectUrlOnMinio(uploadUrl);
 
-  beforeEach(async () => {
-    await removeKeys(ALL_KEYS);
-  });
+      const response = await putTo(uploadUrl, PAYLOAD);
 
-  afterAll(async () => {
-    await removeKeys(ALL_KEYS);
-  });
+      expect(response.status).toBe(200);
+      const stored = await getFrom(
+        await gateway.createPlayPresignedUrl(KEYS.upload)
+      );
+      expect(stored.status).toBe(200);
+      expect(stored.body.equals(PAYLOAD)).toBe(true);
+    });
 
-  it("PUT com o tamanho exato assinado é aceito (200) e o objeto fica disponível", async () => {
-    const uploadUrl = await gateway.createUploadPresignedUrl(
-      KEYS.upload,
-      CONTENT_TYPE,
-      PAYLOAD.length
-    );
-    expectUrlOnMinio(uploadUrl);
+    it("PUT com corpo de tamanho diferente do assinado é rejeitado e o objeto NÃO é criado", async () => {
+      const uploadUrl = await gateway.createUploadPresignedUrl(
+        KEYS.uploadMismatch,
+        CONTENT_TYPE,
+        PAYLOAD.length
+      );
+      expectUrlOnMinio(uploadUrl);
 
-    const response = await putTo(uploadUrl, PAYLOAD);
+      const response = await putTo(uploadUrl, PAYLOAD_MISMATCH);
 
-    expect(response.status).toBe(200);
-    const stored = await getFrom(await gateway.createPlayPresignedUrl(KEYS.upload));
-    expect(stored.status).toBe(200);
-    expect(stored.body.equals(PAYLOAD)).toBe(true);
-  });
+      expect(response.ok).toBe(false);
+      expect(response.status).toBeGreaterThanOrEqual(400);
+      expect(response.status).toBeLessThan(500);
 
-  it("PUT com corpo de tamanho diferente do assinado é rejeitado e o objeto NÃO é criado", async () => {
-    const uploadUrl = await gateway.createUploadPresignedUrl(
-      KEYS.uploadMismatch,
-      CONTENT_TYPE,
-      PAYLOAD.length
-    );
-    expectUrlOnMinio(uploadUrl);
+      const stored = await getFrom(
+        await gateway.createPlayPresignedUrl(KEYS.uploadMismatch)
+      );
+      expect(stored.status).toBe(404);
+    });
 
-    const response = await putTo(uploadUrl, PAYLOAD_MISMATCH);
+    it("GET pela URL de play devolve exatamente o conteúdo enviado", async () => {
+      await seedObject(KEYS.play, PAYLOAD);
+      const playUrl = await gateway.createPlayPresignedUrl(KEYS.play);
+      expectUrlOnMinio(playUrl);
 
-    expect(response.ok).toBe(false);
-    expect(response.status).toBeGreaterThanOrEqual(400);
-    expect(response.status).toBeLessThan(500);
+      const downloaded = await getFrom(playUrl);
 
-    const stored = await getFrom(
-      await gateway.createPlayPresignedUrl(KEYS.uploadMismatch)
-    );
-    expect(stored.status).toBe(404);
-  });
+      expect(downloaded.status).toBe(200);
+      expect(downloaded.body.equals(PAYLOAD)).toBe(true);
+    });
 
-  it("GET pela URL de play devolve exatamente o conteúdo enviado", async () => {
-    await seedObject(KEYS.play, PAYLOAD);
-    const playUrl = await gateway.createPlayPresignedUrl(KEYS.play);
-    expectUrlOnMinio(playUrl);
+    it("deleteFile remove o objeto de verdade (GET posterior retorna 404)", async () => {
+      await seedObject(KEYS.delete, PAYLOAD);
+      const playUrl = await gateway.createPlayPresignedUrl(KEYS.delete);
+      expect((await getFrom(playUrl)).status).toBe(200);
 
-    const downloaded = await getFrom(playUrl);
+      await gateway.deleteFile(KEYS.delete);
 
-    expect(downloaded.status).toBe(200);
-    expect(downloaded.body.equals(PAYLOAD)).toBe(true);
-  });
-
-  it("deleteFile remove o objeto de verdade (GET posterior retorna 404)", async () => {
-    await seedObject(KEYS.delete, PAYLOAD);
-    const playUrl = await gateway.createPlayPresignedUrl(KEYS.delete);
-    expect((await getFrom(playUrl)).status).toBe(200);
-
-    await gateway.deleteFile(KEYS.delete);
-
-    const afterDelete = await getFrom(playUrl);
-    expect(afterDelete.status).toBe(404);
-  });
-});
+      const afterDelete = await getFrom(playUrl);
+      expect(afterDelete.status).toBe(404);
+    });
+  }
+);
