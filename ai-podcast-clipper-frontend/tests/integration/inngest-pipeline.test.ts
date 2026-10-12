@@ -632,4 +632,180 @@ describe("Inngest Pipeline Integration Tests", () => {
     expect(sentBodies[0]!.mode).toBe("manual");
     expect(sentBodies[0]!.manual_cuts).toHaveLength(2);
   });
+
+  it("Cenário 8 (RF-INGEST-10): corte manual em vídeo do YouTube baixa só os trechos necessários e envia ao Modal os tempos REMAPEADOS, nunca os originais", async () => {
+    const user = await createTestUser(10, 0);
+    const youtubeUrl = "https://www.youtube.com/watch?v=mockyt-manual";
+    const file = await createTestFile(user.id, {
+      sourceType: "YOUTUBE",
+      youtubeUrl,
+      durationSeconds: 0,
+    });
+
+    const ytEndpoint = getYouTubeDownloadEndpoint();
+    const downloadedS3Key = `youtube/${file.id}/original.mp4`;
+
+    // Vídeo original tem 3600s (1h); o backend só baixa/concatena os
+    // trechos dos 2 cortes e devolve `remapped_cuts` com os tempos no
+    // arquivo menor. `duration` continua sendo a do vídeo ORIGINAL
+    // (RN-PIPE-MANUAL-18) — usada para validar os cortes antes do remap.
+    const mockDownloadResponse = {
+      success: true,
+      s3_key: downloadedS3Key,
+      title: "Podcast Exclusivo YouTube (Manual)",
+      duration: 3600,
+      thumbnail: null,
+      remapped_ranges: [
+        { original_start: 98, original_end: 132, offset_in_output: 0 },
+        { original_start: 498, original_end: 572, offset_in_output: 34 },
+      ],
+      remapped_cuts: [
+        { original_start: 100, original_end: 130, new_start: 2, new_end: 32, title: "Momento 1" },
+        { original_start: 500, original_end: 570, new_start: 36, new_end: 106, title: "Momento 2" },
+      ],
+    };
+
+    const downloadRequestBodies: Array<Record<string, unknown>> = [];
+    const processRequestBodies: Array<Record<string, unknown>> = [];
+
+    vi.mocked(undiciFetch).mockImplementation(
+      (async (url: RequestInfo, init?: { body?: string }) => {
+        const urlStr = url.toString();
+        if (urlStr === ytEndpoint) {
+          downloadRequestBodies.push(JSON.parse(init?.body ?? "{}"));
+          return new Response(JSON.stringify(mockDownloadResponse), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          });
+        }
+        if (urlStr === env.PROCESS_VIDEO_ENDPOINT) {
+          processRequestBodies.push(JSON.parse(init?.body ?? "{}"));
+          return new Response(
+            JSON.stringify({ success: true, file_id: downloadedS3Key, clips: [] }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response("Not Found", { status: 404 });
+      }) as any
+    );
+
+    const result = await processVideoHandler({
+      event: {
+        data: {
+          uploadedFileId: file.id,
+          userId: user.id,
+          preset: "HORMOZI",
+          mode: "manual",
+          manualCuts: [
+            { id: "cut-1", title: "Momento 1", startTime: 100, endTime: 130 }, // 30s
+            { id: "cut-2", title: "Momento 2", startTime: 500, endTime: 570 }, // 70s
+          ],
+        },
+      },
+      step: createMockStep(),
+    });
+
+    expect(result.success).toBe(true);
+
+    // 1. /download_youtube recebeu os cortes com os tempos ORIGINAIS.
+    expect(downloadRequestBodies).toHaveLength(1);
+    expect(downloadRequestBodies[0]!.manual_cuts).toEqual([
+      { title: "Momento 1", start: 100, end: 130 },
+      { title: "Momento 2", start: 500, end: 570 },
+    ]);
+
+    // 2. /process_video recebeu os tempos REMAPEADOS (não os originais).
+    expect(processRequestBodies).toHaveLength(1);
+    expect(processRequestBodies[0]!.mode).toBe("manual");
+    expect(processRequestBodies[0]!.manual_cuts).toEqual([
+      { title: "Momento 1", start: 2, end: 32 },
+      { title: "Momento 2", start: 36, end: 106 },
+    ]);
+
+    // 3. Cobrança pelo preço manual dos cortes ORIGINAIS (30s -> 1 crédito
+    // + 70s -> 2 créditos = 3 créditos, calculateManualCutsCredits arredonda
+    // por corte), não pela duração do vídeo original (3600s) nem pelos
+    // tempos remapeados.
+    const transactions = await db.creditTransaction.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(transactions.map((t) => [t.type, t.amount])).toEqual([
+      ["HOLD", 3],
+      ["CONSUME", 3],
+    ]);
+
+    // 4. UploadedFile: s3Key/duração do vídeo concatenado persistidos;
+    // manualCutsJson (cortes originais do projeto) NÃO foi tocado por este
+    // handler (continua null, como foi criado — quem grava manualCutsJson é
+    // a importação, não o processamento).
+    const updatedFile = await db.uploadedFile.findUniqueOrThrow({
+      where: { id: file.id },
+    });
+    expect(updatedFile.s3Key).toBe(downloadedS3Key);
+    expect(updatedFile.durationSeconds).toBe(3600);
+    expect(updatedFile.manualCutsJson).toBeNull();
+    expect(updatedFile.status).toBe("processed");
+  });
+
+  it("Cenário 9 (RF-INGEST-10): corte manual no YouTube falha explicitamente, sem fallback silencioso, quando o backend não devolve remapped_cuts", async () => {
+    const user = await createTestUser(10, 0);
+    const youtubeUrl = "https://www.youtube.com/watch?v=mockyt-no-remap";
+    const file = await createTestFile(user.id, {
+      sourceType: "YOUTUBE",
+      youtubeUrl,
+      durationSeconds: 0,
+    });
+
+    const ytEndpoint = getYouTubeDownloadEndpoint();
+    const downloadedS3Key = `youtube/${file.id}/original.mp4`;
+
+    vi.mocked(undiciFetch).mockImplementation(
+      (async (url: RequestInfo) => {
+        const urlStr = url.toString();
+        if (urlStr === ytEndpoint) {
+          // Resposta sem remapped_cuts/remapped_ranges (edge case).
+          return new Response(
+            JSON.stringify({
+              success: true,
+              s3_key: downloadedS3Key,
+              title: "t",
+              duration: 3600,
+              thumbnail: null,
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          );
+        }
+        return new Response("Not Found", { status: 404 });
+      }) as any
+    );
+
+    const result = await processVideoHandler({
+      event: {
+        data: {
+          uploadedFileId: file.id,
+          userId: user.id,
+          mode: "manual",
+          manualCuts: [{ startTime: 100, endTime: 130 }],
+        },
+      },
+      step: createMockStep(),
+    });
+
+    expect(result.success).toBe(false);
+
+    // Créditos retidos (HOLD) foram devolvidos (REFUND) — nenhum débito.
+    const updatedUser = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(updatedUser.credits).toBe(10);
+    expect(updatedUser.reservedCredits).toBe(0);
+
+    const transactions = await db.creditTransaction.findMany({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+    });
+    expect(transactions.map((t) => t.type)).toEqual(["HOLD", "REFUND"]);
+
+    const updatedFile = await db.uploadedFile.findUniqueOrThrow({ where: { id: file.id } });
+    expect(updatedFile.status).toBe("failed");
+  });
 });

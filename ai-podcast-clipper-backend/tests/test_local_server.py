@@ -122,7 +122,7 @@ class TestLocalDownloadYouTube:
 
     def test_omitted_s3_key_is_generated_as_storage_key(self, download_storage):
         with patch.object(local_server, "download_youtube_to_s3") as download:
-            download.side_effect = lambda url, s3_key, storage: {
+            download.side_effect = lambda url, s3_key, storage, time_ranges=None: {
                 "s3_key": s3_key,
                 "title": "t",
                 "duration": 1,
@@ -186,6 +186,86 @@ class TestLocalDownloadYouTube:
                 "/download_youtube", json={"url": LOCAL_VALID_URL}, headers=AUTH_HEADERS
             )
         assert response.status_code == expected_status
+
+    # -----------------------------------------------------------------
+    # RF-PIPE-08 manual-mode partial download: `manual_cuts` sent to
+    # `/download_youtube` -> `download_youtube_to_s3(time_ranges=...)` ->
+    # response carries `remapped_ranges`/`remapped_cuts`.
+    # -----------------------------------------------------------------
+
+    def test_manual_cuts_are_forwarded_as_time_ranges_and_response_has_remapping(
+        self, download_storage
+    ):
+        with patch.object(local_server, "download_youtube_to_s3") as download:
+            download.return_value = {
+                "s3_key": LOCAL_VALID_KEY,
+                "title": "Podcast",
+                "duration": 3600,
+                "thumbnail": None,
+                "remapped_ranges": [
+                    {"original_start": 8.0, "original_end": 17.0, "offset_in_output": 0.0},
+                ],
+            }
+            response = client.post(
+                "/download_youtube",
+                json={
+                    "url": LOCAL_VALID_URL,
+                    "s3_key": LOCAL_VALID_KEY,
+                    "manual_cuts": [{"start": 10.0, "end": 15.0, "title": "Clip 1"}],
+                },
+                headers=AUTH_HEADERS,
+            )
+
+        assert response.status_code == 200
+        assert download.call_args.kwargs["time_ranges"] == [(10.0, 15.0)]
+
+        data = response.json()
+        assert data["remapped_ranges"] == [
+            {"original_start": 8.0, "original_end": 17.0, "offset_in_output": 0.0}
+        ]
+        assert data["remapped_cuts"] == [
+            {
+                "original_start": 10.0,
+                "original_end": 15.0,
+                "new_start": 2.0,
+                "new_end": 7.0,
+                "title": "Clip 1",
+            }
+        ]
+
+    def test_request_without_manual_cuts_still_returns_todays_format(self, download_storage):
+        with patch.object(local_server, "download_youtube_to_s3") as download:
+            download.return_value = {
+                "s3_key": LOCAL_VALID_KEY,
+                "title": "Podcast",
+                "duration": 212,
+                "thumbnail": "https://i.ytimg.com/x.jpg",
+            }
+            response = client.post(
+                "/download_youtube",
+                json={"url": LOCAL_VALID_URL, "s3_key": LOCAL_VALID_KEY},
+                headers=AUTH_HEADERS,
+            )
+
+        assert response.status_code == 200
+        assert download.call_args.kwargs["time_ranges"] is None
+
+        data = response.json()
+        assert data["remapped_ranges"] is None
+        assert data["remapped_cuts"] is None
+
+    def test_too_many_manual_cuts_returns_422_before_any_download(self, download_storage):
+        with patch.object(local_server, "download_youtube_to_s3") as download:
+            response = client.post(
+                "/download_youtube",
+                json={
+                    "url": LOCAL_VALID_URL,
+                    "manual_cuts": [{"start": float(i), "end": float(i) + 1} for i in range(51)],
+                },
+                headers=AUTH_HEADERS,
+            )
+        assert response.status_code == 422
+        download.assert_not_called()
 
 
 def test_download_youtube_missing_url():

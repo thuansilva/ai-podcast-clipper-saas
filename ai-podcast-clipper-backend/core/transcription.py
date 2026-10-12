@@ -11,39 +11,21 @@ import json
 import pathlib
 import subprocess
 import time
-from typing import List, Tuple
 
 try:
     import whisperx
 except ImportError:
     whisperx = None
 
+# `RANGE_MARGIN_SECONDS` and `merge_time_ranges` used to be defined here.
+# They moved to `core/time_ranges.py` so `core/youtube_downloader.py`'s
+# manual-mode partial download can reuse the exact same merge logic instead
+# of a parallel implementation (see that module's docstring). Re-exported
+# here, unchanged, so every existing `from core.transcription import
+# merge_time_ranges, RANGE_MARGIN_SECONDS` keeps working.
+from core.time_ranges import RANGE_MARGIN_SECONDS, merge_time_ranges
 
-# Safety margin (seconds) added before/after each manual cut when transcribing
-# only the cut ranges: whisperx can lose or truncate a word that is cut in half
-# at the very edge of the audio. The extra words are harmless because
-# `generate_ass_subtitles` only keeps words overlapping the clip interval.
-RANGE_MARGIN_SECONDS = 0.5
-
-
-def merge_time_ranges(
-    ranges: List[Tuple[float, float]],
-    margin: float,
-    duration: float,
-) -> List[Tuple[float, float]]:
-    """Expand each range by `margin` (clamped to [0, duration]), then merge
-    overlapping/touching ranges. Returns them sorted. Merging guarantees that
-    no audio (so no word) is transcribed twice."""
-    expanded = sorted(
-        (max(0.0, start - margin), min(duration, end + margin)) for start, end in ranges
-    )
-    merged: List[Tuple[float, float]] = []
-    for start, end in expanded:
-        if merged and start <= merged[-1][1]:
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-        else:
-            merged.append((start, end))
-    return merged
+__all__ = ["WhisperTranscriber", "RANGE_MARGIN_SECONDS", "merge_time_ranges"]
 
 
 class WhisperTranscriber:

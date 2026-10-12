@@ -28,6 +28,89 @@ def _cut(start: float, end: float):
     return schemas.ManualCut(start=start, end=end)
 
 
+class TestHasVideoStream:
+    """Unit tests for `has_video_stream` — guards against a video silently
+    losing its video track (e.g. yt-dlp picking an HLS-only video format for
+    a partial/time-ranged YouTube download, see
+    `core.youtube_downloader._download_time_ranges_to_s3`). ffprobe is
+    mocked at `subprocess.run`: no real video is read here."""
+
+    def test_returns_true_when_a_video_stream_with_duration_is_present(
+        self, tmp_path: Path
+    ):
+        probe = _probe()
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout='{"streams": [{"codec_type": "video", "duration": "2.000000"}]}',
+            stderr="",
+        )
+        with patch("core.video_probe.subprocess.run", return_value=completed):
+            assert probe.has_video_stream(tmp_path / "both.mp4") is True
+
+    def test_returns_false_when_there_are_no_video_streams(self, tmp_path: Path):
+        # The audio-only-file bug this guards against: ffprobe's
+        # `-select_streams v` returns an empty streams list.
+        probe = _probe()
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout='{"streams": []}', stderr=""
+        )
+        with patch("core.video_probe.subprocess.run", return_value=completed):
+            assert probe.has_video_stream(tmp_path / "audio_only.mp4") is False
+
+    def test_returns_true_when_video_stream_has_no_duration_field(
+        self, tmp_path: Path
+    ):
+        # Some codecs/containers don't report a per-stream duration; the
+        # presence of a video stream (already filtered by
+        # `-select_streams v`) is sufficient evidence on its own.
+        probe = _probe()
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout='{"streams": [{"codec_type": "video"}]}',
+            stderr="",
+        )
+        with patch("core.video_probe.subprocess.run", return_value=completed):
+            assert probe.has_video_stream(tmp_path / "no_duration.mp4") is True
+
+    def test_returns_false_when_video_stream_duration_is_zero(self, tmp_path: Path):
+        probe = _probe()
+        completed = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout='{"streams": [{"codec_type": "video", "duration": "0.000000"}]}',
+            stderr="",
+        )
+        with patch("core.video_probe.subprocess.run", return_value=completed):
+            assert probe.has_video_stream(tmp_path / "zero_duration.mp4") is False
+
+    def test_returns_false_on_malformed_ffprobe_output(self, tmp_path: Path):
+        probe = _probe()
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout="not json", stderr=""
+        )
+        with patch("core.video_probe.subprocess.run", return_value=completed):
+            assert probe.has_video_stream(tmp_path / "broken.mp4") is False
+
+    def test_selects_only_video_streams_via_ffprobe_arguments(self, tmp_path: Path):
+        probe = _probe()
+        video_path = tmp_path / "input.mp4"
+        completed = subprocess.CompletedProcess(
+            args=[], returncode=0, stdout='{"streams": []}', stderr=""
+        )
+        with patch(
+            "core.video_probe.subprocess.run", return_value=completed
+        ) as run:
+            probe.has_video_stream(video_path)
+
+        command: List[str] = run.call_args.args[0]
+        assert command[0] == "ffprobe"
+        assert "-select_streams" in command
+        assert "v" in command
+        assert str(video_path) in command
+
+
 class TestGetVideoDurationSeconds:
     def test_parses_duration_from_ffprobe_stdout(self, tmp_path: Path):
         probe = _probe()

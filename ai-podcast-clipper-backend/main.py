@@ -37,6 +37,7 @@ from core.youtube_downloader import (
     YouTubeInvalidHostError,
     YouTubeVideoUnavailableError,
     download_youtube_to_s3,
+    remap_manual_cuts,
 )
 
 # Roda em cada cold start do container (Modal reimporta main.py do zero por
@@ -191,12 +192,26 @@ def download_youtube(
         )
 
     s3_key = request.s3_key or f"youtube/{uuid.uuid4()}/original.mp4"
+    # RF-PIPE-08 manual-mode partial download: when the caller sends
+    # manual_cuts, only the range(s) covering them (merged, with margin) are
+    # downloaded and concatenated into a single file, instead of the whole
+    # video. Falsy (None/empty) behaves exactly as before this field existed.
+    time_ranges = (
+        [(cut.start, cut.end) for cut in request.manual_cuts] if request.manual_cuts else None
+    )
 
     try:
         result = download_youtube_to_s3(
             url=request.url,
             s3_key=s3_key,
             storage=create_object_storage(),
+            time_ranges=time_ranges,
+        )
+        remapped_ranges = result.get("remapped_ranges")
+        remapped_cuts = (
+            remap_manual_cuts(request.manual_cuts, remapped_ranges)
+            if remapped_ranges and request.manual_cuts
+            else None
         )
         return DownloadYouTubeResponse(
             success=True,
@@ -204,6 +219,8 @@ def download_youtube(
             title=result["title"],
             duration=result["duration"],
             thumbnail=result.get("thumbnail"),
+            remapped_ranges=remapped_ranges,
+            remapped_cuts=remapped_cuts,
         )
     except YouTubeInvalidHostError as e:
         # RNF-SEC-06 (SSRF): non-YouTube host is a client error, rejected

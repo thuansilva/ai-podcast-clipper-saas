@@ -134,6 +134,7 @@ from core.youtube_downloader import (
     YouTubeInvalidHostError,
     YouTubeVideoUnavailableError,
     download_youtube_to_s3,
+    remap_manual_cuts,
 )
 
 import pathlib
@@ -160,12 +161,26 @@ def download_youtube(
     # in local dev, see core/storage/factory.py). No local-file shortcut: the
     # returned s3_key is always a real storage key, never a /tmp path.
     s3_key = req.s3_key or f"youtube/{uuid.uuid4()}/original.mp4"
+    # RF-PIPE-08 manual-mode partial download: same contract as main.py's
+    # download_youtube — when manual_cuts is sent, only the range(s)
+    # covering them (merged, with margin) are downloaded and concatenated
+    # into a single file, instead of the whole video.
+    time_ranges = (
+        [(cut.start, cut.end) for cut in req.manual_cuts] if req.manual_cuts else None
+    )
 
     try:
         result = download_youtube_to_s3(
             url=req.url,
             s3_key=s3_key,
             storage=create_object_storage(),
+            time_ranges=time_ranges,
+        )
+        remapped_ranges = result.get("remapped_ranges")
+        remapped_cuts = (
+            remap_manual_cuts(req.manual_cuts, remapped_ranges)
+            if remapped_ranges and req.manual_cuts
+            else None
         )
         return DownloadYouTubeResponse(
             success=True,
@@ -173,6 +188,8 @@ def download_youtube(
             title=result["title"],
             duration=result["duration"],
             thumbnail=result.get("thumbnail"),
+            remapped_ranges=remapped_ranges,
+            remapped_cuts=remapped_cuts,
         )
     except YouTubeInvalidHostError as e:
         raise HTTPException(

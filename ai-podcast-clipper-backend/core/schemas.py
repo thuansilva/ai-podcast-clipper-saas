@@ -251,6 +251,54 @@ class DownloadYouTubeRequest(BaseModel):
             "generates one in the same format."
         ),
     )
+    manual_cuts: Optional[List[ManualCut]] = Field(
+        default=None,
+        max_length=MAX_MANUAL_CUTS,
+        description=(
+            "Optional list of manual-mode cut timestamps (absolute seconds "
+            "in the *original* YouTube video), reusing the same `ManualCut` "
+            "shape/limits as `ProcessVideoRequest.manual_cuts` — these are "
+            "typically the exact same cuts the caller will later send to "
+            "`/process_video`. When present and non-empty, only the time "
+            "range(s) covering these cuts (merged, with a safety margin) "
+            "are downloaded and concatenated into a single output file at "
+            "`s3_key`, instead of the whole video (RF-PIPE-08 manual-mode "
+            "partial download). When omitted/empty, behavior is identical "
+            "to downloading the whole video (no change from before this "
+            "field existed)."
+        ),
+    )
+
+
+class RemappedTimeRange(BaseModel):
+    """One merged (+ margin) time range that was downloaded from the
+    original video, and where it landed in the concatenated output file.
+
+    `original_start`/`original_end` are absolute seconds in the *original*
+    video; `offset_in_output` is the second, in the concatenated output
+    file, where this range's first frame landed."""
+
+    original_start: float
+    original_end: float
+    offset_in_output: float
+
+
+class RemappedManualCut(BaseModel):
+    """A single `manual_cuts` entry from the request, with its `start`/`end`
+    converted from absolute-in-original-video seconds to seconds in the
+    smaller, concatenated output file stored at `s3_key`.
+
+    Whoever calls `/process_video` next for this file (today: the Inngest
+    pipeline in the frontend) must send `new_start`/`new_end` as that
+    request's `manual_cuts[].start/end` — never `original_start`/
+    `original_end` — since the video now served at `s3_key` is this smaller
+    file, not the original full-length video."""
+
+    original_start: float
+    original_end: float
+    new_start: float
+    new_end: float
+    title: Optional[str] = None
 
 
 class DownloadYouTubeResponse(BaseModel):
@@ -262,8 +310,40 @@ class DownloadYouTubeResponse(BaseModel):
     )
     s3_key: str = Field(..., description="S3 storage key of the downloaded video")
     title: str = Field(..., description="Title of the downloaded video")
-    duration: int = Field(..., description="Duration of the video in seconds")
+    duration: int = Field(
+        ...,
+        description=(
+            "Duration, in seconds, of the *original* YouTube video — not of "
+            "the (possibly smaller) file stored at `s3_key` when "
+            "`manual_cuts` was sent. Callers rely on this being the real, "
+            "full video duration to validate cuts expressed in original, "
+            "absolute timestamps (e.g. a manual cut must not end after the "
+            "video's real end) before any remapping happens."
+        ),
+    )
     thumbnail: Optional[str] = Field(
         default=None,
         description="Thumbnail URL of the video",
+    )
+    remapped_ranges: Optional[List[RemappedTimeRange]] = Field(
+        default=None,
+        description=(
+            "Present only when the request sent `manual_cuts`: the merged "
+            "time ranges actually downloaded, in the order they were "
+            "concatenated into the single output file at `s3_key`. `None` "
+            "when the whole video was downloaded (no `manual_cuts` sent)."
+        ),
+    )
+    remapped_cuts: Optional[List[RemappedManualCut]] = Field(
+        default=None,
+        description=(
+            "Present only when the request sent `manual_cuts`: the same "
+            "cuts, in the same order, with `new_start`/`new_end` already "
+            "converted to seconds in the output file at `s3_key`. Callers "
+            "should use these directly as `ProcessVideoRequest.manual_cuts` "
+            "(mapping `new_start`/`new_end` to `start`/`end`) — computing "
+            "the remap again client-side is unnecessary and risks drifting "
+            "from this backend's merge/concat logic. `None` when the whole "
+            "video was downloaded (no `manual_cuts` sent)."
+        ),
     )

@@ -21,7 +21,10 @@ import {
   assertManualCutsWithinVideo,
   computeEffectiveProcessingDuration,
 } from "~/domain/services/processing-duration.service";
-import { buildProcessVideoPayload } from "~/application/services/process-video-payload.service";
+import {
+  buildProcessVideoPayload,
+  type ProcessVideoWireManualCut,
+} from "~/application/services/process-video-payload.service";
 import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
 import { fetch as undiciFetch, Agent } from "undici";
 import { logger } from "~/lib/observability/logger";
@@ -63,11 +66,32 @@ export interface ModalProcessVideoResponse {
   clips?: ModalClipPayload[];
 }
 
+// Mirrors `RemappedTimeRange`/`RemappedManualCut` in the backend
+// (ai-podcast-clipper-backend/core/schemas.py). Only present on
+// `DownloadYouTubeResponse` when the request sent `manual_cuts`.
+export interface YouTubeRemappedTimeRange {
+  original_start: number;
+  original_end: number;
+  offset_in_output: number;
+}
+
+export interface YouTubeRemappedManualCut {
+  original_start: number;
+  original_end: number;
+  new_start: number;
+  new_end: number;
+  title?: string | null;
+}
+
 export interface YouTubeDownloadResult {
   s3_key: string;
   title: string;
   duration: number;
   thumbnail?: string | null;
+  /** Present only when the request sent `manualCuts` (RF-INGEST-10). */
+  remappedRanges?: YouTubeRemappedTimeRange[];
+  /** Present only when the request sent `manualCuts` (RF-INGEST-10). */
+  remappedCuts?: YouTubeRemappedManualCut[];
 }
 
 export function getYouTubeDownloadEndpoint(): string {
@@ -83,14 +107,44 @@ export function getYouTubeDownloadEndpoint(): string {
 export async function downloadYouTubeVideo({
   url,
   s3Key,
+  manualCuts,
 }: {
   url: string;
   s3Key?: string;
+  /**
+   * Absolute-in-original-video timestamps (RF-INGEST-10). When present and
+   * non-empty, the backend downloads only the range(s) covering these cuts
+   * (merged, with margin) instead of the whole video, and the response
+   * includes `remapped_ranges`/`remapped_cuts`. Omitted entirely from the
+   * request body when absent/empty — the backend contract is
+   * `extra="forbid"` (RNF-SEC-18), so this field must never be sent for the
+   * automatic mode.
+   */
+  manualCuts?: ManualCutDTO[];
 }): Promise<YouTubeDownloadResult> {
   const endpoint = getYouTubeDownloadEndpoint();
 
-  
+
   const agent = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+
+  const hasManualCuts = Array.isArray(manualCuts) && manualCuts.length > 0;
+
+  // Only `url` + `s3_key` (+ `manual_cuts` when present): the backend
+  // contract (DownloadYouTubeRequest) is extra="forbid" (RNF-SEC-18) and the
+  // bucket comes from the backend's own config — any other field is a 422.
+  const body: { url: string; s3_key?: string; manual_cuts?: ProcessVideoWireManualCut[] } = {
+    url,
+    s3_key: s3Key,
+  };
+  if (hasManualCuts) {
+    // Wire format matches `core/schemas.py::ManualCut` (`start`/`end`, not
+    // `startTime`/`endTime`) — same shape as `ProcessVideoRequest.manual_cuts`.
+    body.manual_cuts = manualCuts.map((cut) => ({
+      title: cut.title,
+      start: cut.startTime,
+      end: cut.endTime,
+    }));
+  }
 
   const response = await undiciFetch(endpoint, {
     method: "POST",
@@ -99,13 +153,7 @@ export async function downloadYouTubeVideo({
       "Content-Type": "application/json",
       Authorization: `Bearer ${env.AUTH_TOKEN}`,
     }),
-    // Only `url` + `s3_key`: the backend contract (DownloadYouTubeRequest)
-    // is extra="forbid" (RNF-SEC-18) and the bucket comes from the backend's
-    // own config — any other field is a 422.
-    body: JSON.stringify({
-      url,
-      s3_key: s3Key,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -121,6 +169,8 @@ export async function downloadYouTubeVideo({
     title: string;
     duration: number;
     thumbnail?: string | null;
+    remapped_ranges?: YouTubeRemappedTimeRange[] | null;
+    remapped_cuts?: YouTubeRemappedManualCut[] | null;
   };
 
   return {
@@ -128,6 +178,8 @@ export async function downloadYouTubeVideo({
     title: result.title,
     duration: result.duration,
     thumbnail: result.thumbnail,
+    remappedRanges: result.remapped_ranges ?? undefined,
+    remappedCuts: result.remapped_cuts ?? undefined,
   };
 }
 
@@ -185,15 +237,26 @@ export async function processVideoHandler({
 
         let currentS3Key = uploadedFile.s3Key;
         let durationSeconds = uploadedFile.durationSeconds;
+        // RF-INGEST-10: cortes remapeados (tempos no vídeo concatenado
+        // menor que de fato ficou em `currentS3Key`), só preenchido quando
+        // o download do YouTube recebeu `manualCuts` e devolveu
+        // `remapped_cuts`. Consumido pelo step `call-modal-gpu` abaixo —
+        // nunca os tempos originais, que não combinam com esse vídeo menor.
+        let remappedManualCuts: YouTubeRemappedManualCut[] | undefined;
+
+        const hasManualCuts =
+          Array.isArray(event.data.manualCuts) && event.data.manualCuts.length > 0;
 
         if (uploadedFile.sourceType === "YOUTUBE" && uploadedFile.youtubeUrl) {
           const downloadResult = await downloadYouTubeVideo({
             url: uploadedFile.youtubeUrl,
             s3Key: currentS3Key,
+            manualCuts: hasManualCuts ? event.data.manualCuts : undefined,
           });
 
           currentS3Key = downloadResult.s3_key;
           durationSeconds = downloadResult.duration;
+          remappedManualCuts = downloadResult.remappedCuts;
 
           await db.uploadedFile.update({
             where: { id: uploadedFileId },
@@ -204,9 +267,6 @@ export async function processVideoHandler({
             },
           });
         }
-
-        const hasManualCuts =
-          Array.isArray(event.data.manualCuts) && event.data.manualCuts.length > 0;
 
         // RN-PIPE-MANUAL-02 / D5: mode="manual" sem cortes é erro, nunca cai
         // para o cálculo automático de créditos (fallback silencioso).
@@ -260,6 +320,12 @@ export async function processVideoHandler({
           userId: uploadedFile.userId,
           s3Key: currentS3Key,
           creditsCost: holdResult.heldCredits,
+          // RF-INGEST-10: só quando o download do YouTube efetivamente
+          // remapeou cortes (download parcial no modo manual).
+          remappedManualCuts:
+            remappedManualCuts && remappedManualCuts.length > 0
+              ? remappedManualCuts
+              : undefined,
         };
       },
     ));
@@ -290,7 +356,42 @@ export async function processVideoHandler({
         where: { id: uploadedFileId },
       });
 
-      
+      const hasOriginalManualCuts =
+        Array.isArray(event.data.manualCuts) && event.data.manualCuts.length > 0;
+
+      // RF-INGEST-10: para vídeos do YouTube com cortes manuais, o arquivo
+      // que de fato ficou em `video.s3Key` é o vídeo concatenado MENOR
+      // devolvido pelo download parcial — os tempos ORIGINAIS de
+      // `event.data.manualCuts` não combinam com ele. Troca-se por
+      // `reservation.remappedManualCuts` (tempos já convertidos pelo
+      // backend em `/download_youtube`), preservando `id`/`title`
+      // originais na mesma ordem. Uploads diretos nunca passam por esse
+      // remapeamento (não há download/concat) — usam os cortes originais
+      // como sempre.
+      let effectiveEventData: ProcessVideoEventData = event.data;
+
+      if (hasOriginalManualCuts && video.sourceType === "YOUTUBE") {
+        const remapped = reservation.remappedManualCuts;
+        if (!remapped || remapped.length === 0) {
+          // Nunca cair silenciosamente para os cortes originais: eles
+          // apontariam para tempos do vídeo original completo, não do
+          // vídeo (menor) de verdade armazenado em `video.s3Key`.
+          throw new Error(
+            "Manual cuts remapping missing for YouTube video: cannot send pre-download (original) timestamps to the smaller, already-downloaded video.",
+          );
+        }
+        effectiveEventData = {
+          ...event.data,
+          manualCuts: remapped.map((cut, index) => ({
+            id: event.data.manualCuts?.[index]?.id,
+            title: event.data.manualCuts?.[index]?.title,
+            startTime: cut.new_start,
+            endTime: cut.new_end,
+          })),
+        };
+      }
+
+
       const agent = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
 
       const response = await undiciFetch(env.PROCESS_VIDEO_ENDPOINT, {
@@ -301,7 +402,7 @@ export async function processVideoHandler({
           Authorization: `Bearer ${env.AUTH_TOKEN}`,
         }),
         body: JSON.stringify(
-          buildProcessVideoPayload({ video, eventData: event.data }),
+          buildProcessVideoPayload({ video, eventData: effectiveEventData }),
         ),
       });
 
