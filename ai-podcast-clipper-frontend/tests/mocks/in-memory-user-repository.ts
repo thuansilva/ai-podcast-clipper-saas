@@ -2,6 +2,7 @@ import type { UserEntity } from "~/domain/entities/user";
 import { InsufficientCreditsError } from "~/domain/errors/insufficient-credits-error";
 import { DomainError } from "~/domain/errors/domain-error";
 import { NotFoundError } from "~/domain/errors/not-found-error";
+import { UserAlreadyExistsError } from "~/domain/errors/user-already-exists-error";
 import type {
   IUserRepository,
   CreateUserData,
@@ -37,6 +38,12 @@ export class InMemoryUserRepository implements IUserRepository {
   }
 
   async create(data: CreateUserData): Promise<UserEntity> {
+    if (this.users.has(data.id)) {
+      // Espelha a constraint de unicidade real (PK `id` no Postgres via
+      // Prisma) — ver `PrismaUserRepository.create()`.
+      throw new UserAlreadyExistsError(data.id);
+    }
+
     const subCredits = data.subscriptionCredits ?? 0;
     const otCredits = data.oneTimeCredits ?? 10;
     const totalCredits = data.credits ?? (subCredits + otCredits);

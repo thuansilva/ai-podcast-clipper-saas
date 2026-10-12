@@ -1,9 +1,10 @@
 import { db } from "~/server/db";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { UserEntity } from "~/domain/entities/user";
 import { InsufficientCreditsError } from "~/domain/errors/insufficient-credits-error";
 import { DomainError } from "~/domain/errors/domain-error";
 import { NotFoundError } from "~/domain/errors/not-found-error";
+import { UserAlreadyExistsError } from "~/domain/errors/user-already-exists-error";
 import type {
   IUserRepository,
   CreateUserData,
@@ -118,32 +119,47 @@ export class PrismaUserRepository implements IUserRepository {
     const otCredits = data.oneTimeCredits ?? 10;
     const totalCredits = data.credits ?? (subCredits + otCredits);
 
-    const user = await db.user.create({
-      data: {
-        id: data.id,
-        email: data.email,
-        name: data.name ?? null,
-        image: data.image ?? null,
-        stripeCustomerId: data.stripeCustomerId ?? null,
-        credits: totalCredits,
-        subscriptionCredits: subCredits,
-        oneTimeCredits: otCredits,
-        reservedCredits: data.reservedCredits ?? 0,
-        plan: data.plan ?? "STARTER",
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        credits: true,
-        subscriptionCredits: true,
-        oneTimeCredits: true,
-        reservedCredits: true,
-        stripeCustomerId: true,
-        image: true,
-        plan: true,
-      },
-    });
+    let user;
+    try {
+      user = await db.user.create({
+        data: {
+          id: data.id,
+          email: data.email,
+          name: data.name ?? null,
+          image: data.image ?? null,
+          stripeCustomerId: data.stripeCustomerId ?? null,
+          credits: totalCredits,
+          subscriptionCredits: subCredits,
+          oneTimeCredits: otCredits,
+          reservedCredits: data.reservedCredits ?? 0,
+          plan: data.plan ?? "STARTER",
+        },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          credits: true,
+          subscriptionCredits: true,
+          oneTimeCredits: true,
+          reservedCredits: true,
+          stripeCustomerId: true,
+          image: true,
+          plan: true,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        // Violação de unicidade (tipicamente o `id`, PK vinda do Clerk):
+        // traduz o detalhe de infraestrutura do Prisma para um erro de
+        // domínio, que a camada de aplicação (`SyncUserUseCase`) usa para
+        // tratar corridas de condição de forma deliberadamente idempotente.
+        throw new UserAlreadyExistsError(data.id);
+      }
+      throw error;
+    }
 
     return {
       id: user.id,

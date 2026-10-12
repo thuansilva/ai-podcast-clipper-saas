@@ -642,13 +642,24 @@ export const processStripeWebhook = inngest.createFunction(
       limit: 10,
     },
   },
-  async ({ event }) => {
+  async ({ event, step }) => {
     const data = event.data as StripeCheckoutCompletedEventData;
-    const useCase = makeAddCreditsFromStripeWebhookUseCase();
-    await useCase.execute({
-      stripeCustomerId: data.customerId,
-      priceId: data.priceId,
-    });
+    // Idempotência contra retries do Inngest (RNF, item HIGH do checklist
+    // de go-live): sem `step.run`, um retry (dentro do orçamento de
+    // `retries: 3`) reexecuta a função inteira, incluindo o use case que já
+    // tinha rodado com sucesso, duplicando a linha em `CreditTransaction`.
+    // `step.run` faz o Inngest memoizar o resultado deste passo, então um
+    // retry após ele já ter concluído não o chama de novo.
+    await (step as unknown as PipelineStep).run(
+      "add-credits-from-stripe-checkout",
+      async () => {
+        const useCase = makeAddCreditsFromStripeWebhookUseCase();
+        await useCase.execute({
+          stripeCustomerId: data.customerId,
+          priceId: data.priceId,
+        });
+      },
+    );
   },
 );
 
@@ -692,53 +703,72 @@ export const processSubscriptionEvent = inngest.createFunction(
       limit: 10,
     },
   },
-  async ({ event }) => {
+  async ({ event, step }) => {
     const data = event.data as StripeSubscriptionEventData;
     const eventType = data.eventType ?? event.name.replace("stripe/", "");
+    const pipelineStep = step as unknown as PipelineStep;
 
+    // Idempotência contra retries do Inngest (RNF, item HIGH do checklist
+    // de go-live): cada branch roda dentro do seu próprio `step.run`
+    // nomeado (não um `step.run` genérico envolvendo o if/else todo, que
+    // teria nome ambíguo nos logs do Inngest). Sem isso, um retry (dentro
+    // do orçamento de `retries: 3`) reexecuta a função inteira, incluindo o
+    // use case que já tinha rodado com sucesso, duplicando a linha em
+    // `CreditTransaction` — `step.run` faz o Inngest memoizar o resultado
+    // do passo já concluído, então o retry não o chama de novo.
     if (eventType === "checkout.session.completed") {
       if (data.subscriptionId && data.priceId) {
-        const checkoutUseCase = makeProcessSubscriptionCheckoutUseCase();
-        await checkoutUseCase.execute({
-          stripeCustomerId: data.customerId,
-          stripeSubscriptionId: data.subscriptionId,
-          stripePriceId: data.priceId,
-          currentPeriodStart: data.currentPeriodStart
-            ? new Date(data.currentPeriodStart)
-            : undefined,
-          currentPeriodEnd: data.currentPeriodEnd
-            ? new Date(data.currentPeriodEnd)
-            : undefined,
+        const subscriptionId = data.subscriptionId;
+        const priceId = data.priceId;
+        await pipelineStep.run("apply-subscription-checkout", async () => {
+          const checkoutUseCase = makeProcessSubscriptionCheckoutUseCase();
+          await checkoutUseCase.execute({
+            stripeCustomerId: data.customerId,
+            stripeSubscriptionId: subscriptionId,
+            stripePriceId: priceId,
+            currentPeriodStart: data.currentPeriodStart
+              ? new Date(data.currentPeriodStart)
+              : undefined,
+            currentPeriodEnd: data.currentPeriodEnd
+              ? new Date(data.currentPeriodEnd)
+              : undefined,
+          });
         });
       }
     } else if (eventType === "invoice.payment_succeeded") {
       if (data.billingReason !== "subscription_create") {
-        const renewalUseCase = makeProcessSubscriptionRenewalUseCase();
-        await renewalUseCase.execute({
-          stripeCustomerId: data.customerId,
-          stripeSubscriptionId: data.subscriptionId,
-          currentPeriodStart: data.currentPeriodStart
-            ? new Date(data.currentPeriodStart)
-            : undefined,
-          currentPeriodEnd: data.currentPeriodEnd
-            ? new Date(data.currentPeriodEnd)
-            : undefined,
+        await pipelineStep.run("apply-subscription-renewal", async () => {
+          const renewalUseCase = makeProcessSubscriptionRenewalUseCase();
+          await renewalUseCase.execute({
+            stripeCustomerId: data.customerId,
+            stripeSubscriptionId: data.subscriptionId,
+            currentPeriodStart: data.currentPeriodStart
+              ? new Date(data.currentPeriodStart)
+              : undefined,
+            currentPeriodEnd: data.currentPeriodEnd
+              ? new Date(data.currentPeriodEnd)
+              : undefined,
+          });
         });
       }
     } else if (eventType === "customer.subscription.deleted") {
-      const expireUseCase = makeExpireSubscriptionUseCase();
-      await expireUseCase.execute({
-        stripeCustomerId: data.customerId,
-        stripeSubscriptionId: data.subscriptionId,
+      await pipelineStep.run("expire-subscription", async () => {
+        const expireUseCase = makeExpireSubscriptionUseCase();
+        await expireUseCase.execute({
+          stripeCustomerId: data.customerId,
+          stripeSubscriptionId: data.subscriptionId,
+        });
       });
     } else if (eventType === "customer.subscription.updated") {
       if (data.subscriptionId) {
-        const subRepo = new PrismaSubscriptionRepository();
-        await subRepo.update(data.subscriptionId, {
-          ...(data.status && { status: data.status }),
-          ...(data.cancelAtPeriodEnd !== undefined && {
-            cancelAtPeriodEnd: data.cancelAtPeriodEnd,
-          }),
+        await pipelineStep.run("update-subscription-status", async () => {
+          const subRepo = new PrismaSubscriptionRepository();
+          await subRepo.update(data.subscriptionId!, {
+            ...(data.status && { status: data.status }),
+            ...(data.cancelAtPeriodEnd !== undefined && {
+              cancelAtPeriodEnd: data.cancelAtPeriodEnd,
+            }),
+          });
         });
       }
     }
