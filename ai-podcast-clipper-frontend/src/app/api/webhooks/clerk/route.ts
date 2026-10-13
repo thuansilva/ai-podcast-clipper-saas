@@ -1,10 +1,8 @@
 import { Webhook } from "svix";
 import { NextResponse } from "next/server";
 import { env } from "~/env";
-import {
-  makeSyncUserUseCase,
-  makeDeleteUserAccountUseCase,
-} from "~/infrastructure/factories/use-case-factories";
+import { makeSyncUserUseCase } from "~/infrastructure/factories/use-case-factories";
+import { inngest } from "~/inngest/client";
 import { logger } from "~/lib/observability/logger";
 import { withSpan } from "~/lib/observability/tracer";
 
@@ -95,24 +93,34 @@ async function handleClerkEvent(
     const { id } = data;
     if (id) {
       try {
-        const deleteUserAccountUseCase = makeDeleteUserAccountUseCase();
-        await deleteUserAccountUseCase.execute({ userId: id });
+        // A limpeza de verdade (cancelar assinatura, apagar arquivos do S3,
+        // anonimizar o cadastro e apagar as linhas do banco) NÃO roda mais
+        // de forma síncrona dentro deste handler de webhook — ela foi
+        // movida para a function do Inngest `deleteUserAccount`
+        // (`src/inngest/functions.ts`), que a executa em `step.run`s
+        // separados com `retries: 3` (retry granular: um passo que já
+        // concluiu com sucesso não é reexecutado quando outro falha) e
+        // `onFailure` para visibilidade (log estruturado) caso os retries se
+        // esgotem. Isso evita o problema do webhook síncrono: se a limpeza
+        // falhasse no meio, o Clerk só podia reentregar o webhook inteiro
+        // (sem retry por etapa), repetindo do zero passos que já tinham
+        // dado certo.
+        //
+        // Aqui só despachamos o evento e respondemos rápido — é o padrão
+        // correto para webhook + fila (confirmar recebimento, não
+        // conclusão). Se o próprio despacho falhar (ex.: Inngest fora do
+        // ar), nada foi processado ainda, então é seguro pedir ao Clerk
+        // para reentregar o webhook inteiro.
+        await inngest.send({
+          name: "clerk/user.deleted",
+          data: { userId: id },
+        });
       } catch (err) {
-        // Ao contrário de user.created/user.updated (erro de validação,
-        // não vale retry), a limpeza de exclusão de conta é segura de
-        // repetir (idempotente: usuário já anonimizado, arquivos já
-        // deletados do storage são tolerados, assinatura já cancelada é
-        // ignorada). Por isso, diferente do catch de verificação de
-        // assinatura acima, aqui respondemos 5xx de propósito — mesmo
-        // padrão de resiliência do webhook do Stripe
-        // (`src/app/api/webhooks/stripe/route.ts`) — para que o Clerk
-        // reentregue o evento em vez de perder silenciosamente uma
-        // exclusão parcial (ex.: Stripe ou S3 fora do ar no momento).
-        logger.error("Failed to delete/anonymize user account", {
+        logger.error("Failed to dispatch account deletion event to Inngest", {
           userId: id,
           error: err,
         });
-        return new NextResponse("Error: Failed to process account deletion", {
+        return new NextResponse("Error: Failed to enqueue account deletion", {
           status: 500,
         });
       }

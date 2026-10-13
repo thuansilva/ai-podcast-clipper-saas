@@ -10,6 +10,9 @@ import {
   makeExpireSubscriptionUseCase,
   makeProcessSubscriptionCheckoutUseCase,
   makeSuspendExpiredPastDueSubscriptionsUseCase,
+  makeCancelUserSubscriptionUseCase,
+  makeDeleteUserFilesFromStorageUseCase,
+  makeAnonymizeUserAndDeleteRowsUseCase,
 } from "~/infrastructure/factories/use-case-factories";
 import { PrismaSubscriptionRepository } from "~/infrastructure/database/repositories/prisma-subscription.repository";
 import { Prisma } from "@prisma/client";
@@ -793,6 +796,85 @@ export const suspendExpiredPastDueSubscriptions = inngest.createFunction(
   async () => {
     const useCase = makeSuspendExpiredPastDueSubscriptionsUseCase();
     return useCase.execute();
+  },
+);
+
+export interface ClerkUserDeletedEventData {
+  userId: string;
+}
+
+/**
+ * Executa a exclusão de conta de um usuário (ver item "Fluxo de exclusão de
+ * conta incompleto" do checklist de go-live), disparada pelo webhook
+ * `user.deleted` do Clerk (`src/app/api/webhooks/clerk/route.ts`), que só
+ * despacha este evento e responde rápido — a limpeza de verdade roda aqui.
+ *
+ * Decisão de design: em vez de chamar `DeleteUserAccountUseCase.execute()`
+ * inteiro dentro de um único `step.run`, cada uma das 3 sub-etapas roda no
+ * seu próprio `step.run` nomeado (mesmo padrão de idempotência contra
+ * retries já usado em `processStripeWebhook`/`processSubscriptionEvent`),
+ * para ganhar retry granular de verdade: se `anonymize-user-and-delete-rows`
+ * falhar (ex.: Postgres fora do ar) e o Inngest tentar de novo (dentro do
+ * orçamento de `retries: 3`), os passos `cancel-subscription` e
+ * `delete-storage-files` — já concluídos com sucesso — não são
+ * reexecutados, só o passo que falhou. `retries: 3` (maior que o `1` de
+ * `processVideo`) porque esta é uma operação sensível (dados pessoais) mas
+ * totalmente idempotente em cada etapa, então vale mais tentativas antes de
+ * desistir.
+ *
+ * `onFailure` só loga (`logger.error`, mesmo padrão de `processVideo`) —
+ * não há ação de compensação a fazer (diferente de `processVideo`, que
+ * devolve crédito reservado): é o mecanismo de visibilidade para alguém
+ * notar, via observabilidade (Grafana/Loki), que uma exclusão de conta não
+ * terminou mesmo depois de esgotados os retries.
+ */
+export const deleteUserAccount = inngest.createFunction(
+  {
+    id: "delete-user-account",
+    triggers: [{ event: "clerk/user.deleted" }],
+    retries: 3,
+    onFailure: async ({ event, error }) => {
+      const data = event.data.event?.data as
+        | ClerkUserDeletedEventData
+        | undefined;
+      const userId = data?.userId;
+
+      logger.error("delete-user-account exhausted all retries", {
+        userId: userId ?? "",
+        error: error?.message || "Inngest function failed after retries",
+      });
+    },
+  },
+  async ({ event, step }) => {
+    const { userId } = event.data as ClerkUserDeletedEventData;
+    const pipelineStep = step as unknown as PipelineStep;
+
+    // Etapa 1/3: cancela a assinatura Stripe ativa (se houver) e expira os
+    // créditos de assinatura correspondentes. Também disparado de forma
+    // síncrona pela Server Action `requestAccountDeletion`
+    // (`src/actions/delete-account.ts`) — chamar de novo aqui é seguro
+    // porque `CancelUserSubscriptionUseCase` é idempotente.
+    await pipelineStep.run("cancel-subscription", async () => {
+      const cancelUserSubscriptionUseCase = makeCancelUserSubscriptionUseCase();
+      await cancelUserSubscriptionUseCase.execute({ userId });
+    });
+
+    // Etapa 2/3: apaga do S3 os arquivos (`UploadedFile`) e clipes (`Clip`)
+    // do usuário. Tolerante a objeto já ausente no storage.
+    await pipelineStep.run("delete-storage-files", async () => {
+      const deleteUserFilesFromStorageUseCase =
+        makeDeleteUserFilesFromStorageUseCase();
+      await deleteUserFilesFromStorageUseCase.execute({ userId });
+    });
+
+    // Etapa 3/3: remove as linhas de `UploadedFile`/`Clip` e anonimiza o
+    // cadastro do `User` (nunca removido do banco — preserva o histórico de
+    // auditoria em `CreditTransaction`/`Subscription`), na mesma transação.
+    await pipelineStep.run("anonymize-user-and-delete-rows", async () => {
+      const anonymizeUserAndDeleteRowsUseCase =
+        makeAnonymizeUserAndDeleteRowsUseCase();
+      await anonymizeUserAndDeleteRowsUseCase.execute({ userId });
+    });
   },
 );
 

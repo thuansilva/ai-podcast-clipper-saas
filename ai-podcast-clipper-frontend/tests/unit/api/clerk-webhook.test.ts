@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "~/app/api/webhooks/clerk/route";
-import {
-  makeSyncUserUseCase,
-  makeDeleteUserAccountUseCase,
-} from "~/infrastructure/factories/use-case-factories";
+import { makeSyncUserUseCase } from "~/infrastructure/factories/use-case-factories";
+import { inngest } from "~/inngest/client";
 
 vi.mock("~/infrastructure/factories/use-case-factories", () => ({
   makeSyncUserUseCase: vi.fn(),
-  makeDeleteUserAccountUseCase: vi.fn(),
+}));
+
+vi.mock("~/inngest/client", () => ({
+  inngest: {
+    send: vi.fn(),
+  },
 }));
 
 // Mock svix Webhook class
@@ -23,16 +26,13 @@ vi.mock("svix", () => {
 
 describe("Clerk Webhook API Route", () => {
   const mockSyncExecute = vi.fn();
-  const mockDeleteAccountExecute = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(makeSyncUserUseCase).mockReturnValue({
       execute: mockSyncExecute,
     } as any);
-    vi.mocked(makeDeleteUserAccountUseCase).mockReturnValue({
-      execute: mockDeleteAccountExecute,
-    } as any);
+    vi.mocked(inngest.send).mockResolvedValue({ ids: [] } as any);
   });
 
   it("deve retornar 400 se os cabeçalhos do svix estiverem ausentes", async () => {
@@ -79,7 +79,7 @@ describe("Clerk Webhook API Route", () => {
     });
   });
 
-  it("deve processar evento user.deleted chamando DeleteUserAccountUseCase", async () => {
+  it("deve processar evento user.deleted despachando o evento clerk/user.deleted para o Inngest, sem chamar a limpeza diretamente", async () => {
     const payload = {
       type: "user.deleted",
       data: {
@@ -99,13 +99,14 @@ describe("Clerk Webhook API Route", () => {
 
     const res = await POST(req);
     expect(res.status).toBe(200);
-    expect(mockDeleteAccountExecute).toHaveBeenCalledWith({
-      userId: "user_clerk_delete_456",
+    expect(inngest.send).toHaveBeenCalledWith({
+      name: "clerk/user.deleted",
+      data: { userId: "user_clerk_delete_456" },
     });
   });
 
-  it("deve retornar 500 (para o Clerk reentregar) se a limpeza da conta falhar", async () => {
-    mockDeleteAccountExecute.mockRejectedValueOnce(new Error("S3 fora do ar"));
+  it("deve retornar 500 (para o Clerk reentregar) se o despacho do evento para o Inngest falhar", async () => {
+    vi.mocked(inngest.send).mockRejectedValueOnce(new Error("Inngest fora do ar"));
 
     const payload = {
       type: "user.deleted",

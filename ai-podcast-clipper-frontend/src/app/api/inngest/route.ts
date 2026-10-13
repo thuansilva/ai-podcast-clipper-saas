@@ -5,6 +5,7 @@ import {
   processStripeWebhook,
   processSubscriptionEvent,
   suspendExpiredPastDueSubscriptions,
+  deleteUserAccount,
 } from "~/inngest/functions";
 
 // Create an API that serves functions
@@ -15,5 +16,6 @@ export const { GET, POST, PUT } = serve({
     processStripeWebhook,
     processSubscriptionEvent,
     suspendExpiredPastDueSubscriptions,
+    deleteUserAccount,
   ],
 });

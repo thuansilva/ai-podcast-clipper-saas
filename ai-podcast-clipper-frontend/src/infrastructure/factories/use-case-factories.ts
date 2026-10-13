@@ -20,6 +20,7 @@ import { ProcessChargeRefundUseCase } from "~/application/use-cases/credits/proc
 import { ProcessChargeDisputeUseCase } from "~/application/use-cases/credits/process-charge-dispute.use-case";
 import { SuspendExpiredPastDueSubscriptionsUseCase } from "~/application/use-cases/credits/suspend-expired-past-due-subscriptions.use-case";
 import { ResolvePastDueGracePeriodUseCase } from "~/application/use-cases/credits/resolve-past-due-grace-period.use-case";
+import { CancelUserSubscriptionUseCase } from "~/application/use-cases/credits/cancel-user-subscription.use-case";
 
 import { GenerateUploadUrlUseCase } from "~/application/use-cases/videos/generate-upload-url.use-case";
 import { ImportYouTubeVideoUseCase } from "~/application/use-cases/videos/import-youtube-video.use-case";
@@ -34,6 +35,8 @@ import { DeleteClipUseCase } from "~/application/use-cases/clips/delete-clip.use
 import { SyncUserUseCase } from "~/application/use-cases/users/sync-user.use-case";
 import { GetUserBillingDataUseCase } from "~/application/use-cases/users/get-user-billing-data.use-case";
 import { DeleteUserAccountUseCase } from "~/application/use-cases/users/delete-user-account.use-case";
+import { DeleteUserFilesFromStorageUseCase } from "~/application/use-cases/users/delete-user-files-from-storage.use-case";
+import { AnonymizeUserAndDeleteRowsUseCase } from "~/application/use-cases/users/anonymize-user-and-delete-rows.use-case";
 import { TriggerVideoProcessingUseCase } from "~/application/use-cases/videos/trigger-video-processing.use-case";
 import type { IUserRepository } from "~/domain/ports/user-repository";
 import type { ISubscriptionRepository } from "~/domain/ports/subscription-repository";
@@ -139,6 +142,22 @@ export function makeResolvePastDueGracePeriodUseCase(): ResolvePastDueGracePerio
   );
 }
 
+export function makeCancelUserSubscriptionUseCase(): CancelUserSubscriptionUseCase {
+  const userRepository = new PrismaUserRepository();
+  const unitOfWork = new PrismaUnitOfWork();
+  const subscriptionRepository = new PrismaSubscriptionRepository();
+
+  return new CancelUserSubscriptionUseCase(
+    subscriptionRepository,
+    new StripePaymentGateway(),
+    new ExpireSubscriptionUseCase(
+      userRepository,
+      unitOfWork,
+      subscriptionRepository
+    )
+  );
+}
+
 // --- Fábricas de Vídeos ---
 export function makeGenerateUploadUrlUseCase(): GenerateUploadUrlUseCase {
   const storageGateway = createStorageGateway();
@@ -234,21 +253,43 @@ export function makeDeleteUserAccountUseCase(): DeleteUserAccountUseCase {
   const storageGateway = createStorageGateway();
   const userRepository = new PrismaUserRepository();
   const unitOfWork = new PrismaUnitOfWork();
-  const subscriptionRepository = new PrismaSubscriptionRepository();
 
   return new DeleteUserAccountUseCase(
     userRepository,
-    subscriptionRepository,
     new PrismaUploadedFileRepository(),
     new PrismaClipRepository(),
     storageGateway,
-    new StripePaymentGateway(),
     unitOfWork,
-    new ExpireSubscriptionUseCase(
-      userRepository,
-      unitOfWork,
-      subscriptionRepository
-    )
+    makeCancelUserSubscriptionUseCase()
+  );
+}
+
+/**
+ * Etapa "delete-storage-files" da exclusão de conta (ver
+ * `src/inngest/functions.ts::deleteUserAccount`): apaga do S3 só os
+ * arquivos/clipes do usuário, sem tocar nas linhas do banco.
+ */
+export function makeDeleteUserFilesFromStorageUseCase(): DeleteUserFilesFromStorageUseCase {
+  const storageGateway = createStorageGateway();
+  return new DeleteUserFilesFromStorageUseCase(
+    new PrismaUploadedFileRepository(),
+    new PrismaClipRepository(),
+    storageGateway
+  );
+}
+
+/**
+ * Etapa "anonymize-user-and-delete-rows" da exclusão de conta (ver
+ * `src/inngest/functions.ts::deleteUserAccount`): remove as linhas de
+ * `UploadedFile`/`Clip` e anonimiza o cadastro do `User`, na mesma
+ * transação.
+ */
+export function makeAnonymizeUserAndDeleteRowsUseCase(): AnonymizeUserAndDeleteRowsUseCase {
+  return new AnonymizeUserAndDeleteRowsUseCase(
+    new PrismaUserRepository(),
+    new PrismaUploadedFileRepository(),
+    new PrismaClipRepository(),
+    new PrismaUnitOfWork()
   );
 }
 

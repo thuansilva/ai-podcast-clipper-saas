@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DeleteUserAccountUseCase } from "~/application/use-cases/users/delete-user-account.use-case";
 import { ExpireSubscriptionUseCase } from "~/application/use-cases/credits/expire-subscription.use-case";
+import { CancelUserSubscriptionUseCase } from "~/application/use-cases/credits/cancel-user-subscription.use-case";
 import { InMemoryUserRepository } from "../../../mocks/in-memory-user-repository";
 import { InMemorySubscriptionRepository } from "../../../mocks/in-memory-subscription-repository";
 import { InMemoryUploadedFileRepository } from "../../../mocks/in-memory-uploaded-file-repository";
@@ -18,6 +19,7 @@ describe("DeleteUserAccountUseCase", () => {
   let uow: InMemoryUnitOfWork;
   let paymentGateway: IPaymentGateway;
   let expireSubscriptionUseCase: ExpireSubscriptionUseCase;
+  let cancelUserSubscriptionUseCase: CancelUserSubscriptionUseCase;
   let useCase: DeleteUserAccountUseCase;
 
   beforeEach(() => {
@@ -41,15 +43,19 @@ describe("DeleteUserAccountUseCase", () => {
       subscriptionRepo
     );
 
+    cancelUserSubscriptionUseCase = new CancelUserSubscriptionUseCase(
+      subscriptionRepo,
+      paymentGateway,
+      expireSubscriptionUseCase
+    );
+
     useCase = new DeleteUserAccountUseCase(
       userRepo,
-      subscriptionRepo,
       uploadedFileRepo,
       clipRepo,
       storageGateway,
-      paymentGateway,
       uow,
-      expireSubscriptionUseCase
+      cancelUserSubscriptionUseCase
     );
   });
 
