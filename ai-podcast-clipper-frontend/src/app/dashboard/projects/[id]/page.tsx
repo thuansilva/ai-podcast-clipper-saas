@@ -3,7 +3,6 @@ import Link from "next/link";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
 import { ArrowLeft, Clock, Film } from "lucide-react";
-import { Card, CardContent } from "~/components/ui/card";
 import { isManualCut } from "~/domain/services/clip-origin.service";
 import { ClipCard } from "~/components/clip-card";
 import {

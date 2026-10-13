@@ -60,6 +60,15 @@ export const env = createEnv({
     INNGEST_EVENT_KEY: z.string().optional(),
     INNGEST_SIGNING_KEY: z.string().optional(),
     INNGEST_DEV: z.string().optional(),
+
+    // Upstash Redis (rate limiting com estado compartilhado entre
+    // instâncias/serverless). Opcionais: sem elas, a factory de rate
+    // limiters (`rate-limiter-factory.ts`) cai para
+    // `InMemorySlidingWindowRateLimiter` (comportamento de hoje, só
+    // per-instância) em vez de falhar — é o esperado em dev/CI, que não têm
+    // uma conta Upstash configurada.
+    UPSTASH_REDIS_REST_URL: z.string().url().optional(),
+    UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
   },
 
   client: {
@@ -106,6 +115,9 @@ export const env = createEnv({
     INNGEST_EVENT_KEY: process.env.INNGEST_EVENT_KEY,
     INNGEST_SIGNING_KEY: process.env.INNGEST_SIGNING_KEY,
     INNGEST_DEV: process.env.INNGEST_DEV,
+
+    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
   },
   skipValidation: !!process.env.SKIP_ENV_VALIDATION,
   emptyStringAsUndefined: true,

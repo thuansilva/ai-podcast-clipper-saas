@@ -33,6 +33,7 @@ describe("SyncUserUseCase", () => {
       createCheckoutSession: vi.fn(),
       createBillingPortalSession: vi.fn(),
       createCustomer: vi.fn(),
+      cancelSubscription: vi.fn(),
     };
 
     sut = new SyncUserUseCase(mockUserRepository, mockPaymentGateway);

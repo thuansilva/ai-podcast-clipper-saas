@@ -42,6 +42,9 @@ const fakePaymentGateway: IPaymentGateway = {
   async createBillingPortalSession() {
     return "";
   },
+  async cancelSubscription() {
+    // no-op
+  },
 };
 
 /**

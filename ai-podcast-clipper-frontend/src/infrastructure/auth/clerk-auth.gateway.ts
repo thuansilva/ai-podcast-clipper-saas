@@ -1,4 +1,4 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import type { IAuthGateway, AuthUser } from "~/domain/ports/auth-gateway";
 import { UnauthorizedError } from "~/domain/errors/unauthorized-error";
 
@@ -29,5 +29,10 @@ export class ClerkAuthGateway implements IAuthGateway {
       name: fullName || null,
       imageUrl: user.imageUrl ?? null,
     };
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    const client = await clerkClient();
+    await client.users.deleteUser(userId);
   }
 }

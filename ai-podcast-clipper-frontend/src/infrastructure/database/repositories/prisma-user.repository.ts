@@ -196,6 +196,7 @@ export class PrismaUserRepository implements IUserRepository {
         ...(data.reservedCredits !== undefined && {
           reservedCredits: data.reservedCredits,
         }),
+        ...(data.deletedAt !== undefined && { deletedAt: data.deletedAt }),
       },
       select: {
         id: true,

@@ -17,6 +17,8 @@ export interface UserEntity {
   stripeCustomerId?: string | null;
   image?: string | null;
   plan?: string;
+  /** Preenchido quando a conta foi excluída/anonimizada (ver DeleteUserAccountUseCase). */
+  deletedAt?: Date | null;
 }
 
 export type UserPlan = "STARTER" | "PRO";

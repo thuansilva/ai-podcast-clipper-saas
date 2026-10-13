@@ -94,6 +94,11 @@ ASD_DIR = "/asd"
     timeout=900,
     retries=0,
     scaledown_window=20,
+    # RNF/checklist (HIGH, P0): teto de custo de GPU — sem isso, um flood de
+    # /process_video (token estático, sem rate limit por usuário nesta
+    # camada) escalaria containers sem limite. Valor conservador (decisão do
+    # usuário, 2026-10-12); ajustar depois com dado real de uso.
+    max_containers=2,
     secrets=[modal.Secret.from_name("ai-podcast-clipper-secret")],
     volumes={mount_path: volume},
 )

@@ -5,6 +5,7 @@ import type {
   CreateCheckoutSessionInput,
   IPaymentGateway,
 } from "~/domain/ports/payment-gateway";
+import { logger } from "~/lib/observability/logger";
 
 export class StripePaymentGateway implements IPaymentGateway {
   private readonly stripe: Stripe;
@@ -86,11 +87,34 @@ export class StripePaymentGateway implements IPaymentGateway {
       return customer.id;
     } catch (error) {
       console.warn(
-        `[StripePaymentGateway] Erro ao criar cliente no Stripe (${
-          error instanceof Error ? error.message : "Erro desconhecido"
+        `[StripePaymentGateway] Erro ao criar cliente no Stripe (${error instanceof Error ? error.message : "Erro desconhecido"
         }). Usando fallback de desenvolvimento.`,
       );
       return `cus_fallback_${Date.now()}`;
+    }
+  }
+
+  async cancelSubscription(stripeSubscriptionId: string): Promise<void> {
+    try {
+      await this.stripe.subscriptions.cancel(stripeSubscriptionId);
+    } catch (error) {
+      // A assinatura já não existe no Stripe (ex.: cancelada manualmente
+      // antes, ou webhook de cancelamento já processado) — não é um erro
+      // fatal para quem está excluindo a conta (ver
+      // DeleteUserAccountUseCase): o objetivo (não cobrar mais o usuário)
+      // já está satisfeito. Qualquer outro erro (rede, credenciais, etc.)
+      // é relançado para que a chamada possa ser repetida.
+      if (
+        error instanceof Stripe.errors.StripeError &&
+        error.code === "resource_missing"
+      ) {
+        logger.warn(
+          "Stripe subscription already missing/canceled, skipping cancelSubscription",
+          { stripeSubscriptionId, error }
+        );
+        return;
+      }
+      throw error;
     }
   }
 }

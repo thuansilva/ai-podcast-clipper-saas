@@ -140,7 +140,6 @@ from core.youtube_downloader import (
 import pathlib
 import shutil
 
-S3_BUCKET = os.environ.get("S3_BUCKET_NAME", "ai-podcast-clipper")
 ASD_DIR = os.environ.get("ASD_DIR", "/asd")
 
 app = FastAPI(title="Local Podcast Clipper Backend")

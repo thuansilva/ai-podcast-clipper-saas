@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeftIcon, CheckIcon, Coins, Layers, Zap } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon, Coins, Layers } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -12,6 +12,7 @@ import {
 } from "~/actions/stripe";
 import { handleServerActionError } from "~/lib/handle-server-action-error";
 import { ActiveSubscriptionCard } from "~/components/billing/active-subscription-card";
+import { DeleteAccountSection } from "~/components/dashboard/delete-account-section";
 import {
   PricingToggleTabs,
   type PricingTab,
@@ -302,6 +303,8 @@ export default function BillingPage(props: any) {
           <PricingCard key={plan.title} plan={plan} />
         ))}
       </div>
+
+      <DeleteAccountSection />
     </div>
   );
 }

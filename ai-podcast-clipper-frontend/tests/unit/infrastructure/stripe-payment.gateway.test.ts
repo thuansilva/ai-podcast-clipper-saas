@@ -4,25 +4,50 @@ import { StripePaymentGateway } from "~/infrastructure/payments/stripe-payment.g
 const mockCheckoutSessionsCreate = vi.fn();
 const mockBillingPortalSessionsCreate = vi.fn();
 const mockCustomersCreate = vi.fn();
+const mockSubscriptionsCancel = vi.fn();
+
+const { MockStripeError } = vi.hoisted(() => {
+  class MockStripeError extends Error {
+    code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+    }
+  }
+  return { MockStripeError };
+});
+
+vi.mock("~/lib/observability/logger", () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
 
 vi.mock("stripe", () => {
-  return {
-    default: class MockStripe {
-      checkout = {
-        sessions: {
-          create: (...args: any[]) => mockCheckoutSessionsCreate(...args),
-        },
-      };
-      billingPortal = {
-        sessions: {
-          create: (...args: any[]) => mockBillingPortalSessionsCreate(...args),
-        },
-      };
-      customers = {
-        create: (...args: any[]) => mockCustomersCreate(...args),
-      };
-    },
-  };
+  class MockStripe {
+    checkout = {
+      sessions: {
+        create: (...args: any[]) => mockCheckoutSessionsCreate(...args),
+      },
+    };
+    billingPortal = {
+      sessions: {
+        create: (...args: any[]) => mockBillingPortalSessionsCreate(...args),
+      },
+    };
+    customers = {
+      create: (...args: any[]) => mockCustomersCreate(...args),
+    };
+    subscriptions = {
+      cancel: (...args: any[]) => mockSubscriptionsCancel(...args),
+    };
+  }
+
+  (MockStripe as any).errors = { StripeError: MockStripeError };
+
+  return { default: MockStripe };
 });
 
 vi.mock("~/env", () => ({
@@ -164,6 +189,36 @@ describe("StripePaymentGateway", () => {
           returnUrl: "https://example.com/dashboard",
         })
       ).rejects.toThrow("Failed to create Stripe billing portal session URL");
+    });
+  });
+
+  describe("cancelSubscription", () => {
+    it("deve chamar stripe.subscriptions.cancel com o id informado", async () => {
+      mockSubscriptionsCancel.mockResolvedValueOnce({});
+
+      await gateway.cancelSubscription("sub_real_123");
+
+      expect(mockSubscriptionsCancel).toHaveBeenCalledWith("sub_real_123");
+    });
+
+    it("não deve lançar erro se a assinatura já não existir no Stripe (resource_missing)", async () => {
+      mockSubscriptionsCancel.mockRejectedValueOnce(
+        new MockStripeError("resource_missing", "No such subscription")
+      );
+
+      await expect(
+        gateway.cancelSubscription("sub_already_gone")
+      ).resolves.toBeUndefined();
+    });
+
+    it("deve relançar outros erros do Stripe (ex.: falha de rede)", async () => {
+      mockSubscriptionsCancel.mockRejectedValueOnce(
+        new MockStripeError("api_connection_error", "Network error")
+      );
+
+      await expect(
+        gateway.cancelSubscription("sub_network_error")
+      ).rejects.toThrow("Network error");
     });
   });
 

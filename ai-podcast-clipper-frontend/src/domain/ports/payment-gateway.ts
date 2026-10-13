@@ -17,4 +17,11 @@ export interface IPaymentGateway {
     input: CreateBillingPortalSessionInput
   ): Promise<string>;
   createCustomer(email: string, name?: string | null): Promise<string>;
+  /**
+   * Cancela a assinatura no provedor de pagamento (ex.: exclusão de conta,
+   * ver `DeleteUserAccountUseCase`). Implementações devem tratar o caso de
+   * a assinatura já não existir no provedor (ex.: já cancelada antes) sem
+   * lançar erro fatal.
+   */
+  cancelSubscription(stripeSubscriptionId: string): Promise<void>;
 }

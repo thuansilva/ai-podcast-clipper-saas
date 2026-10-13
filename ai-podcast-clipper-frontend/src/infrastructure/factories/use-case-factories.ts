@@ -33,6 +33,7 @@ import { UpdateClipUseCase } from "~/application/use-cases/clips/update-clip.use
 import { DeleteClipUseCase } from "~/application/use-cases/clips/delete-clip.use-case";
 import { SyncUserUseCase } from "~/application/use-cases/users/sync-user.use-case";
 import { GetUserBillingDataUseCase } from "~/application/use-cases/users/get-user-billing-data.use-case";
+import { DeleteUserAccountUseCase } from "~/application/use-cases/users/delete-user-account.use-case";
 import { TriggerVideoProcessingUseCase } from "~/application/use-cases/videos/trigger-video-processing.use-case";
 import type { IUserRepository } from "~/domain/ports/user-repository";
 import type { ISubscriptionRepository } from "~/domain/ports/subscription-repository";
@@ -226,6 +227,28 @@ export function makeGetUserBillingDataUseCase(): GetUserBillingDataUseCase {
   return new GetUserBillingDataUseCase(
     new PrismaUserRepository(),
     new PrismaSubscriptionRepository()
+  );
+}
+
+export function makeDeleteUserAccountUseCase(): DeleteUserAccountUseCase {
+  const storageGateway = createStorageGateway();
+  const userRepository = new PrismaUserRepository();
+  const unitOfWork = new PrismaUnitOfWork();
+  const subscriptionRepository = new PrismaSubscriptionRepository();
+
+  return new DeleteUserAccountUseCase(
+    userRepository,
+    subscriptionRepository,
+    new PrismaUploadedFileRepository(),
+    new PrismaClipRepository(),
+    storageGateway,
+    new StripePaymentGateway(),
+    unitOfWork,
+    new ExpireSubscriptionUseCase(
+      userRepository,
+      unitOfWork,
+      subscriptionRepository
+    )
   );
 }
 

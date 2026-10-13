@@ -379,6 +379,17 @@ Se `subscription.status = 'active'` ou `'past_due'`:
 - **Ação Automática**: Carência de 3 dias (ver **`./visao-fluxo-pagamento.md`** para detalhe)
 - **User Action**: Email notificando falha → Atualizar cartão no Portal Stripe → Retry automático
 
+#### 3.6 Exclusão de Conta (2026-10-12)
+- **Localização**: seção "Zona de risco" no final de `/dashboard/billing`, componente `DeleteAccountSection` (`src/components/dashboard/delete-account-section.tsx`)
+- **Trigger do usuário**: botão "Excluir minha conta" → `AlertDialog` (Shadcn/Radix) pedindo confirmação explícita, com aviso de que vídeos/clipes e a assinatura serão apagados de verdade e a ação não tem volta
+- **Server Action**: `requestAccountDeletion` (`src/actions/delete-account.ts`) — autentica o usuário (`makeAuthGateway().requireUserId()`) e **só** pede ao Clerk para deletar o usuário (`makeAuthGateway().deleteUser(userId)`, SDK backend do Clerk). A action **não** toca no banco de dados diretamente.
+- **Fonte única de verdade da limpeza**: o webhook `user.deleted` do Clerk (`src/app/api/webhooks/clerk/route.ts`), disparado pelo passo anterior, chama `DeleteUserAccountUseCase` (`src/application/use-cases/users/delete-user-account.use-case.ts`), que:
+  1. Cancela a assinatura ativa na Stripe (`IPaymentGateway.cancelSubscription`) e marca `Subscription.status = "canceled"` no banco (reaproveita `ExpireSubscriptionUseCase` para a parte de créditos/status).
+  2. Apaga todo `UploadedFile`/`Clip` do usuário — do S3 (`IStorageGateway.deleteFile`) e das linhas do banco.
+  3. **Anonimiza** o `User` (`email` → `deleted-<userId>@anon.local`, `name`/`image` → `null`, `deletedAt` preenchido) — **nunca** remove a linha (preserva `CreditTransaction`/`Subscription` para auditoria).
+- **Pós-confirmação (client)**: ao `requestAccountDeletion()` resolver sem erro, `DeleteAccountSection` navega (`router.push("/")`) para a landing — a sessão Clerk deixará de ser válida assim que o usuário for removido do Clerk. Em caso de erro, exibe toast e mantém o usuário na página de billing.
+- **Idempotência**: reentregas do webhook (ex.: retry do Clerk) para o mesmo `userId` já anonimizado não lançam erro — `DeleteUserAccountUseCase` trata usuário inexistente/já anonimizado como no-op.
+
 ---
 
 ## Componentes-chave Mapeados
@@ -394,6 +405,7 @@ Se `subscription.status = 'active'` ou `'past_due'`:
 | `ClipEditorModal` | `src/components/clip-editor-modal.tsx` | Editor de preset de legenda |
 | `PricingToggleTabs` | `src/components/billing/pricing-toggle-tabs.tsx` | Monthly/Annual toggle |
 | `ActiveSubscriptionCard` | `src/components/billing/active-subscription-card.tsx` | Card de assinatura ativa |
+| `DeleteAccountSection` | `src/components/dashboard/delete-account-section.tsx` | Zona de risco: excluir conta (confirmação via `AlertDialog`) |
 | `AppSidebar` | `src/components/dashboard/sidebar/app-sidebar.tsx` | Navegação lateral do dashboard |
 | `AccountSwitcher` | `src/components/dashboard/header/account-switcher.tsx` | Usuário logado, opções de conta |
 

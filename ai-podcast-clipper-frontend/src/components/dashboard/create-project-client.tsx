@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -210,33 +210,42 @@ export function CreateProjectClient({
 
   const router = useRouter();
 
-  const handleFetchMeta = async (targetUrl: string) => {
-    if (!targetUrl) return;
+  // useCallback (não só uma função solta no corpo do componente) de propósito:
+  // é dependência do useEffect de auto-fetch abaixo, e precisa manter
+  // identidade estável entre renders que não mudam `isConfigRoute`/`router`
+  // (ambos tipicamente estáveis) para não resetar o debounce do efeito a
+  // cada render não relacionado à URL (ex.: usuário editando os cortes
+  // manuais) — ver comentário no useEffect.
+  const handleFetchMeta = useCallback(
+    async (targetUrl: string) => {
+      if (!targetUrl) return;
 
-    setLoadingMeta(true);
+      setLoadingMeta(true);
 
-    if (!isConfigRoute) {
-      router.push(`/dashboard/new?url=${encodeURIComponent(targetUrl)}`);
-      return;
-    }
+      if (!isConfigRoute) {
+        router.push(`/dashboard/new?url=${encodeURIComponent(targetUrl)}`);
+        return;
+      }
 
-    try {
-      const res = await fetch(
-        `/api/youtube/info?url=${encodeURIComponent(targetUrl)}`,
-      );
-      const data = (await res.json()) as { error?: string; title?: string; durationSeconds?: number; thumbnailUrl?: string; };
-      if (!res.ok) throw new Error(data.error || "Failed to fetch metadata");
+      try {
+        const res = await fetch(
+          `/api/youtube/info?url=${encodeURIComponent(targetUrl)}`,
+        );
+        const data = (await res.json()) as { error?: string; title?: string; durationSeconds?: number; thumbnailUrl?: string; };
+        if (!res.ok) throw new Error(data.error || "Failed to fetch metadata");
 
-      setMetadata(data as VideoMetadata);
-      const total = Math.floor(data.durationSeconds || DEFAULT_SLICE_SECONDS);
-      setRange([0, Math.min(DEFAULT_SLICE_SECONDS, total)]);
-      setSliderPos({});
-    } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Erro desconhecido");
-    } finally {
-      setLoadingMeta(false);
-    }
-  };
+        setMetadata(data as VideoMetadata);
+        const total = Math.floor(data.durationSeconds || DEFAULT_SLICE_SECONDS);
+        setRange([0, Math.min(DEFAULT_SLICE_SECONDS, total)]);
+        setSliderPos({});
+      } catch (e: unknown) {
+        toast.error(e instanceof Error ? e.message : "Erro desconhecido");
+      } finally {
+        setLoadingMeta(false);
+      }
+    },
+    [isConfigRoute, router],
+  );
 
   // Auto-fetch quando a URL parece ser do YouTube
   useEffect(() => {
@@ -252,7 +261,7 @@ export function CreateProjectClient({
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [url, metadata, initialUrl]);
+  }, [url, metadata, initialUrl, handleFetchMeta]);
 
   const startSec = range[0];
   const endSec = range[1];

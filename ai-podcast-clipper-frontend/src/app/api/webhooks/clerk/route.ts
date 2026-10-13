@@ -1,8 +1,10 @@
 import { Webhook } from "svix";
 import { NextResponse } from "next/server";
 import { env } from "~/env";
-import { makeSyncUserUseCase } from "~/infrastructure/factories/use-case-factories";
-import { db } from "~/server/db";
+import {
+  makeSyncUserUseCase,
+  makeDeleteUserAccountUseCase,
+} from "~/infrastructure/factories/use-case-factories";
 import { logger } from "~/lib/observability/logger";
 import { withSpan } from "~/lib/observability/tracer";
 
@@ -93,13 +95,25 @@ async function handleClerkEvent(
     const { id } = data;
     if (id) {
       try {
-        await db.user.delete({
-          where: { id },
-        });
+        const deleteUserAccountUseCase = makeDeleteUserAccountUseCase();
+        await deleteUserAccountUseCase.execute({ userId: id });
       } catch (err) {
-        logger.warn("User could not be deleted or was already removed", {
+        // Ao contrário de user.created/user.updated (erro de validação,
+        // não vale retry), a limpeza de exclusão de conta é segura de
+        // repetir (idempotente: usuário já anonimizado, arquivos já
+        // deletados do storage são tolerados, assinatura já cancelada é
+        // ignorada). Por isso, diferente do catch de verificação de
+        // assinatura acima, aqui respondemos 5xx de propósito — mesmo
+        // padrão de resiliência do webhook do Stripe
+        // (`src/app/api/webhooks/stripe/route.ts`) — para que o Clerk
+        // reentregue o evento em vez de perder silenciosamente uma
+        // exclusão parcial (ex.: Stripe ou S3 fora do ar no momento).
+        logger.error("Failed to delete/anonymize user account", {
           userId: id,
           error: err,
+        });
+        return new NextResponse("Error: Failed to process account deletion", {
+          status: 500,
         });
       }
     }

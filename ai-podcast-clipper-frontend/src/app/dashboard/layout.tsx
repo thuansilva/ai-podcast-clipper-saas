@@ -50,18 +50,6 @@ export default async function DashboardLayout({
     }
   }
 
-  // Adapter for the template's users list
-  const users = [
-    {
-      id: userId,
-      name: user.email.split("@")[0] ?? "User",
-      email: user.email,
-      role: "User",
-      avatar: user.image ?? "",
-      status: "active" as const,
-    }
-  ];
-
   return (
     <TooltipProvider>
       <SidebarProvider>

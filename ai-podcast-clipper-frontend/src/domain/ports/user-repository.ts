@@ -23,6 +23,11 @@ export interface UpdateUserData {
   subscriptionCredits?: number;
   oneTimeCredits?: number;
   reservedCredits?: number;
+  /**
+   * Preenchido na anonimização da conta (ver `DeleteUserAccountUseCase`).
+   * `null` nunca é usado aqui (não existe "desfazer" a exclusão).
+   */
+  deletedAt?: Date;
 }
 
 export interface CreditsUpdateInput {

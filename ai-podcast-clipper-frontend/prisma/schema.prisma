@@ -27,6 +27,12 @@ model User {
   stripeCustomerId    String?             @unique
   image               String?
   plan                String              @default("STARTER") // "STARTER" ou "PRO" (ver PlanCatalogService)
+  // Marca o instante em que a conta foi excluída pelo usuário (via webhook
+  // `user.deleted` do Clerk, ver DeleteUserAccountUseCase). O registro do
+  // `User` nunca é removido do banco (preserva auditoria de
+  // CreditTransaction/Subscription) — em vez disso, email/nome/imagem são
+  // anonimizados e este campo é preenchido. `null` = conta ativa.
+  deletedAt           DateTime?
   subscription        Subscription?
   creditTransactions  CreditTransaction[]
 
@@ -56,6 +62,8 @@ model Subscription {
   updatedAt            DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
 }
 
 model CreditTransaction {
@@ -69,6 +77,7 @@ model CreditTransaction {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([type])
 }
 
 model UploadedFile {
@@ -100,6 +109,7 @@ model UploadedFile {
   userId String
 
   @@index([s3Key])
+  @@index([userId])
 }
 
 model Clip {
@@ -126,6 +136,8 @@ model Clip {
   userId String
 
   @@index([s3Key])
+  @@index([userId])
+  @@index([uploadedFileId])
 }
 
 model ProcessingOption {

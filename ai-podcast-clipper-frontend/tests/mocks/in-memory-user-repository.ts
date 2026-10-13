@@ -88,6 +88,7 @@ export class InMemoryUserRepository implements IUserRepository {
       ...(data.reservedCredits !== undefined && {
         reservedCredits: data.reservedCredits,
       }),
+      ...(data.deletedAt !== undefined && { deletedAt: data.deletedAt }),
     };
     this.users.set(userId, updated);
     return updated;

@@ -1,18 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { POST } from "~/app/api/webhooks/clerk/route";
-import { makeSyncUserUseCase } from "~/infrastructure/factories/use-case-factories";
-import { db } from "~/server/db";
+import {
+  makeSyncUserUseCase,
+  makeDeleteUserAccountUseCase,
+} from "~/infrastructure/factories/use-case-factories";
 
 vi.mock("~/infrastructure/factories/use-case-factories", () => ({
   makeSyncUserUseCase: vi.fn(),
-}));
-
-vi.mock("~/server/db", () => ({
-  db: {
-    user: {
-      delete: vi.fn(),
-    },
-  },
+  makeDeleteUserAccountUseCase: vi.fn(),
 }));
 
 // Mock svix Webhook class
@@ -28,11 +23,15 @@ vi.mock("svix", () => {
 
 describe("Clerk Webhook API Route", () => {
   const mockSyncExecute = vi.fn();
+  const mockDeleteAccountExecute = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(makeSyncUserUseCase).mockReturnValue({
       execute: mockSyncExecute,
+    } as any);
+    vi.mocked(makeDeleteUserAccountUseCase).mockReturnValue({
+      execute: mockDeleteAccountExecute,
     } as any);
   });
 
@@ -80,7 +79,7 @@ describe("Clerk Webhook API Route", () => {
     });
   });
 
-  it("deve processar evento user.deleted e excluir usuário do banco", async () => {
+  it("deve processar evento user.deleted chamando DeleteUserAccountUseCase", async () => {
     const payload = {
       type: "user.deleted",
       data: {
@@ -100,8 +99,32 @@ describe("Clerk Webhook API Route", () => {
 
     const res = await POST(req);
     expect(res.status).toBe(200);
-    expect(db.user.delete).toHaveBeenCalledWith({
-      where: { id: "user_clerk_delete_456" },
+    expect(mockDeleteAccountExecute).toHaveBeenCalledWith({
+      userId: "user_clerk_delete_456",
     });
+  });
+
+  it("deve retornar 500 (para o Clerk reentregar) se a limpeza da conta falhar", async () => {
+    mockDeleteAccountExecute.mockRejectedValueOnce(new Error("S3 fora do ar"));
+
+    const payload = {
+      type: "user.deleted",
+      data: {
+        id: "user_clerk_delete_fail",
+      },
+    };
+
+    const req = new Request("http://localhost:3000/api/webhooks/clerk", {
+      method: "POST",
+      headers: {
+        "svix-id": "msg_test_fail",
+        "svix-timestamp": "1234567890",
+        "svix-signature": "v1,signature",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const res = await POST(req);
+    expect(res.status).toBe(500);
   });
 });

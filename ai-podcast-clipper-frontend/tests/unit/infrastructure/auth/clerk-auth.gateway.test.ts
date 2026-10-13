@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { ClerkAuthGateway } from "~/infrastructure/auth/clerk-auth.gateway";
 import { UnauthorizedError } from "~/domain/errors/unauthorized-error";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: vi.fn(),
   currentUser: vi.fn(),
+  clerkClient: vi.fn(),
 }));
 
 describe("ClerkAuthGateway", () => {
@@ -72,6 +73,19 @@ describe("ClerkAuthGateway", () => {
 
       const user = await sut.getCurrentUser();
       expect(user).toBeNull();
+    });
+  });
+
+  describe("deleteUser", () => {
+    it("deve chamar clerkClient().users.deleteUser com o id informado", async () => {
+      const mockDeleteUser = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(clerkClient).mockResolvedValue({
+        users: { deleteUser: mockDeleteUser },
+      } as any);
+
+      await sut.deleteUser("user_clerk_to_delete");
+
+      expect(mockDeleteUser).toHaveBeenCalledWith("user_clerk_to_delete");
     });
   });
 });

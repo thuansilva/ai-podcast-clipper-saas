@@ -4,7 +4,6 @@ import type { Clip } from "@prisma/client";
 import { useEffect, useState } from "react";
 import {
   Calendar,
-  Clock,
   Download,
   Info,
   Loader2,
@@ -16,7 +15,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
 import { deleteClip, getClipPlayUrl } from "~/actions/generation";
 import { ClipEditorModal } from "./clip-editor-modal";
 import { ClipDetailsModal } from "./clip-details-modal";
