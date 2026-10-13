@@ -234,6 +234,15 @@ só não são mais editáveis pelo usuário. `GENRE`, por outro lado, passou a t
 efeito real: condiciona o prompt de detecção de momentos virais no backend
 (trabalho em paralelo, mesma rodada).
 
+**Atualização (2026-10-13):** o seletor `GENRE` fica escondido quando o modo
+de corte é "Manual" (`isManual === true`, ver seção 2.2.1 abaixo) — o corte
+manual nunca passa pela IA de identificação de momentos (RN-PIPE-MANUAL-08),
+então o gênero não tem efeito nenhum nesse caso; mostrá-lo sugeriria ao
+usuário um controle que não faz nada, mesmo raciocínio que já tinha sido
+aplicado a `CLIP_MODEL`/`ASPECT_RATIO`. Nenhuma mudança no valor persistido
+(continua sendo enviado com o último valor escolhido/default; o backend só o
+ignora em modo manual).
+
 #### 2.2.1 Modo dos cortes: Automático ou Manual (RF-PIPE-08)
 No topo do card "Configurações do Corte" (`CreateProjectClient`) há um radio group
 "Como os cortes serão definidos":

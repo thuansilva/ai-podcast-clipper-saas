@@ -4,6 +4,14 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 
 ---
 
+### 2026-10-13: Esconde o seletor de Gênero no modo de corte Manual
+- **Commit(s):** nenhum ainda — alterações deixadas no working directory para revisão do usuário
+- **Contexto:** o corte manual nunca passa pela IA de identificação de momentos virais (`core/video_pipeline.py`, `if request.mode == "manual"` pula direto pra `clips_to_process = request.manual_cuts`, sem chamar `moments_provider.identify_moments`) — então o `genre` (implementado mais cedo nesta mesma data) não tem efeito nenhum nesse modo. O usuário percebeu isso e pediu para esconder o seletor no modo manual, mesmo raciocínio já aplicado a `CLIP_MODEL`/`ASPECT_RATIO`.
+- **O que foi feito (TDD, RED→GREEN):** `src/components/dashboard/create-project-client.tsx` — o bloco do seletor "Gênero do Conteúdo" passou a ser renderizado só quando `!isManual` (mesma flag já usada para mostrar/esconder o editor de cortes manuais). Nenhuma mudança no valor persistido — continua sendo enviado com o último valor escolhido/default, só o backend já o ignora em modo manual.
+- **Teste:** `tests/unit/components/create-project-client.test.tsx`, teste "alternar para Manual mostra o editor com uma linha vazia e esconde o Fatiador" ganhou 2 asserções: `queryByText("Gênero do Conteúdo")` ausente em modo manual, presente de volta ao voltar para automático. RED confirmado (teste falhava antes da mudança, com o elemento presente mesmo em modo manual) antes de implementar.
+- **Verificado:** `npm run check` limpo; `npm run test` 980 passed/8 skipped (mesma contagem de antes — só assertions adicionadas a um teste existente, nenhum teste novo).
+- **Arquivos alterados:** `ai-podcast-clipper-frontend/src/components/dashboard/create-project-client.tsx`, `ai-podcast-clipper-frontend/tests/unit/components/create-project-client.test.tsx`, `docs/arquitetura/visao-jornada-usuario.md`, este arquivo.
+
 ### 2026-10-13: UI de configuração de projeto para de oferecer "Modelo do Clipe" e "Proporção" (sem efeito real); corrige fallback errado de `genre`
 - **Commit(s):** nenhum ainda — alterações deixadas no working directory para revisão do usuário
 - **Contexto:** o usuário percebeu que a tela de configuração de projeto (`create-project-client.tsx`, usada em criação e edição/retry) mostrava 3 seletores — Gênero, Modelo do Clipe (Modo de IA) e Proporção (Aspect Ratio) — mas só o Gênero teria efeito real: `aspect_ratio`/`auto_zoom` são "NOT YET implemented" no backend (`core/schemas.py::ProcessVideoRequest`) e `clipModel` nunca é lido por `process-video-payload.service.ts` (documentado no próprio código). Outro trabalho em paralelo (fora desta tarefa, backend Python) está implementando o Gênero de verdade (prompt condicionado ao gênero na detecção de momentos virais via Gemini). Decisão de produto: manter Gênero (agora funcional) e **remover** os dois seletores sem efeito, que só confundiam.

@@ -407,10 +407,15 @@ describe("CreateProjectClient - modo manual de cortes", () => {
     expect(screen.queryByTestId("range-slider")).not.toBeInTheDocument();
     // a descrição do card não afirma mais que os cortes são gerados por IA
     expect(screen.queryByText(/gerados por IA/i)).not.toBeInTheDocument();
+    // corte manual nunca passa pela IA de momentos virais (RN-PIPE-MANUAL-08),
+    // então o gênero não tem efeito nenhum nesse modo — escondido para não
+    // confundir o usuário.
+    expect(screen.queryByText("Gênero do Conteúdo")).not.toBeInTheDocument();
 
     fireEvent.click(autoRadio());
     expect(screen.queryByLabelText("Início do corte 1")).not.toBeInTheDocument();
     expect(screen.getByText("Fatiador Inteligente")).toBeInTheDocument();
+    expect(screen.getByText("Gênero do Conteúdo")).toBeInTheDocument();
   });
 
   it("adiciona e remove linhas de corte", async () => {

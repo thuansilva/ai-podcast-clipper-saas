@@ -750,40 +750,46 @@ export function CreateProjectClient({
                       real no backend (condiciona o prompt de detecção de
                       momentos virais). "Modelo do Clipe" e "Proporção" foram
                       removidos da UI (decisão de produto, 2026-10-13): ver
-                      comentário acima de `clipModel`/`aspectRatio`. */}
-                  <div className="max-w-xs space-y-2">
-                    <Label
-                      htmlFor="select-genre"
-                      className="text-sm font-medium text-[var(--marfim)]"
-                    >
-                      Gênero do Conteúdo
-                    </Label>
-                    <select
-                      id="select-genre"
-                      aria-label="Gênero do Conteúdo"
-                      value={genre}
-                      onChange={(e) => setGenreOverride(e.target.value)}
-                    >
-                      {options.GENRE && options.GENRE.length > 0 ? (
-                        options.GENRE.map((opt) => (
+                      comentário acima de `clipModel`/`aspectRatio`. Escondido
+                      no modo manual: o corte manual nunca passa pela IA de
+                      momentos virais (RN-PIPE-MANUAL-08), então o gênero não
+                      tem efeito nenhum nesse caso — mostrá-lo confundiria o
+                      usuário (mesmo raciocínio de "Modelo do Clipe"/"Proporção"). */}
+                  {!isManual && (
+                    <div className="max-w-xs space-y-2">
+                      <Label
+                        htmlFor="select-genre"
+                        className="text-sm font-medium text-[var(--marfim)]"
+                      >
+                        Gênero do Conteúdo
+                      </Label>
+                      <select
+                        id="select-genre"
+                        aria-label="Gênero do Conteúdo"
+                        value={genre}
+                        onChange={(e) => setGenreOverride(e.target.value)}
+                      >
+                        {options.GENRE && options.GENRE.length > 0 ? (
+                          options.GENRE.map((opt) => (
+                            <option
+                              key={opt.id || opt.value}
+                              value={opt.value}
+                              className="bg-[var(--superficie)] text-[var(--marfim)]"
+                            >
+                              {opt.label}
+                            </option>
+                          ))
+                        ) : (
                           <option
-                            key={opt.id || opt.value}
-                            value={opt.value}
+                            value=""
                             className="bg-[var(--superficie)] text-[var(--marfim)]"
                           >
-                            {opt.label}
+                            Padrão
                           </option>
-                        ))
-                      ) : (
-                        <option
-                          value=""
-                          className="bg-[var(--superficie)] text-[var(--marfim)]"
-                        >
-                          Padrão
-                        </option>
-                      )}
-                    </select>
-                  </div>
+                        )}
+                      </select>
+                    </div>
+                  )}
 
                   {/* Auto Zoom */}
                   <div className="flex items-center justify-between border-t border-[var(--linha)] pt-3">
