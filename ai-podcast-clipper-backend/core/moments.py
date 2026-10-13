@@ -31,14 +31,77 @@ The transcript is as follows:
 {transcript_json}
 """
 
+# Marker in `_IDENTIFY_MOMENTS_PROMPT_TEMPLATE` right before the generic
+# rules list. Genre-specific guidance (`_GENRE_INSTRUCTIONS` below) is
+# spliced in right before it, so it reads as an extra rule rather than a
+# disconnected afterthought.
+_RULES_MARKER = "Please adhere to the following rules:"
 
-def identify_moments(transcript: list, gemini_client: "genai.Client | None" = None) -> MomentsExtraction:
-    """Extract viral clips between 30-60 seconds from transcript using Gemini Structured Outputs."""
+# RF-PIPE-GENRE: optional per-genre steering of viral moment identification.
+# Keys are exactly the 4 values the frontend's `ProcessingOption` (type
+# `GENRE`) offers (ai-podcast-clipper-frontend/prisma/seed.ts): "humor",
+# "perguntas", "jogos", "outros". Deliberately NOT in this dict: "outros",
+# `None`, and any unknown/future value — all of those fall through to the
+# generic hook/question-answer prompt above, unchanged (regression-tested in
+# tests/test_moments.py).
+_GENRE_INSTRUCTIONS: dict[str, str] = {
+    "humor": (
+        "This podcast's genre is comedy/humor. Prioritize jokes, punchlines and "
+        "moments of genuine laughter — a clip built around a strong joke or funny "
+        "reaction is just as valid as one built around a question, and should be "
+        "preferred over a weaker hook/question-answer moment."
+    ),
+    "perguntas": (
+        "This podcast's genre is Q&A/interview. Reinforce the hook/question-answer "
+        "structure above: strongly prefer clips that open with a clear, engaging "
+        "question and conclude with its direct answer."
+    ),
+    "jogos": (
+        "This podcast's genre is gaming. Prioritize reactions, hype moments and "
+        "in-game highlights (plays, fails, wins) — a clip built around a big "
+        "reaction or gameplay moment is just as valid as one built around a "
+        "question, and should be preferred over a weaker hook/question-answer "
+        "moment."
+    ),
+}
+
+
+def _build_identify_moments_prompt(transcript: list, genre: "str | None" = None) -> str:
+    """Build the moment-identification prompt for `transcript`, optionally
+    steered by `genre`. Shared by both LLM providers (core/moments.py and
+    core/claude_moments.py) so they stay in parity by construction instead
+    of by convention — see core/moments_factory.py.
+
+    `genre` outside `_GENRE_INSTRUCTIONS` (including `None`, `"outros"`, and
+    any unrecognized value) leaves the prompt byte-for-byte identical to the
+    original generic template — zero behavior change for those cases.
+    """
     import json
 
     prompt = _IDENTIFY_MOMENTS_PROMPT_TEMPLATE.format(
         transcript_json=json.dumps(transcript) if isinstance(transcript, (list, dict)) else str(transcript)
     )
+
+    genre_instruction = _GENRE_INSTRUCTIONS.get(genre or "")
+    if genre_instruction:
+        prompt = prompt.replace(
+            _RULES_MARKER, genre_instruction + "\n\n" + _RULES_MARKER, 1
+        )
+    return prompt
+
+
+def identify_moments(
+    transcript: list,
+    gemini_client: "genai.Client | None" = None,
+    genre: "str | None" = None,
+) -> MomentsExtraction:
+    """Extract viral clips between 30-60 seconds from transcript using Gemini Structured Outputs.
+
+    `genre` (RF-PIPE-GENRE) optionally steers which kind of moment the model
+    prioritizes — see `_GENRE_INSTRUCTIONS`. `None`/unrecognized values keep
+    the original generic behavior.
+    """
+    prompt = _build_identify_moments_prompt(transcript, genre=genre)
 
     client = gemini_client
     if client is None:
@@ -73,5 +136,5 @@ class GeminiMomentsProvider:
     def __init__(self, gemini_client: "genai.Client | None" = None) -> None:
         self.gemini_client = gemini_client
 
-    def identify_moments(self, transcript: list) -> MomentsExtraction:
-        return identify_moments(transcript, gemini_client=self.gemini_client)
+    def identify_moments(self, transcript: list, genre: "str | None" = None) -> MomentsExtraction:
+        return identify_moments(transcript, gemini_client=self.gemini_client, genre=genre)

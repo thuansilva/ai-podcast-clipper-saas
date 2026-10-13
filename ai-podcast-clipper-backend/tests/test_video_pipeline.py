@@ -405,6 +405,52 @@ class TestMomentsProviderInjection:
         assert "moments_provider" in parameters
 
 
+class TestGenrePropagation:
+    """RF-PIPE-GENRE: `request.genre` reaches the injected `MomentsProvider`
+    unchanged, so provider-level prompt steering (core/moments.py,
+    core/claude_moments.py) actually receives it."""
+
+    @pytest.mark.parametrize("genre", ["humor", "perguntas", "jogos", "outros"])
+    def test_auto_mode_forwards_request_genre_to_the_provider(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path, genre: str
+    ):
+        fake_provider = FakeMomentsProvider(_gemini_extraction())
+        request = ProcessVideoRequest(
+            s3_key="uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4",
+            mode="auto",
+            genre=genre,
+        )
+
+        _run(request, tmp_path, transcriber, moments_provider=fake_provider)
+
+        assert fake_provider.genres == [genre]
+
+    def test_auto_mode_forwards_none_when_genre_is_omitted(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        fake_provider = FakeMomentsProvider(_gemini_extraction())
+        request = ProcessVideoRequest(
+            s3_key="uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4",
+            mode="auto",
+        )
+
+        _run(request, tmp_path, transcriber, moments_provider=fake_provider)
+
+        assert fake_provider.genres == [None]
+
+    def test_manual_mode_never_calls_the_provider_so_genre_is_irrelevant(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        fake_provider = FakeMomentsProvider(_gemini_extraction())
+        payload = load_manual_cuts_payload()
+        payload["genre"] = "humor"
+        request = ProcessVideoRequest.model_validate(payload)
+
+        _run(request, tmp_path, transcriber, moments_provider=fake_provider)
+
+        assert fake_provider.genres == []
+
+
 class TestResolveInputVideoPath:
     """RNF-SEC-19: core/video_pipeline.py::resolve_input_video_path always
     downloads `s3_key` through the storage port into base_dir/input.mp4. The

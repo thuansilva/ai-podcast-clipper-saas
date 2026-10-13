@@ -67,7 +67,12 @@ export function buildProcessVideoPayload({
   return {
     s3_key: video.s3Key,
     preset: video.subtitlePreset ?? eventData.preset ?? "NONE",
-    genre: video.genre ?? "auto",
+    // "outros" é o gênero default/`isDefault: true` em `prisma/seed.ts`
+    // (valores reais: "humor" | "perguntas" | "jogos" | "outros"). "auto" NÃO
+    // é um valor válido de gênero — era copy-paste do default de `clipModel`
+    // (esse sim usa "auto" de verdade) e passou despercebido porque `genre`
+    // não tinha efeito nenhum no backend até o gênero real ser implementado.
+    genre: video.genre ?? "outros",
     aspect_ratio: video.aspectRatio ?? "9:16",
     auto_zoom: video.autoZoom ?? true,
     mode: hasManualCuts ? "manual" : "auto",

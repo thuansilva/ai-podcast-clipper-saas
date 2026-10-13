@@ -5,22 +5,29 @@ adapter. Selectable alongside Gemini via MOMENTS_PROVIDER=claude
 503 UNAVAILABLE under Google-side load.
 """
 
-import json
 import os
 
 import anthropic
 
-from core.moments import _IDENTIFY_MOMENTS_PROMPT_TEMPLATE
+from core.moments import _build_identify_moments_prompt
 from core.schemas import MomentsExtraction
 
 _MOMENTS_TOOL_NAME = "extract_viral_moments"
 
 
-def identify_moments(transcript: list, claude_client: "anthropic.Anthropic | None" = None) -> MomentsExtraction:
-    """Extract viral clips between 30-60 seconds from transcript using Claude forced tool-use."""
-    prompt = _IDENTIFY_MOMENTS_PROMPT_TEMPLATE.format(
-        transcript_json=json.dumps(transcript) if isinstance(transcript, (list, dict)) else str(transcript)
-    )
+def identify_moments(
+    transcript: list,
+    claude_client: "anthropic.Anthropic | None" = None,
+    genre: "str | None" = None,
+) -> MomentsExtraction:
+    """Extract viral clips between 30-60 seconds from transcript using Claude forced tool-use.
+
+    `genre` (RF-PIPE-GENRE) is forwarded to the shared prompt builder
+    (`core.moments._build_identify_moments_prompt`) so this provider stays
+    in parity with `core.moments.identify_moments` (Gemini) — see
+    `core/moments_factory.py`.
+    """
+    prompt = _build_identify_moments_prompt(transcript, genre=genre)
 
     client = claude_client
     if client is None:
@@ -53,5 +60,5 @@ class ClaudeMomentsProvider:
     def __init__(self, claude_client: "anthropic.Anthropic | None" = None) -> None:
         self.claude_client = claude_client
 
-    def identify_moments(self, transcript: list) -> MomentsExtraction:
-        return identify_moments(transcript, claude_client=self.claude_client)
+    def identify_moments(self, transcript: list, genre: "str | None" = None) -> MomentsExtraction:
+        return identify_moments(transcript, claude_client=self.claude_client, genre=genre)

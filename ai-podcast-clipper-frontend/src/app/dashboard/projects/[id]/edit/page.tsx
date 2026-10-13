@@ -26,9 +26,12 @@ export default async function EditProjectPage(props: { params: Promise<{ id: str
 
   const initialSettings = {
     preset: project.subtitlePreset || "HORMOZI",
-    genre: project.genre || "Auto",
-    clipModel: project.clipModel || "auto",
-    aspectRatio: project.aspectRatio || "9:16",
+    // "" (não um literal "Auto"/"auto") quando o projeto não tem gênero
+    // salvo: deixa o componente cair no próprio default de `options.GENRE`
+    // (`getDefaultOptionValue`, que resolve para a opção `isDefault: true`
+    // no banco, ex. "outros"). Um literal fixo aqui não bateria com nenhum
+    // `<option>` real e deixaria o `<select>` sem seleção visível.
+    genre: project.genre || "",
     autoZoom: project.autoZoom ?? true,
     sliceStartTime: project.sliceStartTime,
     sliceEndTime: project.sliceEndTime,

@@ -89,7 +89,7 @@ flowchart TD
     FetchMeta --> MetadataLoaded["Thumbnail + Duração exibidos"]
     
     MetadataLoaded --> SliceConfig["Slice Configuration:<br/>Slider range (início/fim) em segundos, rótulos mm:ss ou h:mm:ss"]
-    SliceConfig --> Options["Opções Dinâmicas:<br/>- GENRE (dropdown)<br/>- CLIP_MODEL (dropdown)<br/>- ASPECT_RATIO (dropdown)<br/>- AUTO_ZOOM (toggle)"]
+    SliceConfig --> Options["Opções Dinâmicas:<br/>- GENRE (dropdown, com efeito real desde 2026-10-13)<br/>- AUTO_ZOOM (toggle)"]
     Options --> CreditEstimate["Estimativa de Créditos a Debitar"]
     
     CreditEstimate --> CheckCredits{Créditos<br/>suficientes?}
@@ -210,19 +210,29 @@ flowchart TD
   RF-SEC-02. Nos dois casos, `CreateProjectClient.handleFetchMeta` exibe um
   toast com a mensagem de erro retornada pela API.
 
-**Opções Dinâmicas**:
+**Opções Dinâmicas** (as únicas escolhíveis pelo usuário nesta tela):
 ```
 GENRE
-  └─ DOCUMENTARY, COMEDY, EDUCATIONAL, MOTIVATIONAL, etc.
-CLIP_MODEL
-  └─ VIRALITY (padrão), CONSISTENCY, BALANCED
-ASPECT_RATIO
-  └─ 9:16 (default), 16:9, 1:1
+  └─ humor, perguntas, jogos, outros (default) — ver prisma/seed.ts
 AUTO_ZOOM
   └─ toggle (default: true)
 ```
 
 (Busca de opções: `getProcessingOptions()` → `ProcessingOption` tabela)
+
+**Atualização (2026-10-13 — decisão de produto, não bug):** `CLIP_MODEL`
+("Modelo do Clipe (Modo de IA)") e `ASPECT_RATIO` ("Proporção") deixaram de
+ser seletores nesta tela. Eles nunca tiveram efeito real no pipeline —
+`clipModel` nunca é lido por `process-video-payload.service.ts`, e
+`aspect_ratio` é aceito pelo schema do backend
+(`core/schemas.py::ProcessVideoRequest`) mas "NOT YET implemented" — e expor
+uma escolha sem efeito confundia o usuário. Os dois campos continuam
+existindo em `UploadedFile.clipModel`/`UploadedFile.aspectRatio` e são
+persistidos a cada criação/retry com um valor fixo (mesmo default de antes:
+`getDefaultOptionValue(options.CLIP_MODEL)`/`getDefaultOptionValue(options.ASPECT_RATIO)`),
+só não são mais editáveis pelo usuário. `GENRE`, por outro lado, passou a ter
+efeito real: condiciona o prompt de detecção de momentos virais no backend
+(trabalho em paralelo, mesma rodada).
 
 #### 2.2.1 Modo dos cortes: Automático ou Manual (RF-PIPE-08)
 No topo do card "Configurações do Corte" (`CreateProjectClient`) há um radio group
@@ -279,7 +289,9 @@ No topo do card "Configurações do Corte" (`CreateProjectClient`) há um radio 
 - **Padrão**: primeiros 5 minutos ou duração do vídeo, se menor
 
 #### 2.4 Estimativa de Créditos
-- Backend calcula (baseado no `clipModel`, duração do slice)
+- Calculado no frontend (`calculateVideoCredits`/`calculateManualCutsCredits`,
+  baseado na duração do slice ou soma dos cortes manuais — não no `clipModel`,
+  que não influencia custo) e re-validado pelo Inngest na reserva.
 - **Se insuficientes**:
   - Toast: "Créditos insuficientes"
   - Botão: "Ir para Billing" → `/dashboard/billing`

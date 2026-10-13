@@ -130,15 +130,28 @@ class TestProcessVideoRequestUnknownFields:
 
 
 class TestProcessVideoRequestForwardCompatibilityFields:
-    def test_accepts_aspect_ratio_auto_zoom_and_genre_without_effect(self):
-        # RN-PIPE-MANUAL-12 / D1 / D3: accepted by the contract, no enum for aspect_ratio.
+    def test_accepts_aspect_ratio_and_auto_zoom_without_effect(self):
+        # RN-PIPE-MANUAL-12 / D1 / D3: accepted by the contract, no enum, no
+        # functional effect on the pipeline (still a gap, unlike genre below).
         payload = _legacy_payload()
         payload["aspect_ratio"] = "16:9"
         payload["auto_zoom"] = True
-        payload["genre"] = "podcast"
         request = ProcessVideoRequest.model_validate(payload)
         assert request.aspect_ratio == "16:9"
         assert request.auto_zoom is True
+
+    def test_accepts_genre_as_a_free_string_at_the_schema_level(self):
+        # RF-PIPE-GENRE: the schema itself places no enum/allowlist constraint
+        # on `genre` (any string, including values outside the 4 the frontend
+        # offers, passes here) — but unlike aspect_ratio/auto_zoom, `genre`
+        # now has a real functional effect downstream in the moments
+        # identification prompt. See core/moments.py::_GENRE_INSTRUCTIONS and
+        # tests/test_moments.py for the behavior per recognized value;
+        # unrecognized values (like "podcast" here) fall back to the generic
+        # prompt, same as before this field had any effect.
+        payload = _legacy_payload()
+        payload["genre"] = "podcast"
+        request = ProcessVideoRequest.model_validate(payload)
         assert request.genre == "podcast"
 
     def test_forward_compat_fields_are_optional(self):

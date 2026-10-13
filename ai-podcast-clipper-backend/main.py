@@ -166,11 +166,11 @@ class AiPodcastClipper:
         self.storage = create_object_storage()
         self.moments_provider = create_moments_provider(gemini_client=self.gemini_client)
 
-    def identify_moments(self, transcript: list) -> MomentsExtraction:
+    def identify_moments(self, transcript: list, genre: "str | None" = None) -> MomentsExtraction:
         """Thin delegate to core.moments so this stays testable/instantiable
         as a plain class (see tests/test_gemini_schema.py)."""
         return core_identify_moments(
-            transcript, gemini_client=getattr(self, "gemini_client", None)
+            transcript, gemini_client=getattr(self, "gemini_client", None), genre=genre
         )
 
     @modal.fastapi_endpoint(method="POST")

@@ -96,9 +96,13 @@ def run_video_processing_pipeline(
         print(f"Manual mode: processing {len(clips_to_process)} user-defined cuts")
     else:
         # 2. Identify moments for clips using the configured provider
-        # (Gemini/Claude — core/moments_factory.py)
+        # (Gemini/Claude — core/moments_factory.py). `request.genre`
+        # (RF-PIPE-GENRE) optionally steers which kind of moment is
+        # prioritized; `None`/unrecognized values keep the generic behavior.
         print("Identifying clip moments...")
-        moments_extraction = moments_provider.identify_moments(transcript_segments)
+        moments_extraction = moments_provider.identify_moments(
+            transcript_segments, genre=request.genre
+        )
         clips_to_process = moments_extraction.clips[:clips_limit]
         print(f"Identified {len(clips_to_process)} candidate clips")
 

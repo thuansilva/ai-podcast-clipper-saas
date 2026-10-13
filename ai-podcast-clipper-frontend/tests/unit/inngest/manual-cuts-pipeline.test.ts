@@ -179,7 +179,7 @@ describe("Inngest Manual Cuts Pipeline (Unit)", () => {
     expect(parsedBody).toEqual({
       s3_key: "uploads/file-123/video.mp4",
       preset: "HORMOZI",
-      genre: "auto",
+      genre: "outros",
       aspect_ratio: "9:16",
       auto_zoom: true,
       mode: "manual",

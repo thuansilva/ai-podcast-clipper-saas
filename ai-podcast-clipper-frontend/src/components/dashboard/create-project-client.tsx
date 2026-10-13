@@ -59,8 +59,11 @@ interface CreateProjectClientProps {
   initialSettings?: {
     preset: string;
     genre: string;
-    clipModel: string;
-    aspectRatio: string;
+    // `clipModel`/`aspectRatio` não são mais lidos daqui: não têm seletor na
+    // UI (ver comentário acima de `clipModel`/`aspectRatio` no corpo do
+    // componente). Quem ainda os envia (ex. `edit/page.tsx`) pode continuar
+    // fazendo isso sem erro — o TypeScript permite campos extra em objetos
+    // passados por variável — mas eles são ignorados.
     autoZoom: boolean;
     sliceStartTime?: number;
     sliceEndTime?: number;
@@ -109,28 +112,29 @@ export function CreateProjectClient({
     return [0, Math.min(DEFAULT_SLICE_SECONDS, total ?? DEFAULT_SLICE_SECONDS)];
   });
   const [preset, setPreset] = useState(initialSettings?.preset || "HORMOZI");
-  // `genre`/`clipModel`/`aspectRatio` guardam apenas a escolha explícita do
-  // usuário ("override"); o valor efetivamente usado é derivado durante a
-  // renderização, caindo para o default de `options` quando não há escolha
-  // própria ainda. Isso substitui o antigo useEffect que fazia a mesma coisa
-  // de forma síncrona após a montagem (o que causava uma renderização extra
-  // e é desencorajado por `react-hooks/set-state-in-effect`) — e também
-  // continua correto se `options` só ficar disponível depois do primeiro
-  // render.
+  // `genre` guarda apenas a escolha explícita do usuário ("override"); o
+  // valor efetivamente usado é derivado durante a renderização, caindo para
+  // o default de `options` quando não há escolha própria ainda. Isso
+  // substitui o antigo useEffect que fazia a mesma coisa de forma síncrona
+  // após a montagem (o que causava uma renderização extra e é desencorajado
+  // por `react-hooks/set-state-in-effect`) — e também continua correto se
+  // `options` só ficar disponível depois do primeiro render.
   const [genreOverride, setGenreOverride] = useState(
     () => initialSettings?.genre || "",
   );
-  const [clipModelOverride, setClipModelOverride] = useState(
-    () => initialSettings?.clipModel || "",
-  );
-  const [aspectRatioOverride, setAspectRatioOverride] = useState(
-    () => initialSettings?.aspectRatio || "",
-  );
   const genre = genreOverride || getDefaultOptionValue(options.GENRE);
-  const clipModel =
-    clipModelOverride || getDefaultOptionValue(options.CLIP_MODEL);
-  const aspectRatio =
-    aspectRatioOverride || getDefaultOptionValue(options.ASPECT_RATIO);
+  // `clipModel`/`aspectRatio` (Modelo do Clipe / Proporção) não têm seletor:
+  // o backend ainda não implementa esses campos de verdade (ver
+  // `ai-podcast-clipper-backend/core/schemas.py::ProcessVideoRequest`, campos
+  // "NOT YET implemented", e `process-video-payload.service.ts`, onde
+  // `clipModel` "NUNCA é lido"). Oferecer escolha ao usuário para algo sem
+  // efeito real só confundia (decisão de produto, 2026-10-13 — ver
+  // checklist-go-live.md). Mantemos constantes fixas (mesmo default que já
+  // era usado) só para preencher as colunas que `UpdateUploadedFileInput`/
+  // o payload de criação ainda esperam; não vale a pena migrar o banco para
+  // removê-las agora, já que o backend já as ignora com segurança.
+  const clipModel = getDefaultOptionValue(options.CLIP_MODEL) || "auto";
+  const aspectRatio = getDefaultOptionValue(options.ASPECT_RATIO) || "9:16";
   const [autoZoom, setAutoZoom] = useState(initialSettings?.autoZoom ?? true);
 
   const [processing, setProcessing] = useState(false);
@@ -742,120 +746,43 @@ export function CreateProjectClient({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    {/* Gênero */}
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="select-genre"
-                        className="text-sm font-medium text-[var(--marfim)]"
-                      >
-                        Gênero do Conteúdo
-                      </Label>
-                      <select
-                        id="select-genre"
-                        aria-label="Gênero do Conteúdo"
-                        value={genre}
-                        onChange={(e) => setGenreOverride(e.target.value)}
-                      >
-                        {options.GENRE && options.GENRE.length > 0 ? (
-                          options.GENRE.map((opt) => (
-                            <option
-                              key={opt.id || opt.value}
-                              value={opt.value}
-                              className="bg-[var(--superficie)] text-[var(--marfim)]"
-                            >
-                              {opt.label}
-                            </option>
-                          ))
-                        ) : (
+                  {/* Gênero: único seletor de "Configurações do Corte" com efeito
+                      real no backend (condiciona o prompt de detecção de
+                      momentos virais). "Modelo do Clipe" e "Proporção" foram
+                      removidos da UI (decisão de produto, 2026-10-13): ver
+                      comentário acima de `clipModel`/`aspectRatio`. */}
+                  <div className="max-w-xs space-y-2">
+                    <Label
+                      htmlFor="select-genre"
+                      className="text-sm font-medium text-[var(--marfim)]"
+                    >
+                      Gênero do Conteúdo
+                    </Label>
+                    <select
+                      id="select-genre"
+                      aria-label="Gênero do Conteúdo"
+                      value={genre}
+                      onChange={(e) => setGenreOverride(e.target.value)}
+                    >
+                      {options.GENRE && options.GENRE.length > 0 ? (
+                        options.GENRE.map((opt) => (
                           <option
-                            value=""
+                            key={opt.id || opt.value}
+                            value={opt.value}
                             className="bg-[var(--superficie)] text-[var(--marfim)]"
                           >
-                            Padrão
+                            {opt.label}
                           </option>
-                        )}
-                      </select>
-                    </div>
-
-                    {/* Modelo do Clipe */}
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="select-clip-model"
-                        className="text-sm font-medium text-[var(--marfim)]"
-                      >
-                        Modelo do Clipe (Modo de IA)
-                      </Label>
-                      <select
-                        id="select-clip-model"
-                        aria-label="Modelo do Clipe"
-                        value={clipModel}
-                        onChange={(e) => setClipModelOverride(e.target.value)}
-                      >
-                        {options.CLIP_MODEL && options.CLIP_MODEL.length > 0 ? (
-                          options.CLIP_MODEL.map((opt) => (
-                            <option
-                              key={opt.id || opt.value}
-                              value={opt.value}
-                              className="bg-[var(--superficie)] text-[var(--marfim)]"
-                            >
-                              {opt.label}
-                            </option>
-                          ))
-                        ) : (
-                          <>
-                            <option
-                              value="auto"
-                              className="bg-[var(--superficie)] text-[var(--marfim)]"
-                            >
-                              Padrão
-                            </option>
-                            <option
-                              value="face_focus"
-                              className="bg-[var(--superficie)] text-[var(--marfim)]"
-                            >
-                              Foco no enquadramento
-                            </option>
-                          </>
-                        )}
-                      </select>
-                    </div>
-
-                    {/* Proporção */}
-                    <div className="space-y-2">
-                      <Label
-                        htmlFor="select-aspect-ratio"
-                        className="text-sm font-medium text-[var(--marfim)]"
-                      >
-                        Proporção (Aspect Ratio)
-                      </Label>
-                      <select
-                        id="select-aspect-ratio"
-                        aria-label="Proporção"
-                        value={aspectRatio}
-                        onChange={(e) => setAspectRatioOverride(e.target.value)}
-                      >
-                        {options.ASPECT_RATIO &&
-                        options.ASPECT_RATIO.length > 0 ? (
-                          options.ASPECT_RATIO.map((opt) => (
-                            <option
-                              key={opt.id || opt.value}
-                              value={opt.value}
-                              className="bg-[var(--superficie)] text-[var(--marfim)]"
-                            >
-                              {opt.label}
-                            </option>
-                          ))
-                        ) : (
-                          <option
-                            value="9:16"
-                            className="bg-[var(--superficie)] text-[var(--marfim)]"
-                          >
-                            9:16 (Vertical)
-                          </option>
-                        )}
-                      </select>
-                    </div>
+                        ))
+                      ) : (
+                        <option
+                          value=""
+                          className="bg-[var(--superficie)] text-[var(--marfim)]"
+                        >
+                          Padrão
+                        </option>
+                      )}
+                    </select>
                   </div>
 
                   {/* Auto Zoom */}

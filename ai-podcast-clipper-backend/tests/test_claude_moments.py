@@ -10,7 +10,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from core.claude_moments import ClaudeMomentsProvider, identify_moments
+from core.moments import _build_identify_moments_prompt
 from core.schemas import MomentsExtraction
+
+DUMMY_TRANSCRIPT = [{"start": 15.0, "end": 15.5, "word": "Everything"}]
 
 
 def _tool_use_response(clips_payload: dict) -> MagicMock:
@@ -121,6 +124,88 @@ class TestIdentifyMoments:
 
         _, call_kwargs = mock_client.messages.create.call_args
         assert call_kwargs["model"] == "claude-custom-model"
+
+
+class TestGenreSteering:
+    """RF-PIPE-GENRE: core/claude_moments.py reuses
+    core/moments.py::_build_identify_moments_prompt, so it is in parity with
+    the Gemini provider (core/moments.py) by construction — see
+    core/moments_factory.py."""
+
+    @pytest.mark.parametrize(
+        "genre,expected_snippet",
+        [
+            ("humor", "comedy/humor"),
+            ("perguntas", "Q&A/interview"),
+            ("jogos", "gaming"),
+        ],
+    )
+    def test_known_genre_is_forwarded_into_the_claude_message_content(
+        self, genre: str, expected_snippet: str
+    ):
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _tool_use_response({"clips": []})
+
+        identify_moments(DUMMY_TRANSCRIPT, claude_client=mock_client, genre=genre)
+
+        _, call_kwargs = mock_client.messages.create.call_args
+        prompt_sent = call_kwargs["messages"][0]["content"]
+        assert expected_snippet in prompt_sent
+        assert prompt_sent == _build_identify_moments_prompt(DUMMY_TRANSCRIPT, genre=genre)
+
+    def test_genre_none_sends_the_same_prompt_as_omitting_it(self):
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _tool_use_response({"clips": []})
+
+        identify_moments(DUMMY_TRANSCRIPT, claude_client=mock_client, genre=None)
+        _, call_kwargs_explicit = mock_client.messages.create.call_args
+
+        mock_client_2 = MagicMock()
+        mock_client_2.messages.create.return_value = _tool_use_response({"clips": []})
+        identify_moments(DUMMY_TRANSCRIPT, claude_client=mock_client_2)
+        _, call_kwargs_default = mock_client_2.messages.create.call_args
+
+        assert (
+            call_kwargs_explicit["messages"][0]["content"]
+            == call_kwargs_default["messages"][0]["content"]
+        )
+
+    def test_unknown_genre_does_not_change_the_prompt(self):
+        mock_client = MagicMock()
+        mock_client.messages.create.return_value = _tool_use_response({"clips": []})
+
+        identify_moments(DUMMY_TRANSCRIPT, claude_client=mock_client, genre="outros")
+        _, call_kwargs = mock_client.messages.create.call_args
+
+        mock_client_2 = MagicMock()
+        mock_client_2.messages.create.return_value = _tool_use_response({"clips": []})
+        identify_moments(DUMMY_TRANSCRIPT, claude_client=mock_client_2)
+        _, call_kwargs_default = mock_client_2.messages.create.call_args
+
+        assert (
+            call_kwargs["messages"][0]["content"]
+            == call_kwargs_default["messages"][0]["content"]
+        )
+
+
+class TestClaudeMomentsProviderGenre:
+    def test_forwards_genre_to_the_module_level_function(self, monkeypatch):
+        captured = {}
+
+        def fake_identify_moments(transcript, claude_client=None, genre=None):
+            captured["transcript"] = transcript
+            captured["claude_client"] = claude_client
+            captured["genre"] = genre
+            return MomentsExtraction(clips=[])
+
+        monkeypatch.setattr("core.claude_moments.identify_moments", fake_identify_moments)
+
+        provider = ClaudeMomentsProvider(claude_client="dummy-client")
+        provider.identify_moments(DUMMY_TRANSCRIPT, genre="perguntas")
+
+        assert captured["transcript"] == DUMMY_TRANSCRIPT
+        assert captured["claude_client"] == "dummy-client"
+        assert captured["genre"] == "perguntas"
 
 
 class TestClaudeMomentsProvider:

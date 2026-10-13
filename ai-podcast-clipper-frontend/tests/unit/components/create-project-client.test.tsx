@@ -199,10 +199,13 @@ describe("CreateProjectClient", () => {
     // Verify dynamic options rendered
     expect(screen.getByText("Configurações do Corte")).toBeInTheDocument();
     expect(screen.getByText("Gênero do Conteúdo")).toBeInTheDocument();
-    expect(screen.getByText("Modelo do Clipe (Modo de IA)")).toBeInTheDocument();
-    expect(screen.getByText("Proporção (Aspect Ratio)")).toBeInTheDocument();
     expect(screen.getByText("Auto Zoom")).toBeInTheDocument();
-    expect(screen.getByText("Auto Zoom")).toBeInTheDocument();
+
+    // "Modelo do Clipe" e "Proporção" foram removidos da UI: não têm efeito
+    // real no backend (ver AGENTS.md / checklist-go-live.md), então deixaram
+    // de ser escolhíveis pelo usuário (decisão de produto, 2026-10-13).
+    expect(screen.queryByText("Modelo do Clipe (Modo de IA)")).not.toBeInTheDocument();
+    expect(screen.queryByText("Proporção (Aspect Ratio)")).not.toBeInTheDocument();
 
     // Verify Sem Legenda card is present
     expect(screen.getByText("Sem Legenda")).toBeInTheDocument();
@@ -236,16 +239,11 @@ describe("CreateProjectClient", () => {
     ) as HTMLSelectElement;
     expect(genreSelect.value).toBe("podcast"); // id: 2 isDefault
 
-    const clipModelSelect = screen.getByLabelText(
-      "Modelo do Clipe (Modo de IA)",
-    ) as HTMLSelectElement;
-    expect(clipModelSelect.value).toBe("auto"); // id: 7 isDefault
-
-    const aspectSelect = screen.getByLabelText(
-      "Proporção",
-    ) as HTMLSelectElement;
-    expect(aspectSelect.value).toBe("9:16");
-
+    // "Modelo do Clipe" e "Proporção" não têm mais seletor (ver teste
+    // acima); o default de cada um ainda é enviado como constante fixa no
+    // submit, coberto no teste "submits video with dynamic options...".
+    expect(screen.queryByLabelText("Modelo do Clipe (Modo de IA)")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Proporção")).not.toBeInTheDocument();
 
     const autoZoomSwitch = screen.getByLabelText(
       "Auto Zoom",
@@ -766,8 +764,6 @@ describe("CreateProjectClient - Fatiador com precisão de segundos", () => {
         initialSettings={{
           preset: "HORMOZI",
           genre: "podcast",
-          clipModel: "auto",
-          aspectRatio: "9:16",
           autoZoom: true,
           sliceStartTime: 95,
           sliceEndTime: 650,
@@ -796,8 +792,6 @@ describe("CreateProjectClient - Fatiador com precisão de segundos", () => {
         initialSettings={{
           preset: "HORMOZI",
           genre: "podcast",
-          clipModel: "auto",
-          aspectRatio: "9:16",
           autoZoom: true,
           sliceStartTime: 0,
           sliceEndTime: 0,

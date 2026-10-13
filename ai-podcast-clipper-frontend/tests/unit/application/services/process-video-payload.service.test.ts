@@ -30,11 +30,20 @@ describe("buildProcessVideoPayload", () => {
       expect(payload).toEqual({
         s3_key: "uploads/file-123/video.mp4",
         preset: "NONE",
-        genre: "auto",
+        genre: "outros",
         aspect_ratio: "9:16",
         auto_zoom: true,
         mode: "auto",
       });
+    });
+
+    it("usa 'outros' (não 'auto') como fallback de genre quando o vídeo não tem gênero salvo (bugfix 2026-10-13: 'auto' não é um valor válido de GENRE)", () => {
+      const payload = buildProcessVideoPayload({
+        video: { ...baseVideo, genre: null },
+        eventData: {},
+      });
+
+      expect(payload.genre).toBe("outros");
     });
 
     it("prioriza subtitlePreset do vídeo sobre o preset do evento", () => {

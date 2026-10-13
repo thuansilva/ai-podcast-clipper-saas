@@ -15,6 +15,12 @@ from core.schemas import MomentsExtraction
 class MomentsProvider(Protocol):
     """Extracts candidate viral clips from a transcript."""
 
-    def identify_moments(self, transcript: list) -> MomentsExtraction:
-        """Returns the candidate clips identified from `transcript`."""
+    def identify_moments(self, transcript: list, genre: "str | None" = None) -> MomentsExtraction:
+        """Returns the candidate clips identified from `transcript`.
+
+        `genre` (RF-PIPE-GENRE) optionally steers which kind of moment is
+        prioritized (see `core/moments.py::_GENRE_INSTRUCTIONS`). `None`, or
+        any value a given adapter does not recognize, falls back to the
+        generic behavior — never a silent provider-specific divergence.
+        """
         ...

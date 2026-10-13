@@ -175,7 +175,19 @@ class ProcessVideoRequest(BaseModel):
     )
     genre: Optional[str] = Field(
         default=None,
-        description="Accepted for forward-compatibility only. NOT YET implemented — has no functional effect.",
+        description=(
+            "RF-PIPE-GENRE: steers the automatic ('auto' mode) viral moment "
+            "identification prompt (core/moments.py::identify_moments / "
+            "core/claude_moments.py::identify_moments). One of the 4 values "
+            "the frontend's ProcessingOption (type GENRE) offers: 'humor' "
+            "(prioritize jokes/punchlines), 'perguntas' (reinforce the "
+            "hook/question-answer structure), 'jogos' (prioritize "
+            "reactions/hype/gameplay moments), 'outros' (no extra "
+            "instruction — same generic prompt as before this field had an "
+            "effect). `None` or any other value also falls back to the "
+            "generic prompt, never a 422. No effect in 'manual' mode, which "
+            "skips moment identification entirely."
+        ),
     )
 
     @model_validator(mode="after")
