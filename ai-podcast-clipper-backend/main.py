@@ -18,6 +18,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from google import genai
 
+from core.fonts import iter_download_commands as iter_font_download_commands
 from core.moments import identify_moments as core_identify_moments
 from core.moments_factory import create_moments_provider
 from core.otel_setup import setup_otel
@@ -51,13 +52,29 @@ from core.youtube_downloader import (
 setup_otel("ai-podcast-clipper-backend")
 
 
+# Every font family referenced by any subtitle preset (core/fonts.py is the
+# single source of truth shared with core/subtitle_styles.py) must be
+# downloaded and installed here, or ffmpeg's `ass=` filter silently
+# substitutes a different font with no error (the original bug: only
+# "Anton" was ever downloaded, so 6 of 11 presets rendered with the wrong
+# typeface). Do not hardcode a font URL directly in this file — add it to
+# core/fonts.py::FONT_FILE_DOWNLOADS instead, so main.py,
+# scripts/install-fonts.sh and the test contract
+# (tests/test_font_contract.py) all stay in sync.
+_FONT_DOWNLOAD_COMMANDS = [
+    f"wget -O /usr/share/fonts/truetype/custom/{dest} {url}"
+    for dest, url in iter_font_download_commands()
+]
+
 image = (modal.Image.from_registry(
     "nvidia/cuda:12.4.0-devel-ubuntu22.04", add_python="3.12")
     .apt_install(["ffmpeg", "libgl1-mesa-glx", "wget", "libcudnn8", "libcudnn8-dev"])
     .pip_install_from_requirements("requirements.txt")
-    .run_commands(["mkdir -p /usr/share/fonts/truetype/custom",
-                   "wget -O /usr/share/fonts/truetype/custom/Anton-Regular.ttf https://github.com/google/fonts/raw/main/ofl/anton/Anton-Regular.ttf",
-                   "fc-cache -f -v"])
+    .run_commands(
+        ["mkdir -p /usr/share/fonts/truetype/custom"]
+        + _FONT_DOWNLOAD_COMMANDS
+        + ["fc-cache -f -v"]
+    )
     .add_local_dir("asd", "/asd", copy=True)
     # Bake the LR-ASD face detector weights into the image (the vendored code
     # would otherwise fetch them from Google Drive on every cold start, with a

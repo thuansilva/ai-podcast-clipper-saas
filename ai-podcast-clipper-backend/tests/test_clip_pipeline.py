@@ -48,6 +48,7 @@ def _process(
     end_time: float,
     storage: FakeObjectStorage,
     transcript_segments: Any = None,
+    preset: str = "HORMOZI",
 ) -> Dict[str, Any]:
     return clip_pipeline.process_clip(
         base_dir=base_dir,
@@ -57,7 +58,7 @@ def _process(
         end_time=end_time,
         clip_index=clip_index,
         transcript_segments=transcript_segments or [],
-        preset="HORMOZI",
+        preset=preset,
         clip_item=clip_item,
         storage=storage,
         asd_dir="/asd",
@@ -115,6 +116,84 @@ class TestManualCutMetadata:
         assert metadata["preset"] == "HORMOZI"
         assert metadata["clip_index"] == 0
         assert metadata["s3_key"].startswith("clips/")
+
+
+class TestNonePresetSkipsSubtitleBurn:
+    """Bug fix (checklist-go-live.md, item MÉDIA): preset="NONE" (the "Sem
+    Legenda" option in the UI) must skip subtitle generation/burn entirely and
+    upload the plain vertical video, instead of silently falling back to
+    HORMOZI (SUPPORTED_PRESETS in core/subtitle_styles.py never contained
+    "NONE", so get_preset_style used to fall back there unconditionally)."""
+
+    @pytest.mark.parametrize("preset", ["NONE", " none ", "None", "none"])
+    def test_create_subtitles_with_ffmpeg_is_not_called(
+        self, tmp_path: Path, mocked_side_effects: Dict[str, Any], preset: str
+    ):
+        cut = schemas.ManualCut(start=12.5, end=32.5, title="Corte")
+        _process(
+            tmp_path, cut, clip_index=0, start_time=12.5, end_time=32.5,
+            storage=mocked_side_effects["storage"], preset=preset,
+        )
+        mocked_side_effects["subtitles"].assert_not_called()
+
+    @pytest.mark.parametrize("preset", ["NONE", " none ", "None", "none"])
+    def test_upload_receives_the_plain_vertical_video_not_the_subtitled_one(
+        self, tmp_path: Path, mocked_side_effects: Dict[str, Any], preset: str
+    ):
+        storage: FakeObjectStorage = mocked_side_effects["storage"]
+        cut = schemas.ManualCut(start=12.5, end=32.5, title="Corte")
+
+        _process(
+            tmp_path, cut, clip_index=0, start_time=12.5, end_time=32.5,
+            storage=storage, preset=preset,
+        )
+
+        vertical_video = tmp_path / "clip_0" / "pyavi" / "video_out_vertical.mp4"
+        assert storage.uploads == [(str(vertical_video), "clips/user_1/abc/clip_0.mp4")]
+
+    def test_metadata_preset_is_still_none(
+        self, tmp_path: Path, mocked_side_effects: Dict[str, Any]
+    ):
+        cut = schemas.ManualCut(start=12.5, end=32.5, title="Corte")
+        metadata = _process(
+            tmp_path, cut, clip_index=0, start_time=12.5, end_time=32.5,
+            storage=mocked_side_effects["storage"], preset="NONE",
+        )
+        assert metadata["preset"] == "NONE"
+
+    def test_words_are_still_extracted_even_without_burned_subtitles(
+        self, tmp_path: Path, mocked_side_effects: Dict[str, Any]
+    ):
+        # The transcript ("words") must be saved regardless of whether the
+        # subtitle was burned into the video: the UI uses it independently.
+        cut = schemas.ManualCut(start=10.0, end=15.0)
+        metadata = _process(
+            tmp_path, cut, clip_index=0, start_time=10.0, end_time=15.0,
+            storage=mocked_side_effects["storage"],
+            transcript_segments=ABSOLUTE_SEGMENTS, preset="NONE",
+        )
+        assert metadata["words"] == [
+            {"word": "borda", "start": 0.0, "end": pytest.approx(0.4)},
+            {"word": "meio", "start": 1.0, "end": 1.5},
+            {"word": "fim", "start": 4.0, "end": pytest.approx(4.6)},
+            {"word": "borda2", "start": pytest.approx(4.6), "end": 5.0},
+        ]
+
+    @pytest.mark.parametrize("preset", ["HORMOZI", "MINIMAL"])
+    def test_regression_other_presets_still_burn_subtitles(
+        self, tmp_path: Path, mocked_side_effects: Dict[str, Any], preset: str
+    ):
+        storage: FakeObjectStorage = mocked_side_effects["storage"]
+        cut = schemas.ManualCut(start=12.5, end=32.5, title="Corte")
+
+        _process(
+            tmp_path, cut, clip_index=0, start_time=12.5, end_time=32.5,
+            storage=storage, preset=preset,
+        )
+
+        mocked_side_effects["subtitles"].assert_called_once()
+        subtitled_clip = tmp_path / "clip_0" / "pyavi" / "video_with_subtitles.mp4"
+        assert storage.uploads == [(str(subtitled_clip), "clips/user_1/abc/clip_0.mp4")]
 
 
 class TestAutomaticClipItemRegression:

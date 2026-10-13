@@ -245,6 +245,58 @@ describe("projects-actions - Integração (schema real + use cases reais + Prism
       expect(updated?.aspectRatio).toBe("1:1");
       expect(mockInngestSend).toHaveBeenCalledTimes(1);
     });
+
+    it("normaliza para 'HORMOZI' um subtitlePreset legado/fora da allowlist quando o retry não troca o preset, e corrige o dado de volta no banco", async () => {
+      mockGetUserId.mockResolvedValue(userId);
+      // Simula um projeto criado antes de `PROJECT_SUBTITLE_PRESETS` existir
+      // como allowlist: escreve direto no banco (bypassando o schema de
+      // borda, que hoje rejeitaria esse valor) um preset que não é mais válido.
+      const project = await createTestProject({
+        status: "failed",
+        errorMessage: "erro anterior",
+        subtitlePreset: "FOO_LEGADO",
+      });
+      mockInngestSend.mockResolvedValueOnce({});
+
+      const { retryProjectAction } = await import("~/actions/projects-actions");
+      const result = await retryProjectAction(project.id);
+
+      expect(result).toEqual({ success: true });
+      expect(mockInngestSend).toHaveBeenCalledTimes(1);
+      expect(mockInngestSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: "process-video-events",
+          data: expect.objectContaining({ preset: "HORMOZI" }),
+        })
+      );
+
+      const updated = await db.uploadedFile.findUnique({ where: { id: project.id } });
+      expect(updated?.status).toBe("queued");
+      expect(updated?.subtitlePreset).toBe("HORMOZI");
+    });
+
+    it("preserva o subtitlePreset salvo quando ele já pertence à allowlist atual e o retry não troca o preset", async () => {
+      mockGetUserId.mockResolvedValue(userId);
+      const project = await createTestProject({
+        status: "failed",
+        errorMessage: "erro anterior",
+        subtitlePreset: "NEON",
+      });
+      mockInngestSend.mockResolvedValueOnce({});
+
+      const { retryProjectAction } = await import("~/actions/projects-actions");
+      const result = await retryProjectAction(project.id);
+
+      expect(result).toEqual({ success: true });
+      expect(mockInngestSend).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ preset: "NEON" }),
+        })
+      );
+
+      const updated = await db.uploadedFile.findUnique({ where: { id: project.id } });
+      expect(updated?.subtitlePreset).toBe("NEON");
+    });
   });
 
   describe("loadMoreProjectsAction", () => {

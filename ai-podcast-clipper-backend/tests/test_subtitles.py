@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 import pysubs2
 
+from core.fonts import PRESET_FONT_FAMILIES
 from core.subtitle_styles import (
     generate_ass_subtitles,
     get_preset_style,
@@ -50,7 +51,10 @@ class TestPresetStyles:
         style, is_uppercase, max_words = get_preset_style("MINIMAL")
         assert is_uppercase is False
         assert max_words == 5
-        assert style.fontname == "Arial"
+        # Arial is proprietary and not installed in the container image;
+        # Arimo is Google's free, metric-compatible Arial substitute —
+        # see core/fonts.py.
+        assert style.fontname == "Arimo"
         assert style.fontsize == 90
         assert style.bold is False
         assert style.outline == 1.5
@@ -78,6 +82,45 @@ class TestPresetStyles:
         assert style.fontname == "Anton"
         assert style.fontsize == 150
 
+    @pytest.mark.parametrize("preset", ["NONE", " none ", "None"])
+    def test_none_preset_raises_instead_of_silently_falling_back_to_hormozi(
+        self, preset
+    ):
+        # Defense in depth (checklist-go-live.md, item MÉDIA): "NONE" is a
+        # valid wire-level preset meaning "skip subtitles entirely", a
+        # decision owned by core/clip_pipeline.py::process_clip. If some
+        # caller reaches this function with "NONE" anyway, it must fail
+        # loudly, not silently style it as HORMOZI.
+        with pytest.raises(ValueError, match="NONE"):
+            get_preset_style(preset)
+
+    @pytest.mark.parametrize(
+        "preset",
+        sorted(SUPPORTED_PRESETS - {"NONE"}),
+    )
+    def test_every_supported_preset_uses_a_free_installable_font(self, preset):
+        # Regression guard for the bug where 6 of 11 presets (MINIMAL, VLOG,
+        # CORPORATE, GAMER, TRUE_CRIME, ASMR) requested a proprietary font
+        # (Arial/Helvetica/Impact/Courier New/Georgia) that was never
+        # installed in the container image, so fontconfig silently
+        # substituted a different font with no error anywhere. Every preset
+        # must resolve to a family this project actually bundles —
+        # core/fonts.py::PRESET_FONT_FAMILIES is the single source of
+        # truth for both this assertion and main.py's font download list.
+        style, _, _ = get_preset_style(preset)
+        normalized = "MINIMAL" if preset == "CLEAN" else preset
+        assert style.fontname == PRESET_FONT_FAMILIES[normalized]
+
+    def test_proprietary_fonts_are_never_referenced(self):
+        proprietary_fonts = {"Arial", "Helvetica", "Impact", "Courier New", "Georgia"}
+        for preset in sorted(SUPPORTED_PRESETS - {"NONE"}):
+            style, _, _ = get_preset_style(preset)
+            assert style.fontname not in proprietary_fonts, (
+                f"Preset {preset!r} still references the proprietary font "
+                f"{style.fontname!r}; it must be baked/redistributable "
+                f"(see core/fonts.py)."
+            )
+
     def test_preset_case_insensitivity(self):
         style_lower, is_uppercase_lower, max_words_lower = get_preset_style("hormozi")
         style_upper, is_uppercase_upper, max_words_upper = get_preset_style("HORMOZI")
@@ -85,6 +128,20 @@ class TestPresetStyles:
         assert style_lower.primarycolor == style_upper.primarycolor
         assert is_uppercase_lower == is_uppercase_upper
         assert max_words_lower == max_words_upper
+
+
+class TestGenerateAssSubtitlesNonePresetGuard:
+    def test_generate_ass_subtitles_raises_for_none_preset(self, sample_transcript):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_file = os.path.join(tmpdir, "none.ass")
+            with pytest.raises(ValueError, match="NONE"):
+                generate_ass_subtitles(
+                    transcript_segments=sample_transcript,
+                    clip_start=10.0,
+                    clip_end=15.0,
+                    output_path=out_file,
+                    preset="NONE",
+                )
 
 
 class TestGenerateAssSubtitles:

@@ -482,6 +482,28 @@ class TestProcessVideoManualCutsIntegration:
         assert len(storage.uploads) == FIXTURE_CUT_COUNT
         assert all(key.startswith("clips/") for _, key in storage.uploads)
 
+    def test_preset_none_skips_subtitle_burn_and_uploads_plain_vertical_video(
+        self, pipeline_env
+    ):
+        # Bug fix (checklist-go-live.md, item MÉDIA): preset "NONE" ("Sem
+        # Legenda" in the UI) must not burn subtitles, end-to-end through the
+        # real /process_video request/response cycle.
+        payload = _payload_for_local_file(pipeline_env["video_path"])
+        payload["preset"] = "NONE"
+
+        response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
+
+        assert response.status_code == 200
+        pipeline_env["create_subtitles"].assert_not_called()
+        storage: FakeObjectStorage = pipeline_env["storage"]
+        assert len(storage.uploads) == FIXTURE_CUT_COUNT
+        assert all(
+            src_path.endswith("video_out_vertical.mp4")
+            for src_path, _ in storage.uploads
+        )
+        clips = response.json()["clips"]
+        assert all(clip["preset"] == "NONE" for clip in clips)
+
     def test_manual_mode_transcribes_only_the_cut_ranges(self, pipeline_env):
         # RN-PIPE-MANUAL-08: two distant cuts -> two ranges (0.5s margin,
         # clamped to [0, duration]); the whole video is never transcribed and

@@ -4,6 +4,8 @@ import os
 from typing import Any, Dict, List, Tuple
 import pysubs2
 
+from core.fonts import PRESET_FONT_FAMILIES
+
 SUPPORTED_PRESETS = {
     "HORMOZI", "POPPING_GREEN", "MINIMAL", "NEON", 
     "VLOG", "TRUE_CRIME", "CORPORATE", "GAMER", 
@@ -18,6 +20,20 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
         (style, is_uppercase, max_words)
     """
     normalized = preset_name.strip().upper()
+    if normalized == "NONE":
+        # Defense in depth: "NONE" ("Sem Legenda") is a valid wire-level
+        # preset (core/schemas.py SubtitlePreset), but it means "do not burn
+        # any subtitle at all" -- a decision core/clip_pipeline.py::process_clip
+        # must make BEFORE ever calling create_subtitles_with_ffmpeg /
+        # generate_ass_subtitles / get_preset_style. If one of these is
+        # reached with "NONE" anyway (a caller bypassing that guard), fail
+        # loudly instead of silently rendering HORMOZI subtitles the user
+        # explicitly opted out of.
+        raise ValueError(
+            "get_preset_style() does not style preset 'NONE': 'Sem Legenda' "
+            "must be handled by skipping subtitle generation entirely in "
+            "core/clip_pipeline.py::process_clip, not by styling a 'NONE' preset."
+        )
     if normalized not in SUPPORTED_PRESETS:
         print(f"Warning: Unsupported preset '{preset_name}'. Falling back to HORMOZI.")
         normalized = "HORMOZI"
@@ -32,7 +48,7 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
     style.spacing = 0.0
 
     if normalized == "HORMOZI":
-        style.fontname = "Anton"
+        style.fontname = PRESET_FONT_FAMILIES["HORMOZI"]
         style.fontsize = 150
         style.bold = True
         style.primarycolor = pysubs2.Color(255, 230, 0)      # High-visibility yellow
@@ -47,7 +63,7 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
         return style, True, 2
 
     elif normalized == "POPPING_GREEN":
-        style.fontname = "Anton"
+        style.fontname = PRESET_FONT_FAMILIES["POPPING_GREEN"]
         style.fontsize = 160
         style.bold = True
         style.primarycolor = pysubs2.Color(0, 255, 0)        # Bright Green
@@ -62,7 +78,7 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
         return style, True, 2
 
     elif normalized == "MINIMAL":
-        style.fontname = "Arial"
+        style.fontname = PRESET_FONT_FAMILIES["MINIMAL"]
         style.fontsize = 90
         style.bold = False
         style.primarycolor = pysubs2.Color(255, 255, 255)    # Clean white
@@ -77,7 +93,7 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
         return style, False, 5
 
     elif normalized == "NEON":
-        style.fontname = "Anton"
+        style.fontname = PRESET_FONT_FAMILIES["NEON"]
         style.fontsize = 130
         style.bold = True
         style.primarycolor = pysubs2.Color(0, 255, 255)      # Vibrant Cyan
@@ -92,7 +108,7 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
         return style, True, 3
         
     elif normalized == "VLOG":
-        style.fontname = "Arial"
+        style.fontname = PRESET_FONT_FAMILIES["VLOG"]
         style.fontsize = 100
         style.bold = True
         style.primarycolor = pysubs2.Color(255, 255, 255)    # White
@@ -105,7 +121,7 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
         return style, False, 4
 
     elif normalized == "TRUE_CRIME":
-        style.fontname = "Courier New"
+        style.fontname = PRESET_FONT_FAMILIES["TRUE_CRIME"]
         style.fontsize = 110
         style.bold = True
         style.primarycolor = pysubs2.Color(220, 20, 60)      # Crimson Red
@@ -120,7 +136,7 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
         return style, True, 3
         
     elif normalized == "CORPORATE":
-        style.fontname = "Helvetica"
+        style.fontname = PRESET_FONT_FAMILIES["CORPORATE"]
         style.fontsize = 90
         style.bold = True
         style.primarycolor = pysubs2.Color(10, 30, 80)       # Dark Blue
@@ -133,7 +149,7 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
         return style, False, 5
         
     elif normalized == "GAMER":
-        style.fontname = "Impact"
+        style.fontname = PRESET_FONT_FAMILIES["GAMER"]
         style.fontsize = 140
         style.bold = True
         style.italic = True
@@ -149,7 +165,7 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
         return style, True, 2
         
     elif normalized == "ASMR":
-        style.fontname = "Georgia"
+        style.fontname = PRESET_FONT_FAMILIES["ASMR"]
         style.fontsize = 70
         style.bold = False
         style.italic = True
@@ -163,7 +179,7 @@ def get_preset_style(preset_name: str) -> Tuple[pysubs2.SSAStyle, bool, int]:
         return style, False, 4
         
     elif normalized == "LOUD":
-        style.fontname = "Anton"
+        style.fontname = PRESET_FONT_FAMILIES["LOUD"]
         style.fontsize = 200
         style.bold = True
         style.primarycolor = pysubs2.Color(255, 255, 255)    # White

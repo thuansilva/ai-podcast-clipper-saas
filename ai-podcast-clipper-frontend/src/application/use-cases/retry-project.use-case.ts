@@ -6,6 +6,7 @@ import type {
 } from "~/domain/ports/uploaded-file-repository";
 import type { IClipRepository } from "~/domain/ports/clip-repository";
 import type { IQueueGateway } from "~/domain/ports/queue-gateway";
+import { normalizeSubtitlePreset } from "~/domain/value-objects/subtitle-preset.vo";
 
 export interface RetryProjectInput {
   projectId: string;
@@ -63,6 +64,26 @@ export class RetryProjectUseCase {
         sliceEndTime: input.updates.sliceEndTime,
       }),
     };
+
+    // Quando o retry NÃO está trocando o subtitlePreset, o valor que será
+    // reenviado ao backend é o que já estava salvo em `project.subtitlePreset`.
+    // Projetos criados antes da allowlist (`PROJECT_SUBTITLE_PRESETS`) existir
+    // podem ter um preset legado/inválido persistido — normalizamos esse valor
+    // aqui (para o fallback "HORMOZI" quando fora da allowlist) e aproveitamos
+    // para corrigir o dado legado de volta no banco no mesmo update, evitando
+    // que o projeto caia nesse caminho de novo em retries futuros.
+    //
+    // Quando o retry ESTÁ trocando o subtitlePreset (`input.updates.subtitlePreset
+    // !== undefined`), o valor já passou pela validação de borda (`retryProjectUpdatesSchema`,
+    // enum fechado) antes de chegar neste use case — por isso não normalizamos
+    // de novo aqui (ver AGENTS.md: "o domínio pressupõe que os dados já
+    // chegaram limpos e validados na borda").
+    if (input.updates?.subtitlePreset === undefined) {
+      const normalizedPreset = normalizeSubtitlePreset(project.subtitlePreset);
+      if (normalizedPreset !== project.subtitlePreset) {
+        updateData.subtitlePreset = normalizedPreset;
+      }
+    }
 
     // Reset status to queued
     const updated = await this.uploadedFileRepository.update(

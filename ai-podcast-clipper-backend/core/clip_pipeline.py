@@ -123,18 +123,27 @@ def process_clip(
         f"{time.time() - cvv_start_time:.2f} seconds"
     )
 
-    # 4. Generate subtitles with chosen preset and burn to video
-    create_subtitles_with_ffmpeg(
-        transcript_segments=transcript_segments,
-        clip_start=start_time,
-        clip_end=end_time,
-        clip_video_path=str(vertical_mp4_path),
-        output_path=str(subtitle_output_path),
-        preset=preset,
-        max_words=5,
-    )
+    # 4. Generate subtitles with chosen preset and burn to video, UNLESS the
+    # user picked "Sem Legenda" (preset "NONE"): SUPPORTED_PRESETS in
+    # core/subtitle_styles.py never included "NONE", so skipping this call is
+    # the only way to honor that choice -- calling create_subtitles_with_ffmpeg
+    # unconditionally would silently fall back to HORMOZI (get_preset_style's
+    # fallback for any unrecognized preset) and burn subtitles the user asked
+    # to not have.
+    render_path = vertical_mp4_path
+    if preset.strip().upper() != "NONE":
+        create_subtitles_with_ffmpeg(
+            transcript_segments=transcript_segments,
+            clip_start=start_time,
+            clip_end=end_time,
+            clip_video_path=str(vertical_mp4_path),
+            output_path=str(subtitle_output_path),
+            preset=preset,
+            max_words=5,
+        )
+        render_path = subtitle_output_path
 
-    storage.upload_file(str(subtitle_output_path), output_s3_key)
+    storage.upload_file(str(render_path), output_s3_key)
 
     clip_metadata = {
         "clip_index": clip_index,

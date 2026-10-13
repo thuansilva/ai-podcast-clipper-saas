@@ -32,7 +32,9 @@ flowchart TD
     L --> M["3. Corte + Detecção de Fala Ativa"]
     M -->|FFMPEG: corta segmento| N["4. LR-ASD: detecta falante ativo"]
     N -->|OpenCV/FFMPEGCV: reframe vertical| O["5. Vertical Reframe 9:16"]
-    O -->|pysubs2 + FFMPEG: queima legendas| P["6. Legendas Stylizadas"]
+    O --> D{"preset == NONE?<br/>(Sem Legenda)"}
+    D -->|"não: pysubs2 + FFMPEG queima legendas"| P["6. Legendas Stylizadas"]
+    D -->|"sim: desvio, pula a etapa 6"| Q
     P -->|"upload_file(clip, clips/...)"| Q["7. Upload do clipe final (clips/)"]
     Q --> PORT
     
@@ -392,6 +394,10 @@ create_subtitles_with_ffmpeg(
 
 Resultado: `video_with_subtitles.mp4` (9:16 + legendas).
 
+> **Desvio: preset `NONE` ("Sem Legenda", 2026-10-13).** `process_clip` (`core/clip_pipeline.py`) não chama `create_subtitles_with_ffmpeg` quando `preset.strip().upper() == "NONE"`: a etapa 5 e a etapa 6 (queima) são puladas e o upload da etapa 7 envia o vídeo vertical da etapa 4, sem legenda. `get_preset_style("NONE")` levanta `ValueError`, então nenhum caminho cai silenciosamente para HORMOZI. Teste: `tests/test_clip_pipeline.py::TestNonePresetSkipsSubtitleBurn`.
+>
+> **Fontes dos presets (2026-10-13):** cada preset usa uma família definida em `core/fonts.py::PRESET_FONT_FAMILIES`. A imagem Modal (`main.py`) instala no build todos os arquivos de `FONT_FILE_DOWNLOADS`; a GPU local (`local_server.py`) precisa de `scripts/install-fonts.sh` uma vez por máquina. Fonte ausente não gera erro (fontconfig substitui), por isso o contrato é coberto por `tests/test_font_contract.py`.
+
 #### 6. Upload para S3
 ```python
 s3_client.upload_file(str(subtitle_output_path), s3_bucket, output_s3_key)
@@ -505,6 +511,7 @@ Usuário clica **"Reprocessar"** na Dashboard:
 | **Deploy wrapper** | `main.py` (decorators Modal) | `local_server.py` (FastAPI) |
 | **Secrets** | Modal secrets (`GEMINI_API_KEY`, `ANTHROPIC_API_KEY` se `MOMENTS_PROVIDER=claude`, etc.) | Env vars locais (`.env`) |
 | **GPU** | Modal GPU (NVIDIA L40S) | GPU local (ex.: RTX 4090) |
+| **Fontes das legendas** | Instaladas no build da imagem (`main.py`, lista de `core/fonts.py`) | `scripts/install-fonts.sh` (manual, uma vez por máquina; sem ele, presets renderizam com fonte substituta sem erro) |
 | **Lógica pipeline** | `core/video_pipeline.py` + módulos | Mesmo `core/video_pipeline.py` + módulos |
 | **S3 access** | AWS credentials via Modal secrets | AWS credentials via env var `AWS_*` |
 | **Download YouTube (`/download_youtube`)** | `main.py::download_youtube` → `core/youtube_downloader.py::download_youtube_to_s3` + `create_object_storage()` | **Mesmo caminho (2026-10-11):** `local_server.py::download_youtube` → `download_youtube_to_s3` + `create_object_storage()` (MinIO em dev). Antes rodava `yt_dlp` via `subprocess` sem validar host e devolvia caminho em `/tmp` |

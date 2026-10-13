@@ -193,6 +193,109 @@ describe("RetryProjectUseCase", () => {
     });
   });
 
+  describe("normalização de subtitlePreset legado (item MÉDIO do checklist go-live)", () => {
+    it("deve cair no fallback 'HORMOZI' quando o preset salvo é legado/fora da allowlist e o retry não troca o preset", async () => {
+      const project = await uploadedFileRepository.create({
+        userId: "user-1",
+        s3Key: "test.mp4",
+        sourceType: "UPLOAD",
+        status: "failed",
+        subtitlePreset: "FOO_LEGADO",
+      });
+
+      await useCase.execute({ projectId: project.id, userId: "user-1" });
+
+      expect(queueGateway.sentEvents).toHaveLength(1);
+      expect(queueGateway.sentEvents[0]!.preset).toBe("HORMOZI");
+
+      // Corrige o dado legado de volta no banco, para o dashboard parar de
+      // mostrar um preset que não existe mais e o projeto não cair nesse
+      // caminho de novo em retries futuros.
+      const updated = await uploadedFileRepository.findById(project.id);
+      expect(updated?.subtitlePreset).toBe("HORMOZI");
+    });
+
+    it("deve preservar o preset salvo quando ele já pertence à allowlist atual (ex.: NEON)", async () => {
+      const project = await uploadedFileRepository.create({
+        userId: "user-1",
+        s3Key: "test.mp4",
+        sourceType: "UPLOAD",
+        status: "failed",
+        subtitlePreset: "NEON",
+      });
+
+      await useCase.execute({ projectId: project.id, userId: "user-1" });
+
+      expect(queueGateway.sentEvents[0]!.preset).toBe("NEON");
+      const updated = await uploadedFileRepository.findById(project.id);
+      expect(updated?.subtitlePreset).toBe("NEON");
+    });
+
+    it("deve preservar o preset salvo quando ele é 'NONE' (também pertence à allowlist)", async () => {
+      const project = await uploadedFileRepository.create({
+        userId: "user-1",
+        s3Key: "test.mp4",
+        sourceType: "UPLOAD",
+        status: "failed",
+        subtitlePreset: "NONE",
+      });
+
+      await useCase.execute({ projectId: project.id, userId: "user-1" });
+
+      expect(queueGateway.sentEvents[0]!.preset).toBe("NONE");
+      const updated = await uploadedFileRepository.findById(project.id);
+      expect(updated?.subtitlePreset).toBe("NONE");
+    });
+
+    it("deve continuar caindo no fallback 'HORMOZI' quando o preset salvo é null (regressão)", async () => {
+      const project = await uploadedFileRepository.create({
+        userId: "user-1",
+        s3Key: "test.mp4",
+        sourceType: "UPLOAD",
+        status: "failed",
+        subtitlePreset: null,
+      });
+
+      await useCase.execute({ projectId: project.id, userId: "user-1" });
+
+      expect(queueGateway.sentEvents[0]!.preset).toBe("HORMOZI");
+    });
+
+    it("deve continuar caindo no fallback 'HORMOZI' quando o preset salvo é string vazia (regressão)", async () => {
+      const project = await uploadedFileRepository.create({
+        userId: "user-1",
+        s3Key: "test.mp4",
+        sourceType: "UPLOAD",
+        status: "failed",
+        subtitlePreset: "",
+      });
+
+      await useCase.execute({ projectId: project.id, userId: "user-1" });
+
+      expect(queueGateway.sentEvents[0]!.preset).toBe("HORMOZI");
+    });
+
+    it("deve usar o novo valor normalmente quando o retry troca o preset explicitamente (updates.subtitlePreset válido), mesmo partindo de um preset legado salvo", async () => {
+      const project = await uploadedFileRepository.create({
+        userId: "user-1",
+        s3Key: "test.mp4",
+        sourceType: "UPLOAD",
+        status: "failed",
+        subtitlePreset: "FOO_LEGADO",
+      });
+
+      await useCase.execute({
+        projectId: project.id,
+        userId: "user-1",
+        updates: { subtitlePreset: "GAMER" },
+      });
+
+      expect(queueGateway.sentEvents[0]!.preset).toBe("GAMER");
+      const updated = await uploadedFileRepository.findById(project.id);
+      expect(updated?.subtitlePreset).toBe("GAMER");
+    });
+  });
+
   describe("regressão do BLOCKER de corte manual no retry (Fase 1 — TDD red)", () => {
     it("deve reenfileirar em modo manual quando há cortes salvos em manualCutsJson, sem nenhum update (clipModel nulo)", async () => {
       const project = await uploadedFileRepository.create({

@@ -15,6 +15,14 @@ for the consolidation rationale. The only things that belong here are:
     pipeline logic.
 
 Run with: `python local_server.py` (uvicorn on 0.0.0.0:8000).
+
+Prerequisite for subtitles to render with the right font: unlike `main.py`
+(whose Modal container image bakes in every font core/fonts.py declares),
+this local runner does not install any fonts for you — it depends on
+whatever is already on your machine. Run `scripts/install-fonts.sh` once
+before processing a video, or presets other than the ones already covered
+by a system "Anton" install may silently render with a substituted font
+(fontconfig does this without any error/log line).
 """
 
 import hmac
