@@ -111,7 +111,10 @@ export function PricingSection({ isAuthenticated }: PricingSectionProps) {
           <button
             onClick={() => setIsAnnual(!isAnnual)}
             className="relative inline-flex h-6 w-12 items-center rounded-full bg-[var(--linha-2)] transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--ouro)]/50 focus:ring-offset-2 focus:ring-offset-[var(--tinta)]"
-            aria-label="Toggle Annual Billing"
+            type="button"
+            role="switch"
+            aria-checked={isAnnual}
+            aria-label="Annual billing"
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-[var(--ouro)] transition-transform duration-200 ease-in-out ${

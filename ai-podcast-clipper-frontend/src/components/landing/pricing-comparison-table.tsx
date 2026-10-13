@@ -34,11 +34,19 @@ export function PricingComparisonTable() {
   ];
 
   const renderCheck = (val: string | boolean) => {
+    // Ícone sozinho não é anunciado por leitores de tela: cada célula
+    // booleana leva um texto equivalente (WCAG 1.1.1), oculto visualmente.
     if (typeof val === "boolean") {
       return val ? (
-        <CheckIcon className="h-5 w-5 mx-auto text-[var(--patina)]" />
+        <>
+          <CheckIcon className="h-5 w-5 mx-auto text-[var(--patina)]" aria-hidden="true" />
+          <span className="sr-only">Included</span>
+        </>
       ) : (
-        <MinusIcon className="h-5 w-5 mx-auto text-[var(--fumaca)]" />
+        <>
+          <MinusIcon className="h-5 w-5 mx-auto text-[var(--fumaca)]" aria-hidden="true" />
+          <span className="sr-only">Not included</span>
+        </>
       );
     }
     return <span className="text-sm font-medium">{val}</span>;
@@ -58,14 +66,15 @@ export function PricingComparisonTable() {
 
         <div className="overflow-x-auto rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] shadow-lg hide-scrollbar">
           <table className="w-full text-left border-collapse min-w-[800px]">
+            <caption className="sr-only">Feature comparison by plan</caption>
             <thead>
               <tr className="border-b border-[var(--linha)]">
-                <th className="p-6 text-sm font-semibold text-[var(--marfim)] w-2/5">Features</th>
-                <th className="p-6 text-center text-sm font-semibold text-[var(--marfim)] w-1/5">Starter</th>
-                <th className="p-6 text-center text-sm font-bold text-[var(--ouro)] w-1/5">
+                <th scope="col" className="p-6 text-sm font-semibold text-[var(--marfim)] w-2/5">Features</th>
+                <th scope="col" className="p-6 text-center text-sm font-semibold text-[var(--marfim)] w-1/5">Starter</th>
+                <th scope="col" className="p-6 text-center text-sm font-bold text-[var(--ouro)] w-1/5">
                   Pro <span className="block text-[10px] font-normal text-[var(--fumaca)] uppercase tracking-widest mt-1">Most Popular</span>
                 </th>
-                <th className="p-6 text-center text-sm font-semibold text-[var(--marfim)] w-1/5">Enterprise</th>
+                <th scope="col" className="p-6 text-center text-sm font-semibold text-[var(--marfim)] w-1/5">Enterprise</th>
               </tr>
             </thead>
             <tbody>
@@ -84,9 +93,9 @@ export function PricingComparisonTable() {
                       key={iIdx}
                       className="border-b border-[var(--linha)] transition-colors hover:bg-[var(--superficie-2)]"
                     >
-                      <td className="p-4 px-6 text-sm text-[var(--marfim-2)] font-medium">
+                      <th scope="row" className="p-4 px-6 text-left text-sm text-[var(--marfim-2)] font-medium">
                         {item.name}
-                      </td>
+                      </th>
                       <td className="p-4 text-center text-[var(--marfim)]">
                         {renderCheck(item.starter)}
                       </td>

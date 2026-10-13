@@ -396,6 +396,7 @@ export function CreateProjectClient({
                   </div>
                   
                   <input
+                    aria-label="Link do vídeo do YouTube"
                     placeholder="Cole o link do YouTube (ex: https://youtube.com/watch?v=...)"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
@@ -403,8 +404,9 @@ export function CreateProjectClient({
                   />
 
                   {loadingMeta && (
-                    <div className="pr-4">
-                      <Loader2 className="h-5 w-5 animate-spin text-[var(--ouro)]" />
+                    <div role="status" className="pr-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-[var(--ouro)]" aria-hidden="true" />
+                      <span className="sr-only">Buscando informações do vídeo…</span>
                     </div>
                   )}
                 </div>
@@ -435,7 +437,7 @@ export function CreateProjectClient({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
 <img
                   src={metadata.thumbnailUrl}
-                  alt="Thumbnail"
+                  alt={`Miniatura do vídeo ${metadata.title}`}
                   className="aspect-video w-full object-cover"
                 />
                 <div className="p-4">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ChevronDownIcon } from "lucide-react";
 
 interface FAQItem {
@@ -10,6 +10,8 @@ interface FAQItem {
 
 export function FAQSection() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+  // useId evita colisão de ids se o FAQ for renderizado mais de uma vez na página.
+  const baseId = useId();
 
   const faqs: FAQItem[] = [
     {
@@ -62,15 +64,20 @@ export function FAQSection() {
         <div className="mt-10 space-y-3">
           {faqs.map((faq, idx) => {
             const isOpen = openIndex === idx;
+            const questionId = `${baseId}-question-${idx}`;
+            const panelId = `${baseId}-panel-${idx}`;
             return (
               <div
                 key={idx}
                 className="overflow-hidden rounded-xl border border-[var(--linha)] bg-[var(--superficie)] transition-all duration-200 hover:border-[var(--linha-2)]"
               >
                 <button
+                  id={questionId}
+                  type="button"
                   onClick={() => setOpenIndex(isOpen ? null : idx)}
                   className="flex w-full items-center justify-between p-4 text-left text-sm font-medium text-[var(--marfim)] transition-colors hover:text-[var(--ouro)] cursor-pointer"
                   aria-expanded={isOpen}
+                  aria-controls={panelId}
                 >
                   <span>{faq.question}</span>
                   <ChevronDownIcon
@@ -79,11 +86,17 @@ export function FAQSection() {
                     }`}
                   />
                 </button>
-                {isOpen && (
-                  <div className="border-t border-[var(--linha)] px-4 py-3.5 text-xs leading-relaxed text-[var(--marfim-2)] bg-[var(--superficie-2)]/60">
-                    {faq.answer}
-                  </div>
-                )}
+                {/* Painel sempre no DOM (oculto quando fechado) para que
+                    aria-controls aponte para um elemento existente (WCAG 4.1.2). */}
+                <div
+                  id={panelId}
+                  role="region"
+                  aria-labelledby={questionId}
+                  hidden={!isOpen}
+                  className="border-t border-[var(--linha)] px-4 py-3.5 text-xs leading-relaxed text-[var(--marfim-2)] bg-[var(--superficie-2)]/60"
+                >
+                  {faq.answer}
+                </div>
               </div>
             );
           })}

@@ -131,7 +131,7 @@ Cada requisito funcional é identificado por um ID estável (`RF-<ÁREA>-NN`), c
 | RF-UI-01 | Dashboard com listagem de projetos, clipes e navegação | RN: Apresentação | `src/app/dashboard/` | ✅ | Componentes testados em `tests/unit/components/` |
 | RF-UI-02 | Formulários de autenticação (login/cadastro) com validação e aceite de Termos/Privacidade | RN: UX | `src/components/auth/custom-sign-in-form.tsx`, `custom-sign-up-form.tsx` | ✅ | `tests/unit/components/custom-sign-up-form.test.tsx`, `tests/unit/components/custom-sign-in-form.test.tsx` |
 | RF-UI-03 | Página de Billing com exibição de créditos, plano atual, botão de upgrade/gerenciar | RN: Cobrança | `src/app/dashboard/billing/` | ✅ | `tests/unit/components/billing-page.test.tsx`, `tests/unit/components/active-subscription-card.test.tsx` |
-| RF-UI-04 | Player de vídeo customizado com controles acessíveis | RN: Reprodução + WCAG | `src/components/custom-video-player.tsx` | ✅ | `tests/unit/custom-video-player.a11y.test.tsx` |
+| RF-UI-04 | Player de vídeo customizado com controles acessíveis | RN: Reprodução + WCAG | `src/components/custom-video-player.tsx` | ✅ | `tests/unit/custom-video-player.a11y.test.tsx`, `tests/unit/components/custom-video-player.test.tsx` |
 | RF-UI-05 | Páginas legais (Terms, Privacy, Refund, Contact) com placeholders `[A PREENCHER]` | RN: Compliance | `src/app/terms/`, `src/app/privacy/`, `src/app/refund/`, `src/app/contact/` | ✅ | `tests/integration/legal-pages.test.ts` |
 
 ---
@@ -272,12 +272,16 @@ Cada RNF é identificado por um ID estável (`RNF-<CATEGORIA>-NN`), com categori
 | ID | Descrição | Categoria | Fonte | Status | Valor/Meta |
 |---|---|---|---|---|---|
 | RNF-A11Y-01 | Botões com texto legível ou `aria-label` | WCAG 4.1.2 | RF-UI-04, checklist-go-live.md | ✅ | **Todos os botões possuem label acessível** |
-| RNF-A11Y-02 | Controles de video player operáveis via teclado | WCAG 2.1.1 | RF-UI-04, checklist-go-live.md | ✅ | **`focus-visible:outline` + tab order definido** |
+| RNF-A11Y-02 | Controles de video player operáveis via teclado | WCAG 2.1.1 | RF-UI-04, checklist-go-live.md | ✅ | **Play/pause é `<button>` nativo; barra de progresso é `role="slider"` com setas ±5s, Home/End (2026-10-13, antes era `div` com `onClick` sem teclado)** |
 | RNF-A11Y-03 | Alertas de erro com `role="alert"` ou `aria-live` | WCAG 4.1.3 | RF-UI-02, checklist-go-live.md | ✅ | **Forms usam `role="alert"` e `aria-live="polite"`** |
 | RNF-A11Y-04 | Focus indicators visíveis em todos os componentes interativos | WCAG 2.4.7 | checklist-go-live.md | ✅ | **`focus:ring` com cor e offset visível** |
-| RNF-A11Y-05 | Modais com focus trap | WCAG 2.4.3 | checklist-go-live.md (HIGH) | ❌ | **A DEFINIR — implementar focus trap em todos os modais** |
-| RNF-A11Y-06 | Contraste mínimo 4.5:1 em modo light e dark | WCAG 1.4.3 | — | ⚠️ | **A DEFINIR — validar em modo light (alguns textos podem estar abaixo)** |
-| RNF-A11Y-07 | Skip links presentes na navegação | WCAG 2.4.1 | checklist-go-live.md (NICE) | ❌ | **A DEFINIR — adicionar skip link para main content** |
+| RNF-A11Y-05 | Modais com focus trap | WCAG 2.4.3 | checklist-go-live.md (HIGH) | ✅ | **Implementado (2026-10-13):** `clip-details-modal.tsx` e `clip-editor-modal.tsx` migrados para `Dialog` do Radix (foco preso, Escape, devolução de foco via `src/hooks/use-dialog-focus-return.ts`). Modais de `ui/dialog`, `ui/alert-dialog` e `ui/sheet` já usavam Radix |
+| RNF-A11Y-06 | Contraste mínimo 4.5:1 em modo light e dark | WCAG 1.4.3 | — | ⚠️ | **Medido (2026-10-13, cálculo das cores de `src/styles/globals.css`):** tema claro `--fumaca` sobre `--tinta` = 3,99:1 (abaixo de 4,5:1); os demais pares medidos passam, e o tema escuro passa (`--fumaca` sobre `--tinta` = 5,49:1). Correção é de token de design, escalada |
+| RNF-A11Y-07 | Skip links presentes na navegação | WCAG 2.4.1 | checklist-go-live.md (NICE) | ❌ | **A DEFINIR — adicionar skip link para main content** (o dashboard já tem landmark `<main>`, técnica ARIA11) |
+| RNF-A11Y-08 | Conteúdo em rotação automática pausável pelo usuário | WCAG 2.2.2 | checklist-go-live.md (HIGH) | ✅ | **Carrossel da landing (`showcase-carousel.tsx`) ganhou botão Pause/Resume e slides inativos `aria-hidden` (2026-10-13)** |
+| RNF-A11Y-09 | Widgets de tabs e switch operáveis por teclado e com estado anunciado | WCAG 2.1.1, 4.1.2 | checklist-go-live.md (HIGH) | ✅ | **Toggle de cobrança com setas e roving tabindex (`pricing-toggle-tabs.tsx`); switch Mensal/Anual da landing com `role="switch"` e `aria-checked` (2026-10-13)** |
+| RNF-A11Y-10 | Campos com nome acessível e carregamentos anunciados a leitores de tela | WCAG 3.3.2, 4.1.3 | checklist-go-live.md (HIGH) | ✅ | **Campo de URL do YouTube com `aria-label`; spinner de metadados com `role="status"` (2026-10-13)** |
+| RNF-A11Y-11 | Idioma da página declarado (`<html lang>`) coerente com o conteúdo | WCAG 3.1.1 | checklist-go-live.md (HIGH) | ⚠️ | **Escalado (2026-10-13): `src/app/layout.tsx` declara `lang="en"`, mas a UI autenticada é em português e a landing em inglês. Decisão de produto pendente** |
 
 ---
 
@@ -394,7 +398,7 @@ Tabela de referência cruzada para validação de funcionalidade ponta a ponta:
 7. **RNF-PERF-06** — SLA de processamento de vídeo
 8. **RNF-SCALE-05** — Tamanho do pool Postgres
 9. **RNF-AVAIL-03, RNF-AVAIL-04, RNF-AVAIL-05, RNF-AVAIL-06** — Circuit breaker, fallback, backup/rollback
-10. **RNF-A11Y-05, RNF-A11Y-07** — Focus trap em modais, skip links
+10. ~~**RNF-A11Y-05** — Focus trap em modais~~ — resolvido em 2026-10-13 (modais customizados migrados para Radix); **RNF-A11Y-07** — skip link (NICE, aberto); **RNF-A11Y-06** e **RNF-A11Y-11** — contraste no tema claro e `lang` da página, escalados para decisão de design/produto
 11. **RNF-MAINT-04, RNF-MAINT-09** — Cobertura de teste formal, ADRs
 
 ---

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PlayIcon, Wand2Icon, LayoutTemplateIcon, Volume2Icon } from "lucide-react";
+import { PauseIcon, PlayIcon, Wand2Icon, LayoutTemplateIcon, Volume2Icon } from "lucide-react";
 
 export function ShowcaseCarousel() {
   const [activeIndex, setActiveIndex] = useState(0);
+  // Rotação automática pode ser pausada pelo usuário (WCAG 2.2.2 Pause, Stop, Hide).
+  const [isPaused, setIsPaused] = useState(false);
 
   const showcases = [
     {
@@ -31,11 +33,12 @@ export function ShowcaseCarousel() {
   ];
 
   useEffect(() => {
+    if (isPaused) return;
     const timer = setInterval(() => {
       setActiveIndex((current) => (current + 1) % showcases.length);
     }, 5000);
     return () => clearInterval(timer);
-  }, [showcases.length]);
+  }, [showcases.length, isPaused]);
 
   return (
     <section className="py-24 bg-[var(--tinta)] relative overflow-hidden" id="showcase">
@@ -84,6 +87,14 @@ export function ShowcaseCarousel() {
                 </p>
               </button>
             ))}
+            <button
+              type="button"
+              onClick={() => setIsPaused((paused) => !paused)}
+              aria-label={isPaused ? "Resume showcase rotation" : "Pause showcase rotation"}
+              className="self-start inline-flex items-center gap-2 rounded-full border border-[var(--linha)] px-3 py-1.5 text-xs font-mono text-[var(--fumaca)] hover:text-[var(--marfim)] hover:border-[var(--linha-2)] transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ouro)]"
+            >
+              {isPaused ? <PlayIcon className="h-3.5 w-3.5" aria-hidden="true" /> : <PauseIcon className="h-3.5 w-3.5" aria-hidden="true" />}
+            </button>
           </div>
 
           {/* Visual Display */}
@@ -91,6 +102,7 @@ export function ShowcaseCarousel() {
             {showcases.map((showcase, idx) => (
               <div
                 key={idx}
+                aria-hidden={activeIndex !== idx}
                 className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
                   activeIndex === idx ? "opacity-100 z-10" : "opacity-0 z-0"
                 }`}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { PricingSection } from "~/components/landing/pricing-section";
 
 describe("PricingSection - Accessibility (WCAG 2.1 AA)", () => {
@@ -7,7 +7,7 @@ describe("PricingSection - Accessibility (WCAG 2.1 AA)", () => {
     it("annual billing toggle should have visible focus indicator (BLOCKER #6)", () => {
       render(<PricingSection isAuthenticated={false} />);
 
-      const toggle = screen.getByRole("button", { name: /toggle.*billing|annual/i });
+      const toggle = screen.getByRole("switch", { name: /annual billing/i });
       expect(toggle).toBeInTheDocument();
 
       const classList = toggle.className;
@@ -21,6 +21,18 @@ describe("PricingSection - Accessibility (WCAG 2.1 AA)", () => {
         // If outline is removed, must have ring or border
         expect(classList).toMatch(/focus:.*ring|focus:.*border|focus-visible/);
       }
+    });
+  });
+
+  describe("WCAG 4.1.2: Name, Role, Value (estado do alternador)", () => {
+    it("o alternador Monthly/Annually é um switch com aria-checked refletindo o estado", () => {
+      render(<PricingSection isAuthenticated={false} />);
+
+      const toggle = screen.getByRole("switch", { name: /annual billing/i });
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute("aria-checked", "true");
     });
   });
 });

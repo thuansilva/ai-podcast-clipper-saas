@@ -19,6 +19,17 @@ import { deleteClip, getClipPlayUrl } from "~/actions/generation";
 import { ClipEditorModal } from "./clip-editor-modal";
 import { ClipDetailsModal } from "./clip-details-modal";
 import { CustomVideoPlayer } from "./custom-video-player";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 
 export interface ClipCardProps {
   clip: Clip;
@@ -82,12 +93,10 @@ export function ClipCard({ clip, isManual = false, onDelete }: ClipCardProps) {
     toast.success("Download iniciado!");
   };
 
+  // A confirmação é feita pelo AlertDialog (ver botão de exclusão abaixo),
+  // não pelo window.confirm nativo: diálogo do design system, com foco
+  // gerenciado, rótulos em português e testável sem mockar o navegador.
   const handleDelete = async () => {
-    const confirmed = window.confirm(
-      "Tem certeza que deseja excluir este clipe? Esta ação não pode ser desfeita.",
-    );
-    if (!confirmed) return;
-
     setIsDeleting(true);
     try {
       const result = await deleteClip(clip.id);
@@ -190,15 +199,30 @@ export function ClipCard({ clip, isManual = false, onDelete }: ClipCardProps) {
               >
                 <Scissors className="h-[18px] w-[18px]" />
               </button>
-              <button
-                aria-label="Excluir clipe permanentemente"
-                className="text-[var(--fumaca)] hover:text-[var(--perigo)] transition-colors p-1"
-                onClick={handleDelete}
-                disabled={isDeleting}
-                title="Excluir Clipe"
-              >
-                {isDeleting ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Trash2 className="h-[18px] w-[18px]" />}
-              </button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button
+                    aria-label="Excluir clipe permanentemente"
+                    className="text-[var(--fumaca)] hover:text-[var(--perigo)] transition-colors p-1"
+                    disabled={isDeleting}
+                    title="Excluir Clipe"
+                  >
+                    {isDeleting ? <Loader2 className="h-[18px] w-[18px] animate-spin" /> : <Trash2 className="h-[18px] w-[18px]" />}
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Excluir clipe?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Tem certeza que deseja excluir este clipe? Esta ação não pode ser desfeita.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete}>Excluir clipe</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
 

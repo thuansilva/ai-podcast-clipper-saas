@@ -4,6 +4,8 @@ import type { Clip } from "@prisma/client";
 import { useState } from "react";
 import { Loader2, Sparkles, Subtitles, X } from "lucide-react";
 import { toast } from "sonner";
+import { Dialog as DialogPrimitive } from "radix-ui";
+import { useDialogFocusReturn } from "~/hooks/use-dialog-focus-return";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Label } from "~/components/ui/label";
@@ -114,7 +116,6 @@ export function ClipEditorModal({
   );
   const [isSaving, setIsSaving] = useState(false);
 
-  if (!isOpen) return null;
 
   const handleTextChange = (text: string) => {
     setTranscriptText(text);
@@ -155,38 +156,58 @@ export function ClipEditorModal({
     }
   };
 
+  // Diálogo Radix: foco preso enquanto aberto (WCAG 2.4.3), Escape fecha
+  // (WCAG 2.1.1), foco volta ao gatilho ao fechar (WCAG 2.4.3). Enquanto um
+  // salvamento está em curso, Escape e clique no overlay são bloqueados para
+  // não descartar um envio em andamento.
+  const focusReturn = useDialogFocusReturn();
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="clip-editor-title"
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-md animate-in fade-in duration-200"
+    <DialogPrimitive.Root
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open && !isSaving) onClose();
+      }}
     >
-      {/* Modal Card */}
-      <div
-        className="relative w-full max-w-xl rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-[var(--marfim)]"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <DialogPrimitive.Portal>
+        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md animate-in fade-in duration-200" />
+        {/* Modal Card */}
+        <DialogPrimitive.Content
+          onOpenAutoFocus={focusReturn.onOpenAutoFocus}
+          onCloseAutoFocus={focusReturn.onCloseAutoFocus}
+          onEscapeKeyDown={(e) => {
+            if (isSaving) e.preventDefault();
+          }}
+          onInteractOutside={(e) => {
+            if (isSaving) e.preventDefault();
+          }}
+          className="fixed top-1/2 left-1/2 z-50 w-[calc(100%-2rem)] max-w-xl max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-[var(--linha)] bg-[var(--superficie)] p-6 shadow-[0_0_50px_rgba(0,0,0,0.8)] text-[var(--marfim)] outline-none animate-in fade-in duration-200"
+        >
         {/* Header */}
         <div className="flex items-start justify-between border-b border-[var(--linha)] pb-4">
           <div>
-            <h2 id="clip-editor-title" className="text-lg font-semibold flex items-center gap-2 text-[var(--marfim)]">
-              <Subtitles className="h-5 w-5 text-[var(--ouro)]" />
-              Editar Legendas e Transcrição
-            </h2>
-            <p className="text-xs text-[var(--fumaca)] mt-0.5">
-              Personalize o estilo visual e ajuste as palavras faladas no clipe: &ldquo;{clip.title}&rdquo;
-            </p>
+            <DialogPrimitive.Title asChild>
+              <h2 className="text-lg font-semibold flex items-center gap-2 text-[var(--marfim)]">
+                <Subtitles className="h-5 w-5 text-[var(--ouro)]" />
+                Editar Legendas e Transcrição
+              </h2>
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Description asChild>
+              <p className="text-xs text-[var(--fumaca)] mt-0.5">
+                Personalize o estilo visual e ajuste as palavras faladas no clipe: &ldquo;{clip.title}&rdquo;
+              </p>
+            </DialogPrimitive.Description>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            aria-label="Fechar"
-            className="h-8 w-8 p-0 text-[var(--fumaca)] hover:text-[var(--marfim)] hover:bg-[var(--superficie-2)] rounded-full"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <DialogPrimitive.Close asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Fechar"
+              className="h-8 w-8 p-0 text-[var(--fumaca)] hover:text-[var(--marfim)] hover:bg-[var(--superficie-2)] rounded-full"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </DialogPrimitive.Close>
         </div>
 
         <div className="space-y-6 py-4">
@@ -310,7 +331,8 @@ export function ClipEditorModal({
             )}
           </Button>
         </div>
-      </div>
-    </div>
+        </DialogPrimitive.Content>
+      </DialogPrimitive.Portal>
+    </DialogPrimitive.Root>
   );
 }

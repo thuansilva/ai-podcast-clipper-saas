@@ -43,11 +43,11 @@ describe("CustomVideoPlayer", () => {
   it("alterna o mute ao clicar no botão de volume", () => {
     render(<CustomVideoPlayer src="https://example.com/video.mp4" />);
 
-    expect(screen.getByLabelText(/^mute$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Desativar som")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByLabelText(/^mute$/i));
+    fireEvent.click(screen.getByLabelText("Desativar som"));
 
-    expect(screen.getByLabelText(/^unmute$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Ativar som")).toBeInTheDocument();
   });
 
   it("atualiza a barra de progresso conforme o vídeo reproduz e reseta ao terminar", () => {

@@ -159,6 +159,7 @@ function NavLinkItem({ item, isActive, showIconFallback }: NavLinkItemProps) {
           href={item.url}
           target={item.newTab ? "_blank" : undefined}
           rel={item.newTab ? "noreferrer" : undefined}
+          aria-current={isActive ? "page" : undefined}
         >
           <NavLinkIcon item={item} showFallback={showIconFallback} />
           <span>{item.title}</span>
@@ -256,6 +257,7 @@ function NavCollapsibleItem({ item, isActive, defaultOpen, isSubItemActive }: Na
                       href={subItem.url}
                       target={subItem.newTab ? "_blank" : undefined}
                       rel={subItem.newTab ? "noreferrer" : undefined}
+                      aria-current={isSubItemActive(subItem.url) ? "page" : undefined}
                     >
                       {SubIcon && <SubIcon />}
                       <span>{subItem.title}</span>
