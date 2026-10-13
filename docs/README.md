@@ -42,6 +42,8 @@ Tudo que você precisa para rodar, manter e diagnosticar o sistema em produção
 |-----------|-----------|------------------|-----------|
 | **checklist-go-live.md** | Checklist consolidado de **21 BLOCKERs** resolvidos (100% ✅) + itens HIGH e NICE. Auditoria realizada por 6 especialistas (devops, security, domain, qa, frontend, accessibility). Todos os riscos críticos (billing, webhooks, segurança, infra, CI, produto) com notas de resolução. | Antes de qualquer release para produção. Primeira coisa a revisar se algo quebrar em prod. | DevOps, Architect, Tech Lead, PM |
 | **aws-s3-lifecycle-rules.md** | Guia passo a passo para configurar regras de ciclo de vida no S3: expiração automática de uploads/youtube após 1 dia, manter clips/ para sempre. Economia: ~95% em custo de storage. | Quando preparar ambiente de produção; quando revisar custos de AWS. | DevOps, Cloud Architect |
+| **estrategia-rollback.md** | Como desfazer um deploy ruim: rollback do frontend (Vercel), do backend (Modal, com o histórico de deployments), das migrations do Prisma (forward-fix, sem down automático), ordem segura quando frontend e backend mudaram juntos (contrato `/process_video` v1 vs v2) e critérios objetivos para acionar rollback. Deploy real e provedores ainda a confirmar. | Antes de publicar uma release; durante um incidente após deploy. | DevOps, Tech Lead |
+| **backup-restore-postgres.md** | Backup com `pg_dump` (formato custom), frequência e retenção propostas, restore em banco novo com `pg_restore` e alinhamento com `prisma migrate deploy`/`migrate diff`, e teste periódico de restore. Provedor do Postgres de produção ainda a confirmar. | Antes do go-live; mensalmente (teste de restore); durante incidente de dados. | DevOps, DBA, Tech Lead |
 | **minio-dev-local.md** | Como subir o MinIO (S3-compatível, gratuito) para dev local com `docker compose up -d minio minio-init`: portas 9000/9001, credenciais do usuário restrito da aplicação (variáveis `MINIO_APP_*`), limitação de o Modal não alcançar `localhost`, e por que a imagem é a Chainguard (fixada por digest) em vez de `minio/minio`. | Antes de desenvolver com storage local, rodar testes `pytest -m minio` / `test:integration` de storage, ou trocar a versão da imagem. | DevOps, Backend Dev, Frontend Dev |
 | **observabilidade.md** | Lições aprendidas do stack local OpenTelemetry + Prometheus + Grafana + Tempo + Loki: indexação com delay, busca por trace ID vs /api/search, métricas do collector. | Quando debugar traces; para entender timing de observabilidade; para estender stack em prod. | DevOps, Backend Dev, SRE |
 
@@ -168,7 +170,9 @@ RNF-PERF-03: Processamento de vídeo < 5 minutos para 30min de podcast
 ### Preparando lançamento em produção:
 1. `./operacao/checklist-go-live.md` → validar todos os BLOCKERs resolvidos
 2. `./operacao/aws-s3-lifecycle-rules.md` → configurar S3 lifecycle
-3. `./operacao/observabilidade.md` → estender stack pra prod
+3. `./operacao/estrategia-rollback.md` → procedimento de rollback e critérios de acionamento
+4. `./operacao/backup-restore-postgres.md` → backup, restore e teste de restore do Postgres
+5. `./operacao/observabilidade.md` → estender stack pra prod
 
 ---
 

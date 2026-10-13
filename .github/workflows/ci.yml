@@ -5,6 +5,22 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Gatilhos só do job "k6-load-test" (ver checklist-go-live.md, "Testes de
+  # carga com k6 nunca executados"). Deliberadamente NÃO em push/pull_request:
+  # os cenários k6 (load-tests/) são lentos (perfil "load" leva ~2min de
+  # rampa) e os thresholds de latência/erro (load-tests/config/thresholds.js)
+  # nunca foram calibrados contra um runner de produção real — rodar isso em
+  # todo PR adicionaria minutos a cada push sem o benefício de um gate
+  # confiável (um runner hospedado e compartilhado do GitHub Actions tem
+  # variância de CPU/rede bem maior que qualquer baseline real, então um
+  # "vermelho" aqui não seria necessariamente uma regressão de verdade).
+  # workflow_dispatch: para rodar manualmente quando quiser conferir a carga
+  # antes de uma mudança sensível. schedule: baseline semanal para não deixar
+  # o script apodrecer sem nunca ser executado (o problema original deste
+  # item do checklist).
+  workflow_dispatch: {}
+  schedule:
+    - cron: "23 5 * * 1" # toda segunda-feira, 05:23 UTC
 
 jobs:
   frontend:
@@ -212,3 +228,170 @@ jobs:
 
       - name: Run Pytest (local_server.py)
         run: pytest tests/test_local_server.py -v
+
+  k6-load-test:
+    name: k6 Load Test (manual/scheduled baseline, non-blocking)
+    runs-on: ubuntu-latest
+    # Só roda quando disparado manualmente ou pelo cron semanal (ver "on:" no
+    # topo do arquivo) — nunca em push/pull_request, então nunca bloqueia um
+    # PR/merge. Thresholds de load-tests/config/thresholds.js ainda não foram
+    # calibrados contra produção real, então uma falha de threshold aqui é
+    # só um sinal a investigar, não um gate.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'schedule'
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ai_podcast_clipper
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    defaults:
+      run:
+        working-directory: ai-podcast-clipper-frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: ai-podcast-clipper-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client & Apply Migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper?connection_limit=5
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
+
+      # Mesmo bloco de env vars fake/dummy do job "frontend" acima (ver os
+      # comentários lá para o porquê de cada uma), com duas adições
+      # necessárias só aqui: INNGEST_DEV=1 + INNGEST_EVENT_KEY. O cenário
+      # main-suite.js bate em /api/webhooks/stripe de verdade, que despacha
+      # para o Inngest (StripeBackgroundQueue) — em NODE_ENV=production (o
+      # que "next start" usa) sem INNGEST_EVENT_KEY o enqueue lança e a rota
+      # responde 503, o que faria o k6 reportar falha mesmo sem nenhum bug
+      # real. Mesmo padrão já usado por scripts/test-everything.sh (que roda
+      # localmente o Inngest dev server para o mesmo propósito).
+      # SKIP_ENV_VALIDATION=1 continua necessário e, como efeito colateral,
+      # também desliga a validação de "assertInngestProductionEnv" (src/env.js)
+      # que em produção de verdade proibiria INNGEST_DEV=1 — aceitável aqui
+      # porque este harness nunca representa produção real.
+      - name: Build Next.js app and start server in background
+        env:
+          SKIP_ENV_VALIDATION: "1"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_podcast_clipper?connection_limit=5
+          BASE_URL: http://localhost:3000
+          AWS_ACCESS_KEY_ID: mock_key
+          AWS_SECRET_ACCESS_KEY: mock_secret
+          AWS_REGION: us-east-1
+          S3_BUCKET_NAME: mock-bucket
+          PROCESS_VIDEO_ENDPOINT: https://mock.modal.run/process_video
+          PROCESS_VIDEO_ENDPOINT_AUTH: mock-auth-token
+          STRIPE_SECRET_KEY: sk_test_mock
+          STRIPE_PRICE_ID_PLAN_STARTER_MONTHLY: price_starter_monthly_mock
+          STRIPE_PRICE_ID_PLAN_STARTER_ANNUAL: price_starter_annual_mock
+          STRIPE_PRICE_ID_PLAN_PRO_MONTHLY: price_pro_monthly_mock
+          STRIPE_PRICE_ID_PLAN_PRO_ANNUAL: price_pro_annual_mock
+          STRIPE_SMALL_CREDIT_PACK: price_small_123
+          STRIPE_MEDIUM_CREDIT_PACK: price_med_456
+          STRIPE_LARGE_CREDIT_PACK: price_large_789
+          # Precisa casar com o default usado por load-tests/helpers/stripe-signature.js
+          # (generateStripeSignature) quando STRIPE_WEBHOOK_SECRET não é passado via
+          # --env ao k6 — senão todo webhook assinado pelo k6 falha a verificação de
+          # assinatura no servidor com 400, mascarando qualquer sinal de carga real.
+          STRIPE_WEBHOOK_SECRET: whsec_test_secret
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_mock
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuYWNjb3VudHMuZGV2JA
+          CLERK_SECRET_KEY: sk_test_YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY3ODkw
+          CLERK_WEBHOOK_SECRET: whsec_mock_clerk
+          INNGEST_DEV: "1"
+          INNGEST_EVENT_KEY: local-test-event-key
+        run: |
+          npm run build
+          nohup npm run start > next-server.log 2>&1 &
+          echo $$ > next-server.pgid
+
+      - name: Wait for Next.js server to become healthy
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3000/api/health > /dev/null; then
+              echo "Servidor respondeu em /api/health após ${i} tentativa(s)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Servidor não respondeu em /api/health dentro do tempo esperado." >&2
+          echo "--- next-server.log ---" >&2
+          cat next-server.log >&2 || true
+          exit 1
+
+      - name: Start Inngest dev server in background
+        run: |
+          nohup npx inngest-cli@latest dev > inngest-dev.log 2>&1 &
+          echo $! > inngest-dev.pid
+          # Sem endpoint de healthcheck HTTP simples e estável (mesma
+          # limitação documentada em scripts/test-everything.sh) — polling
+          # leve de "a porta já responde algo" + sleep de settle para a
+          # sincronização inicial de funções terminar.
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8288 > /dev/null 2>&1; then
+              echo "Inngest dev server respondeu após ${i} tentativa(s)."
+              break
+            fi
+            sleep 2
+          done
+          sleep 3
+
+      # Não instalamos o binário k6 nativo (apt) de propósito: os scripts
+      # "test:load*" (package.json) já usam "PATH=./bin:$PATH k6 run ...",
+      # e "./bin/k6" (versionado no repo) é um wrapper que roda a imagem
+      # oficial "grafana/k6" via `docker run --network host` (ver
+      # load-tests/README.md, "Opção A: Docker — já configurado"). Runners
+      # hospedados do GitHub Actions já têm o Docker Engine disponível, então
+      # reaproveitamos exatamente o mesmo caminho já usado localmente em vez
+      # de introduzir uma segunda forma de instalar k6 só para o CI.
+      #
+      # Cada cenário roda como step próprio com "continue-on-error: true":
+      # uma falha de threshold (latência/taxa de erro) fica visível no
+      # resumo do job (ícone de aviso), mas não derruba o job nem o run —
+      # coerente com a decisão de não bloquear nada com isso (thresholds
+      # ainda não calibrados contra produção real).
+      - name: Run k6 — main suite (perfil "load", ~2min)
+        continue-on-error: true
+        run: npm run test:load
+
+      - name: Run k6 — fluxo de presigned URL do S3 (perfil "smoke")
+        continue-on-error: true
+        run: npm run test:load:s3
+
+      - name: Run k6 — webhook do Stripe (perfil "smoke")
+        continue-on-error: true
+        run: npm run test:load:stripe
+
+      - name: Stop Inngest dev server and Next.js server
+        if: always()
+        run: |
+          if [ -f inngest-dev.pid ]; then
+            kill "$(cat inngest-dev.pid)" 2>/dev/null || true
+            rm -f inngest-dev.pid
+          fi
+          if [ -f next-server.pgid ]; then
+            kill -- "-$(cat next-server.pgid)" 2>/dev/null || true
+            rm -f next-server.pgid
+          fi

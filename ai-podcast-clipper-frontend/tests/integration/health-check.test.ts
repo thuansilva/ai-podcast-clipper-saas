@@ -6,7 +6,13 @@ import { describe, it, expect } from "vitest";
 describe("Health Check Route - Integration Tests", () => {
   const baseUrl = process.env.TEST_BASE_URL || "http://localhost:3000";
 
-  it("deve responder com status 200 em GET /api/health", async () => {
+  // Postgres é a única dependência dura garantida em TODOS os ambientes
+  // onde esta suíte roda hoje: CI (serviço docker real), `npm run
+  // test:everything` (docker-compose local) e dev manual (Postgres local).
+  // S3/Stripe/Redis não têm essa garantia (CI usa credenciais fake de
+  // propósito — ver `.github/workflows/ci.yml`), então o probe continua
+  // sempre 200 independente delas.
+  it("deve responder com status 200 em GET /api/health (Postgres saudável neste ambiente de teste)", async () => {
     const res = await fetch(`${baseUrl}/api/health`, {
       method: "GET",
       headers: {
@@ -17,7 +23,7 @@ describe("Health Check Route - Integration Tests", () => {
     expect(res.status).toBe(200);
   });
 
-  it("deve retornar um objeto JSON com status 'ok'", async () => {
+  it("deve retornar { status, checks } com o resultado individual de cada dependência", async () => {
     const res = await fetch(`${baseUrl}/api/health`, {
       method: "GET",
       headers: {
@@ -27,8 +33,26 @@ describe("Health Check Route - Integration Tests", () => {
 
     expect(res.status).toBe(200);
     const data = await res.json();
+
     expect(data).toHaveProperty("status");
-    expect(data.status).toBe("ok");
+    expect(["ok", "degraded"]).toContain(data.status);
+
+    expect(data).toHaveProperty("checks");
+    expect(data.checks).toHaveProperty("postgres");
+    expect(data.checks).toHaveProperty("s3");
+    expect(data.checks).toHaveProperty("stripe");
+    expect(data.checks).toHaveProperty("redis");
+
+    // Postgres: dependência dura, sempre real nestes ambientes de teste.
+    expect(data.checks.postgres.status).toBe("ok");
+
+    // S3/Stripe: credenciais podem ser fake (CI) ou reais (dev/MinIO local)
+    // dependendo de onde a suíte roda — só garantimos o formato do status.
+    expect(["ok", "error"]).toContain(data.checks.s3.status);
+    expect(["ok", "error"]).toContain(data.checks.stripe.status);
+
+    // Redis/Upstash é opcional — "skipped" quando não configurado.
+    expect(["ok", "error", "skipped"]).toContain(data.checks.redis.status);
   });
 
   it("deve retornar Content-Type application/json", async () => {

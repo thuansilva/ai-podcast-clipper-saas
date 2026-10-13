@@ -164,7 +164,48 @@ collector, como no item 1).
 
 ---
 
-## 5. Referência rápida: como consultar cada peça durante debug local
+## 5. `GET /api/health` do frontend: liveness vs. readiness por dependência (RNF-AVAIL-01)
+
+`ai-podcast-clipper-frontend/src/app/api/health/route.ts` não é mais um
+stub (`{ status: "ok" }` fixo) — ele roda 4 checks reais em paralelo, cada
+um com timeout de 2.5s: Postgres (`SELECT 1` via Prisma), S3
+(`HeadBucketCommand`, read-only), Stripe (`balance.retrieve()`, sem custo
+nem efeito colateral) e Redis/Upstash (`GET /ping`, só quando
+`UPSTASH_REDIS_REST_URL`/`TOKEN` estão configurados — senão `"skipped"`,
+já que é opcional). A lógica fica em
+`src/infrastructure/health/dependency-health-checks.ts`.
+
+```json
+{
+  "status": "ok" | "degraded",
+  "checks": {
+    "postgres": { "status": "ok", "latencyMs": 5 },
+    "s3": { "status": "error", "latencyMs": 666, "error": "..." },
+    "stripe": { "status": "ok", "latencyMs": 180 },
+    "redis": { "status": "skipped" }
+  }
+}
+```
+
+**Decisão deliberada: só o Postgres derruba o HTTP para 503.** S3, Stripe e
+Redis são reportados individualmente no corpo (`"ok" | "error" |
+"skipped"`), mas uma falha neles só deixa `status: "degraded"` no corpo —
+o HTTP continua 200. Motivo: este é o mesmo endpoint usado por
+`.github/workflows/ci.yml` (step "Wait for Next.js server to become
+healthy") como probe de "o servidor Next subiu", num ambiente onde S3 e
+Stripe recebem credenciais fake de propósito (o CI não tem acesso a
+AWS/Stripe reais). Se o status HTTP dependesse delas, o probe nunca
+passaria — por isso Postgres (dependência dura de praticamente toda rota)
+é o único critério de 503.
+
+Ao usar este endpoint para alertar/monitorar em produção, não baste olhar
+o status HTTP: leia o campo `status` e o `checks` individual — `200` com
+`"degraded"` é um sinal válido de "o app está de pé mas uma dependência
+não-crítica está com problema", não "tudo ok".
+
+---
+
+## 6. Referência rápida: como consultar cada peça durante debug local
 
 ```bash
 # Health dos containers
@@ -192,4 +233,7 @@ curl -s -G "http://localhost:3100/loki/api/v1/query_range" \
 
 # Targets que o Prometheus está raspando (ex.: confirmar que o otel-collector está "up")
 curl -s http://localhost:9090/api/v1/targets
+
+# Liveness + readiness por dependência do frontend (item 5)
+curl -s http://localhost:3000/api/health | jq
 ```

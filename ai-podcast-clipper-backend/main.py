@@ -14,13 +14,18 @@ import shutil
 import uuid
 
 import modal
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from google import genai
 
 from core.moments import identify_moments as core_identify_moments
 from core.moments_factory import create_moments_provider
 from core.otel_setup import setup_otel
+from core.rate_limit import (
+    enforce_rate_limit,
+    make_download_youtube_rate_limiter,
+    make_process_video_rate_limiter,
+)
 from core.schemas import (
     DownloadYouTubeRequest,
     DownloadYouTubeResponse,
@@ -88,6 +93,27 @@ auth_scheme = HTTPBearer()
 
 ASD_DIR = "/asd"
 
+# RNF-RL-03: per-IP throttling (defaults 10/min process_video, 30/min
+# download_youtube; env-overridable — see core/rate_limit.py). In-memory, so
+# on Modal these counters are PER CONTAINER: not shared between replicas and
+# lost on scale-down. Best-effort against a single origin hammering a warm
+# container, not a global guarantee (checklist-go-live.md documents it).
+PROCESS_VIDEO_RATE_LIMITER = make_process_video_rate_limiter()
+DOWNLOAD_YOUTUBE_RATE_LIMITER = make_download_youtube_rate_limiter()
+
+
+# Module-level lookup at call time (not a captured reference) so tests can
+# swap the limiter. Declared as the LAST parameter of each endpoint so the
+# existing positional raw calls keep working; FastAPI still resolves it
+# before the function body, i.e. before the Bearer token comparison — wrong
+# token guesses are throttled too.
+def _throttle_process_video(http_request: Request) -> None:
+    enforce_rate_limit(PROCESS_VIDEO_RATE_LIMITER, http_request)
+
+
+def _throttle_download_youtube(http_request: Request) -> None:
+    enforce_rate_limit(DOWNLOAD_YOUTUBE_RATE_LIMITER, http_request)
+
 
 @app.cls(
     gpu="L40S",
@@ -95,8 +121,8 @@ ASD_DIR = "/asd"
     retries=0,
     scaledown_window=20,
     # RNF/checklist (HIGH, P0): teto de custo de GPU — sem isso, um flood de
-    # /process_video (token estático, sem rate limit por usuário nesta
-    # camada) escalaria containers sem limite. Valor conservador (decisão do
+    # /process_video (token estático; o rate limit por IP — RNF-RL-03 — é
+    # por container, não global) escalaria containers sem limite. Valor conservador (decisão do
     # usuário, 2026-10-12); ajustar depois com dado real de uso.
     max_containers=2,
     secrets=[modal.Secret.from_name("ai-podcast-clipper-secret")],
@@ -135,6 +161,7 @@ class AiPodcastClipper:
         self,
         request: ProcessVideoRequest,
         token: HTTPAuthorizationCredentials = Depends(auth_scheme),
+        _throttle: None = Depends(_throttle_process_video),
     ) -> ProcessVideoResponse:
         expected_token = os.environ.get("AUTH_TOKEN") or ""
         # RNF-SEC-07: constant-time comparison (no timing side channel); bytes so a
@@ -182,6 +209,7 @@ class AiPodcastClipper:
 def download_youtube(
     request: DownloadYouTubeRequest,
     token: HTTPAuthorizationCredentials = Depends(auth_scheme),
+    _throttle: None = Depends(_throttle_download_youtube),
 ) -> DownloadYouTubeResponse:
     expected_token = os.environ.get("AUTH_TOKEN") or ""
     # RNF-SEC-07: constant-time comparison (no timing side channel); bytes so a

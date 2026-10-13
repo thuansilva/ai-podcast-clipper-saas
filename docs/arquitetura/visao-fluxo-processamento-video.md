@@ -250,6 +250,21 @@ Faz HTTP POST para `env.PROCESS_VIDEO_ENDPOINT` (Modal em produção OU GPU loca
 
 Ambos (Modal e GPU local) recebem esse payload. `core/schemas.py::ProcessVideoRequest` usa `extra="forbid"`: campo desconhecido gera HTTP 422 em vez de ser descartado em silêncio (RN-PIPE-MANUAL-13). `mode` tem default `"auto"` (RN-PIPE-MANUAL-14). `mode="manual"` exige `manual_cuts` não vazio, e `mode="auto"` não aceita cortes (RN-PIPE-MANUAL-02/03). `aspect_ratio`, `auto_zoom` e `genre` são aceitos, mas **ainda não têm efeito** no processamento (RN-PIPE-MANUAL-12, gap conhecido D1). `preset` de legenda é validado contra uma allowlist (`SubtitlePreset`); valor fora dela gera 422 antes de qualquer comando de shell (RN-PIPE-PRESET-01, RNF-SEC-16).
 
+**Ordem das barreiras na entrada do backend (`/process_video` e `/download_youtube`, nos dois runners):**
+
+```mermaid
+flowchart LR
+    REQ["POST do Inngest<br/>(Bearer AUTH_TOKEN)"] --> RL{"Rate limit por IP<br/>core/rate_limit.py<br/>process_video 10/min<br/>download_youtube 30/min"}
+    RL -->|"acima do limite"| R429["HTTP 429 + Retry-After<br/>(sem pipeline/yt-dlp)"]
+    RL -->|"dentro do limite"| AUTH{"Bearer == AUTH_TOKEN?<br/>hmac.compare_digest"}
+    AUTH -->|"não"| R401["HTTP 401"]
+    AUTH -->|"sim"| SCHEMA{"Schema Pydantic<br/>extra=forbid, s3_key"}
+    SCHEMA -->|"inválido"| R422["HTTP 422"]
+    SCHEMA -->|"válido"| RUN["Pipeline / download"]
+```
+
+O rate limit (RNF-RL-03, 2026-10-12) vem antes da comparação do token, então tentativas de adivinhar o `AUTH_TOKEN` também consomem o orçamento do IP (no Modal, requisição sem header `Authorization` é recusada pelo `HTTPBearer` antes de contar). Chave = `request.client.host` (`X-Forwarded-For` ignorado). **Limitação:** o estado é em memória — no `local_server.py` é exato; no Modal é **por container** (não compartilhado entre réplicas, zera em scale-down) e o check roda dentro do container, depois do enfileiramento — evita o trabalho caro, não o slot de GPU. A vazão sustentada de `/process_video` continua limitada pelo `max_containers=2`. O frontend hoje trata 429 como erro genérico (sem respeitar `Retry-After`). Detalhes e pendências: `docs/operacao/checklist-go-live.md` (item "Rate limiting nos endpoints do backend Python").
+
 ### Fluxo Principal do Backend: `core/video_pipeline.run_video_processing_pipeline()`
 
 **Arquivo**: `ai-podcast-clipper-backend/core/video_pipeline.py`
@@ -496,6 +511,7 @@ Usuário clica **"Reprocessar"** na Dashboard:
 | **Contrato do download** | `DownloadYouTubeRequest` (`extra="forbid"`, `s3_key` só `youtube/<uuid>/original.mp4`); host fora de YouTube → 400; indisponível → 404; restrição de idade → 403; resto → 500 | Idêntico (mesmo schema e mesmo mapeamento de erros) |
 | **Input video** | Chave de storage, baixada pelo `ObjectStorage` | Idêntico: chave de storage (MinIO em dev). Sem atalho de arquivo local nos dois ambientes desde 2026-10-11 (RNF-SEC-19, ver risco 2) |
 | **S3 bucket** | Hardcoded: `"ai-podcast-clipper"` | Hardcoded: `"ai-podcast-clipper"` |
+| **Rate limit por IP (RNF-RL-03)** | `core/rate_limit.py` via `Depends` em cada endpoint; 10/min `/process_video`, 30/min `/download_youtube`; **por container** (não global) | Mesmo módulo e mesmos defaults, via `dependencies=[Depends(...)]` nas rotas; processo único → limite exato |
 
 **Resultado**: ambos produzem exatamente os mesmos clipes, na mesma ordem, com a mesma qualidade. Não há surpresas ao fazer deploy em produção.
 

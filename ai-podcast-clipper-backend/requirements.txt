@@ -1,26 +1,66 @@
-tqdm
-torch
-opencv-python
-ffmpegcv
-numpy
-python_speech_features
-scipy
+# Pinning exato (checklist-go-live.md, "Dependências Python sem versão
+# fixada", 2026-10-12). Antes deste commit nenhum pacote abaixo (exceto
+# `scenedetect`) tinha versão fixa, então `pip install`/`modal deploy`
+# podia resolver versões diferentes das validadas nesta sessão.
+#
+# Fonte da maioria dos pins: `pip freeze` do `.venv` local do backend
+# (ambiente que já roda a suíte `pytest` completa desta sessão).
+#
+# EXCEÇÃO IMPORTANTE — torch / torchvision / transformers: `pip check`
+# nesse mesmo `.venv` já apontava um conflito real preexistente (`whisperx
+# 3.7.2 has requirement torch>=2.7.1, but you have torch 2.4.0+cu124` e o
+# mesmo para `transformers>=4.48.0`/`triton>=3.3.0`) — ou seja, o `.venv`
+# está com esse trio desatualizado em relação ao que o próprio `whisperx`
+# já pinado declara precisar. Confirmado na prática: gerar
+# `requirements.txt` com os valores literais do `pip freeze` para esse
+# trio faz `pip install -r requirements.txt` falhar de cara com
+# `ResolutionImpossible` (pip recusa instalar `torch==2.4.0` junto de
+# `whisperx==3.7.2`). Por isso esses 3 pacotes foram pinados não a partir
+# do `.venv`, mas a partir da única resolução consistente que o próprio
+# `pip` encontra hoje para satisfazer todas as outras versões já fixas
+# abaixo + o piso mínimo exigido pelo `whisperx` (`torch==2.14.1`,
+# `torchvision==0.29.1`, `transformers==5.17.0`). `triton` (dependência
+# transitiva do whisperx/torch, nunca foi um pacote de topo neste arquivo)
+# resolve para `3.8.0`, compatível.
+#
+# Validado nesta sessão (não só resolução de metadados): `pip install -r
+# requirements.txt` real (não `--dry-run`) num venv novo, completo, sem
+# erros (`pip check` limpo depois); import conjunto de
+# torch/torchvision/transformers/whisperx/cv2/pandas/numpy/scenedetect
+# sem erro; suíte `pytest tests/test_local_server.py -v` (mesmo comando do
+# job `backend-local-server` do CI) — **59 passed** nesse venv novo.
+#
+# RESSALVA (residual, não resolvida nesta sessão): o que falta é
+# especificamente o ambiente do `modal deploy` real — container Modal com
+# base `nvidia/cuda:12.4.0-devel-ubuntu22.04` (`main.py`), GPU de verdade e
+# um processamento de vídeo de ponta a ponta. Esta sessão rodou em CPU,
+# sem GPU disponível; `torch.cuda.is_available()` não foi exercitado.
+# Resta essa validação (ação do usuário, fora do escopo desta tarefa)
+# antes de confiar 100% nisso em produção — ver
+# docs/operacao/checklist-go-live.md.
+tqdm==4.70.0
+torch==2.14.1
+opencv-python==4.14.0.94
+ffmpegcv==0.3.18
+numpy==2.0.2
+python_speech_features==0.6
+scipy==1.18.1
 scenedetect==0.6.7.1
-scikit-learn
-gdown
-torchvision
-pandas
-transformers
-accelerate
-datasets
-google-genai
-anthropic
-pysubs2
-boto3
-fastapi[standard]
-whisperx
-yt-dlp
-opentelemetry-api
-opentelemetry-sdk
-opentelemetry-instrumentation-fastapi
-opentelemetry-exporter-otlp-proto-http
+scikit-learn==1.9.1
+gdown==6.2.0
+torchvision==0.29.1
+pandas==2.2.3
+transformers==5.17.0
+accelerate==1.15.0
+datasets==5.0.1
+google-genai==2.23.0
+anthropic==1.13.0
+pysubs2==1.9.0
+boto3==1.43.92
+fastapi[standard]==0.141.1
+whisperx==3.7.2
+yt-dlp==2026.8.19
+opentelemetry-api==1.45.0
+opentelemetry-sdk==1.45.0
+opentelemetry-instrumentation-fastapi==0.66b0
+opentelemetry-exporter-otlp-proto-http==1.45.0

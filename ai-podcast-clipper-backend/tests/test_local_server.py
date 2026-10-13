@@ -797,3 +797,101 @@ class TestProcessVideoEndpointRejectsHostileCutsWith422:
 
         assert response.status_code == 422
         process_video.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# RNF-RL-03 — per-IP throttling on the local runner. Same shared limiter
+# (core/rate_limit.py) and same defaults as main.py; here it is a real
+# FastAPI app, so the limiter runs as a route-level dependency, before the
+# Bearer check. Single process => the counters really are shared by every
+# request this server receives (unlike Modal, where they are per container).
+# ---------------------------------------------------------------------------
+
+from core.rate_limit import SlidingWindowRateLimiter  # noqa: E402
+
+RATE_LIMIT_PEER = ("203.0.113.10", 40000)
+RATE_LIMIT_OTHER_PEER = ("198.51.100.20", 40000)
+
+
+@pytest.fixture
+def rate_limited_local(monkeypatch):
+    monkeypatch.setenv("AUTH_TOKEN", "test-secret")
+    monkeypatch.setattr(local_server, "models_loaded", True)
+    process = MagicMock(return_value=schemas.ProcessVideoResponse(file_id="x", clips=[]))
+    monkeypatch.setattr(local_server.video_processor, "process_video", process)
+    downloader = MagicMock(
+        return_value={"s3_key": LOCAL_VALID_KEY, "title": "t", "duration": 1, "thumbnail": None}
+    )
+    monkeypatch.setattr(local_server, "download_youtube_to_s3", downloader)
+    monkeypatch.setattr(local_server, "create_object_storage", MagicMock(return_value=FakeObjectStorage()))
+    monkeypatch.setattr(
+        local_server, "PROCESS_VIDEO_RATE_LIMITER", SlidingWindowRateLimiter(limit=2, window_seconds=60)
+    )
+    monkeypatch.setattr(
+        local_server, "DOWNLOAD_YOUTUBE_RATE_LIMITER", SlidingWindowRateLimiter(limit=3, window_seconds=60)
+    )
+    return process, downloader
+
+
+class TestLocalServerRateLimit:
+    def test_production_defaults_match_main(self):
+        assert local_server.PROCESS_VIDEO_RATE_LIMITER.limit == 10
+        assert local_server.DOWNLOAD_YOUTUBE_RATE_LIMITER.limit == 30
+        assert local_server.PROCESS_VIDEO_RATE_LIMITER.window_seconds == 60
+        assert local_server.DOWNLOAD_YOUTUBE_RATE_LIMITER.window_seconds == 60
+
+    def test_process_video_under_limit_ok_then_429(self, rate_limited_local):
+        process, _ = rate_limited_local
+        peer = TestClient(app, client=RATE_LIMIT_PEER)
+        payload = load_manual_cuts_payload()
+        codes = [
+            peer.post("/process_video", json=payload, headers=AUTH_HEADERS).status_code
+            for _ in range(3)
+        ]
+        assert codes == [200, 200, 429]
+        assert process.call_count == 2
+
+    def test_process_video_429_carries_retry_after(self, rate_limited_local):
+        peer = TestClient(app, client=RATE_LIMIT_PEER)
+        payload = load_manual_cuts_payload()
+        for _ in range(2):
+            peer.post("/process_video", json=payload, headers=AUTH_HEADERS)
+        response = peer.post("/process_video", json=payload, headers=AUTH_HEADERS)
+        assert response.status_code == 429
+        assert int(response.headers["Retry-After"]) >= 1
+
+    def test_download_youtube_under_limit_ok_then_429(self, rate_limited_local):
+        _, downloader = rate_limited_local
+        peer = TestClient(app, client=RATE_LIMIT_PEER)
+        codes = [
+            peer.post("/download_youtube", json={"url": LOCAL_VALID_URL}, headers=AUTH_HEADERS).status_code
+            for _ in range(4)
+        ]
+        assert codes == [200, 200, 200, 429]
+        assert downloader.call_count == 3
+
+    def test_other_ip_keeps_its_own_budget(self, rate_limited_local):
+        attacker = TestClient(app, client=RATE_LIMIT_PEER)
+        for _ in range(4):
+            attacker.post("/download_youtube", json={"url": LOCAL_VALID_URL}, headers=AUTH_HEADERS)
+        other = TestClient(app, client=RATE_LIMIT_OTHER_PEER)
+        response = other.post("/download_youtube", json={"url": LOCAL_VALID_URL}, headers=AUTH_HEADERS)
+        assert response.status_code == 200
+
+    def test_unauthenticated_flood_is_throttled_before_auth(self, rate_limited_local):
+        """Route-level dependency runs before the Bearer check: token guessing
+        (and header-less floods) get 429 after the budget, like main.py."""
+        peer = TestClient(app, client=RATE_LIMIT_PEER)
+        codes = [
+            peer.post(
+                "/download_youtube",
+                json={"url": LOCAL_VALID_URL},
+                headers={"Authorization": "Bearer wrong-token"},
+            ).status_code
+            for _ in range(4)
+        ]
+        assert codes == [401, 401, 401, 429]
+
+    def test_health_check_is_not_throttled(self, rate_limited_local):
+        peer = TestClient(app, client=RATE_LIMIT_PEER)
+        assert all(peer.get("/").status_code == 200 for _ in range(50))

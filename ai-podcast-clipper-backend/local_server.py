@@ -26,7 +26,7 @@ os.environ.setdefault("TORCH_HOME", "/tmp/ai-podcast-clipper-models")
 from typing import Optional
 
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 auth_scheme = HTTPBearer()
@@ -119,6 +119,11 @@ load_dotenv()
 from google import genai
 
 from core.moments_factory import create_moments_provider
+from core.rate_limit import (
+    enforce_rate_limit,
+    make_download_youtube_rate_limiter,
+    make_process_video_rate_limiter,
+)
 from core.schemas import (
     DownloadYouTubeRequest,
     DownloadYouTubeResponse,
@@ -144,13 +149,29 @@ ASD_DIR = os.environ.get("ASD_DIR", "/asd")
 
 app = FastAPI(title="Local Podcast Clipper Backend")
 
+# RNF-RL-03: same per-IP limiter and defaults as main.py (shared
+# core/rate_limit.py). Single process here, so the counters really are shared
+# by every request this server receives (on Modal they are per container).
+PROCESS_VIDEO_RATE_LIMITER = make_process_video_rate_limiter()
+DOWNLOAD_YOUTUBE_RATE_LIMITER = make_download_youtube_rate_limiter()
+
+
+def throttle_process_video(http_request: Request) -> None:
+    enforce_rate_limit(PROCESS_VIDEO_RATE_LIMITER, http_request)
+
+
+def throttle_download_youtube(http_request: Request) -> None:
+    enforce_rate_limit(DOWNLOAD_YOUTUBE_RATE_LIMITER, http_request)
+
 
 @app.get("/")
 def health_check():
     return {"status": "ok"}
 
 
-@app.post("/download_youtube")
+# Route-level dependency: runs before the Bearer check (token guessing and
+# header-less floods are throttled too).
+@app.post("/download_youtube", dependencies=[Depends(throttle_download_youtube)])
 def download_youtube(
     req: DownloadYouTubeRequest, _: None = Depends(verify_auth_token)
 ) -> DownloadYouTubeResponse:
@@ -268,7 +289,7 @@ video_processor = LocalVideoProcessor()
 models_loaded = False
 
 
-@app.post("/process_video")
+@app.post("/process_video", dependencies=[Depends(throttle_process_video)])
 def process_video_endpoint(req: ProcessVideoRequest, _: None = Depends(verify_auth_token)):
     global models_loaded
     try:
