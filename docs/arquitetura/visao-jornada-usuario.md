@@ -371,6 +371,8 @@ No topo do card "Configurações do Corte" (`CreateProjectClient`) há um radio 
 - O **vídeo original** não é mais um banner: fica escondido atrás do botão de ícone (`original-video-trigger`, com tooltip). Ao clicar abre um popover com thumbnail, nome, "X min de duração" e o link de texto **"Assistir no YouTube"** (a URL crua não é exibida), que abre em nova aba com aviso para leitor de tela (RF-UI-06). O link é remontado a partir da URL canônica, nunca do valor bruto salvo, e só aparece se a URL for válida. O botão some se o projeto não tiver thumbnail nem URL.
 - A **busca de cortes** (RF-UI-08) é um formulário GET com `?q=`: filtra no servidor por título ou gancho, sem diferenciar maiúsculas. A paginação passa a usar a contagem filtrada e preserva `q`. Sem resultado, aparece "Nenhum corte encontrado para '...'" com link para limpar a busca.
 
+- **Feedback de cortes em geração** (RF-UI-09, 2026-10-14): enquanto houver `ProjectProcessingBatch` em `queued`/`processing`, o topo da seção "Cortes Gerados" mostra um banner discreto ("Gerando N cortes… Isso pode levar alguns minutos. A página atualiza sozinha.") e, na 1ª página sem busca, cards placeholder no grid, antes dos cortes existentes, no mesmo formato vertical do card de corte (shimmer e spinner só animam sem `prefers-reduced-motion`). Lote manual: 1 card por corte pedido, com título (se houver) e "mm:ss – mm:ss" do vídeo original; lote de IA: 1 card "IA analisando mm:ss – mm:ss". Cada card mostra "Na fila" ou "Gerando…". A página faz `router.refresh()` a cada 5 s enquanto houver lote ativo; quando termina, os placeholders somem, os cortes novos aparecem e um toast "Novos cortes prontos!" é exibido. O botão **Adicionar cortes** fica desabilitado (`aria-disabled`, "Aguarde os cortes em geração terminarem") durante a geração. Se o lote **mais recente** falhou, um alerta mostra o motivo e que os créditos reservados do lote foram devolvidos (ou que nada foi cobrado); ele some ao criar um novo lote (sem notificação persistente). Seletores: `clips-generating-banner`, `clip-generating-placeholder`, `clips-batch-failed-alert`.
+
 ---
 
 #### 2.10 Adicionar Cortes a um Projeto Existente (2026-10-13)
@@ -399,6 +401,7 @@ flowchart TD
 - Projeto com clipe manual do YouTube criado antes desta feature (sem tempo de origem) não aceita cortes novos (RN-PROJ-APPEND-02).
 - Só um lote pode estar ativo por projeto. Enquanto houver um em `queued` ou `processing`, a tela mostra o aviso de bloqueio (RNF-IDEM-07).
 - Fluxo de processamento: ver `visao-fluxo-processamento-video.md`, seção "Adicionar Cortes a Projeto Existente".
+- Cabeçalho (2026-10-14): card com a thumbnail do vídeo original (placeholder com ícone quando não há), o rótulo "Adicionar cortes", o nome do projeto, a duração em minutos e o link em texto **"Assistir no YouTube"** (href canônico via `YouTubeUrl`, nova aba; a URL crua não é exibida e URLs inválidas não viram link). Abaixo, uma linha informativa: "Você só paga pelos cortes novos. Os cortes já gerados continuam intactos." Seletores: `append-video-thumbnail`, `append-video-thumbnail-placeholder`, `append-video-meta`, `append-youtube-url`.
 
 ---
 

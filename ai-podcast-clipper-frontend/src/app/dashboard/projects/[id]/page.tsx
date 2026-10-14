@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
-import { ArrowLeft, Clock, Film, Plus, Search, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Clock, Film, Loader2, Plus, Search, X } from "lucide-react";
 import { isManualCut } from "~/domain/services/clip-origin.service";
 import { formatClipsDurationLabel } from "~/domain/services/clip-duration.service";
 import { YouTubeUrl } from "~/domain/value-objects/youtube-url.vo";
@@ -10,6 +10,12 @@ import { ClipCard } from "~/components/clip-card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { OriginalVideoPopover } from "~/components/dashboard/original-video-popover";
+import { ProjectBatchPoller } from "~/components/dashboard/project-batch-poller";
+import { ClipGeneratingPlaceholder } from "~/components/dashboard/clip-generating-placeholder";
+import {
+  buildGeneratingPlaceholders,
+  describeGeneratingBanner,
+} from "~/lib/generating-batch-placeholders";
 import {
   Pagination,
   PaginationContent,
@@ -79,6 +85,28 @@ export default async function ProjectDetailsPage(props: {
   ]);
 
   if (!project) redirect("/dashboard/projects");
+
+  // Feedback de lotes "adicionar cortes": ativos (queued/processing) + o lote
+  // mais recente. A falha só é exibida se o lote MAIS RECENTE do projeto estiver
+  // `failed` (sem notificação persistente: some quando um novo lote é criado).
+  // Consulta só após confirmar que o projeto pertence ao usuário.
+  const [activeBatches, latestBatch] = await Promise.all([
+    db.projectProcessingBatch.findMany({
+      where: { uploadedFileId: id, status: { in: ["queued", "processing"] } },
+      orderBy: { createdAt: "asc" },
+    }),
+    db.projectProcessingBatch.findFirst({
+      where: { uploadedFileId: id },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+  const generatingPlaceholders = buildGeneratingPlaceholders(activeBatches);
+  const hasActiveBatch = generatingPlaceholders.length > 0;
+  const failedBatch =
+    !hasActiveBatch && latestBatch?.status === "failed" ? latestBatch : null;
+  // Placeholders ocupam o grid só na 1ª página sem busca (onde os cortes novos
+  // entrariam, por ordem de criação desc); o banner aparece sempre.
+  const showPlaceholders = hasActiveBatch && page === 1 && !query;
 
   const totalClips = project._count.clips;
   // Com busca ativa a paginação é calculada sobre a contagem filtrada.
@@ -197,23 +225,88 @@ export default async function ProjectDetailsPage(props: {
               {/*
                 Botão "Adicionar cortes": `<Link>` real para a rota
                 `/dashboard/projects/[id]/add-clips`. `data-testid`
-                mantém o seletor estável pros testes.
+                mantém o seletor estável pros testes. Com lote em geração
+                vira botão `aria-disabled` (continua focável para o leitor de
+                tela ouvir o motivo; sem navegação).
               */}
-              <Button
-                asChild
-                size="lg"
-                className="flex-1 bg-[var(--ouro)] text-black hover:bg-[var(--ouro)]/90 focus-visible:ring-[var(--ouro)]/60 sm:flex-none"
-              >
-                <Link href={`${basePath}/add-clips`} data-testid="add-clips-slot">
-                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-                  Adicionar cortes
-                </Link>
-              </Button>
+              {hasActiveBatch ? (
+                <>
+                  <Button
+                    type="button"
+                    size="lg"
+                    aria-disabled="true"
+                    aria-describedby="add-clips-disabled-reason"
+                    title="Aguarde os cortes em geração terminarem"
+                    data-testid="add-clips-slot"
+                    className="flex-1 cursor-not-allowed bg-[var(--ouro)] text-black opacity-50 hover:bg-[var(--ouro)] focus-visible:ring-[var(--ouro)]/60 sm:flex-none"
+                  >
+                    <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    Adicionar cortes
+                  </Button>
+                  <span id="add-clips-disabled-reason" className="sr-only">
+                    Aguarde os cortes em geração terminarem
+                  </span>
+                </>
+              ) : (
+                <Button
+                  asChild
+                  size="lg"
+                  className="flex-1 bg-[var(--ouro)] text-black hover:bg-[var(--ouro)]/90 focus-visible:ring-[var(--ouro)]/60 sm:flex-none"
+                >
+                  <Link href={`${basePath}/add-clips`} data-testid="add-clips-slot">
+                    <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    Adicionar cortes
+                  </Link>
+                </Button>
+              )}
             </div>
           </div>
         </div>
 
-        {totalClips === 0 ? (
+        <ProjectBatchPoller activeCount={generatingPlaceholders.length} />
+
+        {hasActiveBatch && (
+          <div
+            data-testid="clips-generating-banner"
+            className="mb-4 flex items-start gap-2 rounded-lg border border-[var(--ouro)]/40 bg-[var(--ouro)]/10 px-4 py-3 text-sm text-[var(--marfim)]"
+          >
+            <Loader2
+              className="mt-0.5 h-4 w-4 shrink-0 text-[var(--ouro)] motion-safe:animate-spin"
+              aria-hidden="true"
+            />
+            <p>
+              <span className="font-semibold">
+                {describeGeneratingBanner(generatingPlaceholders)}
+              </span>{" "}
+              Isso pode levar alguns minutos. A página atualiza sozinha.
+            </p>
+          </div>
+        )}
+
+        {failedBatch && (
+          <div
+            role="alert"
+            data-testid="clips-batch-failed-alert"
+            className="mb-4 flex items-start gap-2 rounded-lg border border-red-400/50 bg-red-500/10 px-4 py-3 text-sm text-[var(--marfim)]"
+          >
+            <AlertTriangle
+              className="mt-0.5 h-4 w-4 shrink-0 text-red-400"
+              aria-hidden="true"
+            />
+            <div className="space-y-1">
+              <p className="font-semibold">Não foi possível gerar os cortes adicionados.</p>
+              {failedBatch.errorMessage && <p>{failedBatch.errorMessage}</p>}
+              <p className="text-[var(--prata)]">
+                {failedBatch.creditsCost > 0
+                  ? `Os ${failedBatch.creditsCost} créditos reservados para este lote foram devolvidos. `
+                  : "Nenhum crédito foi cobrado por este lote. "}
+                Os cortes existentes não foram afetados; você pode tentar adicionar novamente.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {totalClips === 0 && !showPlaceholders ? (
           <div className="py-20 text-center text-[var(--fumaca)] border border-dashed border-[var(--linha)] rounded-xl">
             {project.status === "processing" || project.status === "queued"
               ? "O projeto está sendo processado. Os cortes aparecerão aqui em breve."
@@ -221,7 +314,7 @@ export default async function ProjectDetailsPage(props: {
                 ? ("Falha ao processar o projeto. " + (project.errorMessage || "")).trim()
                 : "Nenhum corte gerado."}
           </div>
-        ) : filteredClips === 0 ? (
+        ) : filteredClips === 0 && !showPlaceholders ? (
           <div
             data-testid="clips-search-empty"
             className="py-20 text-center text-[var(--fumaca)] border border-dashed border-[var(--linha)] rounded-xl"
@@ -237,6 +330,13 @@ export default async function ProjectDetailsPage(props: {
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+              {showPlaceholders &&
+                generatingPlaceholders.map((placeholder) => (
+                  <ClipGeneratingPlaceholder
+                    key={placeholder.key}
+                    placeholder={placeholder}
+                  />
+                ))}
               {project.clips.map((clip) => (
                 <ClipCard
                   key={clip.id}

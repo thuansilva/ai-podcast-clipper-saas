@@ -5,6 +5,7 @@ import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
 
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
   redirect: vi.fn((url: string) => {
     const error = new Error("NEXT_REDIRECT");
     (error as any).digest = `NEXT_REDIRECT;${url}`;
@@ -24,6 +25,10 @@ vi.mock("~/server/db", () => ({
     clip: {
       aggregate: vi.fn(),
       count: vi.fn(),
+    },
+    projectProcessingBatch: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
   },
 }));

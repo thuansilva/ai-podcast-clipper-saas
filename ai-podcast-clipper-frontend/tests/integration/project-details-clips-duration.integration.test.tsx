@@ -21,6 +21,13 @@ import { db } from "~/server/db";
 import ProjectDetailsPage from "~/app/dashboard/projects/[id]/page";
 import { useRollbackTransactionPerTest } from "../helpers/with-rollback-transaction";
 
+// O poller de lotes (client component) usa useRouter; fora do App Router real
+// precisa ser mockado.
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn() }),
+  redirect: vi.fn(),
+}));
+
 const mockGetUserId = vi.fn();
 vi.mock("~/infrastructure/factories/auth-factory", () => ({
   makeAuthGateway: () => ({ getUserId: mockGetUserId }),

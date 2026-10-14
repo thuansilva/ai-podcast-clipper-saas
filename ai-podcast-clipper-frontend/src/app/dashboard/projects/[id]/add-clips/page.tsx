@@ -103,6 +103,7 @@ export default async function AddClipsToProjectPage(props: {
         projectId={project.id}
         projectName={project.displayName || project.id}
         youtubeUrl={project.youtubeUrl!}
+        thumbnailUrl={project.thumbnailUrl}
         videoDurationSeconds={project.durationSeconds}
         usedRanges={usedRanges}
         userCredits={user?.credits ?? 0}

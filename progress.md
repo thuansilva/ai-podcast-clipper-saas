@@ -4,6 +4,39 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 
 ---
 
+### 2026-10-14: Cabeçalho da tela "Adicionar cortes" mais limpo (thumbnail + link em texto)
+- **Commit(s):** ainda não commitado
+- **O que foi feito:** o cabeçalho de `src/components/dashboard/add-clips-to-project-client.tsx` exibia a URL crua do YouTube ("Vídeo original: https://…"). Agora é um card com a thumbnail (ou placeholder), o nome do projeto, a duração e o link em texto "Assistir no YouTube" (href canônico via `YouTubeUrl.tryCreate`, igual à tela de detalhes), seguido do aviso de cobrança mais curto. `page.tsx` da rota `add-clips` passa `thumbnailUrl`. A estrutura do restante do formulário não mudou
+- **Testes (RED observado → GREEN):** 5 casos novos em `tests/unit/components/add-clips-to-project-client.test.tsx` (link canônico sem URL crua, thumbnail, placeholder, URL inválida sem link, duração) e `thumbnailUrl` repassado em `tests/unit/app/dashboard/add-clips-page.test.tsx`. `npm run check` limpo; `npm run test` 1121 passed/8 skipped; `tests/integration/add-clips-to-project-client.integration.test.tsx` passou
+- **Docs:** seção 2.10 de `docs/arquitetura/visao-jornada-usuario.md`
+
+### 2026-10-14: Bugfix — "Adicionar cortes" ficava em loading infinito (função Inngest não registrada)
+- **Commit(s):** ainda não commitado
+- **Sintoma:** depois de pedir novos cortes, a página do projeto ficava com os placeholders "Na fila" para sempre e nada aparecia em execução no Inngest
+- **Causa:** `appendClipsToProject` existia em `src/inngest/functions.ts`, mas não estava na lista de `functions` do `serve()` em `src/app/api/inngest/route.ts`. O Inngest dev server recebia o evento `append-clips-events` (confirmado nos logs) mas não tinha função registrada para ele, então o lote nunca saía de `queued`
+- **Correção:** função registrada na rota. Depois do re-sync, o Inngest lista `append-clips-to-project` e `append-clips-to-project-failure`
+- **Teste (RED observado → GREEN):** novo `tests/unit/app/api/inngest-route.test.ts`, que falha se qualquer função exportada de `functions.ts` não estiver registrada (pegou `appendClipsToProject`). `npm run check` limpo; `npm run test` 1116 passed/8 skipped; `tests/integration/inngest-serve-signature.integration.test.ts` 4/4
+- **Docs:** nota no RF-PROJ-06 em `docs/requisitos/requisitos-funcionais-e-nao-funcionais.md`
+- **Pendência:** os 2 lotes criados antes do fix (`cmv8knkta0008ubqi1hlc6aul`, `cmv8kr488000aubqivhqrn20t`) continuam `queued`; o evento original já foi consumido sem função, então eles não andam sozinhos
+
+### 2026-10-14: Feedback de cortes em geração na tela de detalhes do projeto
+- **Commit(s):** ainda não commitado
+- **O que foi feito:**
+  - A página `/dashboard/projects/[id]` agora consulta os lotes `ProjectProcessingBatch` ativos (`queued`/`processing`) e o mais recente; mostra banner "Gerando N cortes…", cards placeholder 9/16 (manual: um por corte com título e `mm:ss – mm:ss`; IA: "IA analisando") e, se o lote mais recente falhou, alerta com o `errorMessage` e a situação dos créditos (conferido em `appendClipsToProjectHandler`: a falha reembolsa o hold do lote via `skipFileStatusUpdate`; `creditsCost = 0` significa que a falha foi antes da reserva)
+  - Novo client component `project-batch-poller.tsx`: `router.refresh()` a cada 5 s enquanto houver lote ativo, toast "Novos cortes prontos!" e região `role="status"` para leitores de tela; botão "Adicionar cortes" fica `aria-disabled` durante a geração
+  - Testes (TDD, RED observado antes do código): unitários do helper, do poller (fake timers) e da página; integração com Postgres real (`project-details-generating-batches.integration.test.tsx`). Mocks de `next/navigation`/`db` dos testes existentes da página ajustados (poller usa `useRouter`)
+  - Docs: seção 2.9 da visão da jornada, RF-UI-09 e matriz
+- **Por quê:** o usuário só descobria que o lote estava em andamento ao esbarrar em `ProjectBatchInProgressError`
+- **Ressalva:** o polling não tem teto de tempo (lote preso em `queued` por falha do Inngest o mantém ligado)
+
+### 2026-10-14: Bugfix — clipes do fluxo normal sem tempo original bloqueavam "Adicionar cortes"
+- **Commit(s):** ainda não commitado
+- **Sintoma:** ao tentar adicionar cortes num projeto do YouTube criado com cortes manuais, a tela dizia "Este projeto tem clipes antigos sem o tempo original registrado…", mesmo em projeto criado hoje.
+- **Causa:** o passo `persist-clips-and-consume` do `processVideoHandler` (`src/inngest/functions.ts`) nunca gravava `Clip.sourceStartTime`/`sourceEndTime`; só o fluxo de append gravava. O backfill da migration `20261014015607` cobria só clipes anteriores a ela.
+- **Correção (TDD, RED observado):** função pura `resolveClipSourceRange` em `src/domain/services/clip-source-range.service.ts` (identity / merged-range / remapped-cuts; `null` quando não casa), usada pelos dois fluxos. Testes: `tests/unit/domain/services/clip-source-range.service.test.ts`, `tests/unit/inngest/process-video-clip-source-range.test.ts` (4 casos falharam antes do fix), `tests/integration/process-video-clip-source-range.integration.test.ts` (falhou sem o fix via `git stash`, passa com ele).
+- **Reparo de dados:** migration `20261014180000_backfill_manual_cut_clip_source_time` preenche o tempo original a partir de `manualCutsJson` (array ou string JSON) só quando nº de cortes = nº de clipes, todos os clipes do projeto estão sem source e as durações pareadas batem em 1s. Aplicada no banco local: os 4 projetos afetados foram preenchidos e não resta clipe sem source. Casos ambíguos (duração diferente, contagem diferente, JSON inválido) conferidos numa transação com ROLLBACK: ficam `null`.
+- **Verificado:** `npm run check` limpo; `npm run test` 1097 passed/8 skipped; `npm run test:integration` 178 passed/2 failed — as 2 falhas são de `stripe-webhook-real-http.integration.test.ts` (HTTP 400 contra o dev server em `localhost:3000`, que estava rodando com o `.env` local; não relacionadas a este fix).
+
 ### 2026-10-14: Menu lateral — "Meus Projetos" movido para o grupo "Geral"
 - **Commit(s):** ainda não commitado
 - **O que foi feito:** o usuário removeu o grupo próprio "Meus Projetos" (`id: 2`) em `src/navigation/sidebar/sidebar-items.ts` e colocou o item dentro do grupo "Geral", junto de "Início". A busca do header (`search-dialog.tsx`) é derivada dessa lista, então "Meus Projetos" passa a aparecer agrupado em "Geral" lá também, sem mudança de código.

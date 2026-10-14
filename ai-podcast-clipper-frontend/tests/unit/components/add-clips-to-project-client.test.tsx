@@ -71,7 +71,8 @@ const sliderValues = (testId: string) =>
 const baseProps = {
   projectId: "project-1",
   projectName: "Meu Podcast",
-  youtubeUrl: "https://www.youtube.com/watch?v=abc123",
+  youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&feature=share",
+  thumbnailUrl: "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
   videoDurationSeconds: 3600,
   usedRanges: [{ start: 0, end: 30 }],
   userCredits: 50,
@@ -88,9 +89,49 @@ describe("AddClipsToProjectClient", () => {
 
     expect(screen.getByRole("radio", { name: /IA gera mais/i })).toBeChecked();
     expect(screen.getByRole("radio", { name: /Manual: eu defino/i })).not.toBeChecked();
-    expect(screen.getByTestId("append-youtube-url")).toHaveTextContent(baseProps.youtubeUrl);
     // Não há input de URL editável neste fluxo.
     expect(screen.queryByPlaceholderText(/youtube\.com\/watch/i)).not.toBeInTheDocument();
+  });
+
+  describe("cabeçalho do vídeo original", () => {
+    it("mostra o link em texto 'Assistir no YouTube' com href canônico, sem a URL crua", () => {
+      render(<AddClipsToProjectClient {...baseProps} />);
+
+      const link = screen.getByTestId("append-youtube-url");
+      expect(link.tagName).toBe("A");
+      expect(link).toHaveAttribute("href", "https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+      expect(link).toHaveAttribute("target", "_blank");
+      expect(link).toHaveAttribute("rel", "noopener noreferrer");
+      expect(link).toHaveTextContent(/Assistir no YouTube/);
+      expect(screen.queryByText(/youtube\.com\/watch/)).not.toBeInTheDocument();
+    });
+
+    it("mostra a thumbnail do vídeo original quando existe", () => {
+      render(<AddClipsToProjectClient {...baseProps} />);
+
+      const img = screen.getByTestId("append-video-thumbnail");
+      expect(img).toHaveAttribute("src", baseProps.thumbnailUrl);
+      expect(img).toHaveAttribute("alt", expect.stringMatching(/Meu Podcast/));
+    });
+
+    it("usa um placeholder quando não há thumbnail", () => {
+      render(<AddClipsToProjectClient {...baseProps} thumbnailUrl={null} />);
+
+      expect(screen.queryByTestId("append-video-thumbnail")).not.toBeInTheDocument();
+      expect(screen.getByTestId("append-video-thumbnail-placeholder")).toBeInTheDocument();
+    });
+
+    it("não renderiza link quando a URL não é do YouTube", () => {
+      render(<AddClipsToProjectClient {...baseProps} youtubeUrl="javascript:alert(1)//youtube.com" />);
+
+      expect(screen.queryByTestId("append-youtube-url")).not.toBeInTheDocument();
+    });
+
+    it("mostra a duração do vídeo original", () => {
+      render(<AddClipsToProjectClient {...baseProps} />);
+
+      expect(screen.getByTestId("append-video-meta")).toHaveTextContent("60 min");
+    });
   });
 
   it("mostra a trilha de trechos já usados em ambos os modos", () => {

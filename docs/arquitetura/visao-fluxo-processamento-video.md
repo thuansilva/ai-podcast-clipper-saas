@@ -460,6 +460,7 @@ O Modal retorna `ModalProcessVideoResponse`:
    - Cria `Clip` row no banco com metadados
    - Mapeia campo `s3_key` (snake_case) → `s3Key` (camelCase) conforme Prisma
    - Armazena `words` do clipe em `Clip.transcriptWords` (tempos relativos ao clipe; consumido por `clip-editor-modal` e `clip-details-modal`)
+   - Grava `Clip.sourceStartTime`/`sourceEndTime` (tempo no vídeo ORIGINAL, pré-requisito do "adicionar cortes") via `resolveClipSourceRange` (`src/domain/services/clip-source-range.service.ts`): YouTube com cortes manuais casa o clipe com `remappedManualCuts` pelo par `new_start`/`new_end` (tolerância 0,5 s); upload direto e YouTube automático (vídeo inteiro baixado) usam `start`/`end` direto. Sem correspondência, grava `null` (nunca inventa). _Bugfix 2026-10-14: antes este passo não gravava esses campos — projetos com cortes manuais criados após a migration `20261014015607` ficavam bloqueados como "legados"; reparados pela migration `20261014180000_backfill_manual_cut_clip_source_time`._
 
 2. Chama `ConsumeCreditsUseCase`:
    - Cria `CreditTransaction` com `type: CONSUME`
@@ -546,7 +547,7 @@ sequenceDiagram
 | `mark-batch-processing` | Grava `s3Key` e `creditsCost` no lote | `ProjectProcessingBatch` |
 | `call-modal-gpu` | Manual: envia os cortes remapeados para o arquivo baixado. Automático: envia os `excluded_ranges` remapeados para a timeline do arquivo do lote | `buildAppendProcessVideoPayload`, `remapOriginalRangeToOutput` |
 | Backend | `/download_youtube` com `slice` baixa um único trecho e devolve `remapped_ranges` com um item. `/process_video` com `excluded_ranges` descarta candidatos da IA que se sobrepõem, antes do `clips_limit` (só modo automático) | `core/youtube_downloader.py::resolve_download_time_ranges`, `core/video_pipeline.py` (`_filter_out_excluded_ranges`) |
-| `persist-clips-and-consume` | Insere os clipes com `sourceStartTime`/`sourceEndTime` (tempo no vídeo original, por `remappedRanges` no automático e pelo par `new_start`/`new_end` no manual, tolerância de 0,5 s); consome o hold; lote vira `processed` | `appendClipsToProjectHandler` |
+| `persist-clips-and-consume` | Insere os clipes com `sourceStartTime`/`sourceEndTime` (tempo no vídeo original, por `remappedRanges` no automático e pelo par `new_start`/`new_end` no manual, tolerância de 0,5 s); consome o hold; lote vira `processed` | `appendClipsToProjectHandler`, `resolveClipSourceRange` (mesma função do fluxo normal) |
 | `onFailure` | Lote vira `failed` com a mensagem; devolve só o crédito reservado do lote. Nada é apagado e `UploadedFile` não muda | `appendClipsToProject` (`onFailure`) |
 
 **Ciclo de vida do lote:** `queued` para `processing` para `processed`, ou `failed` em qualquer falha após o claim.

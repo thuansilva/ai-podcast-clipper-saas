@@ -4,6 +4,10 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  Clock,
+  ExternalLink,
+  Film,
+  Info,
   Loader2,
   PlusIcon,
   ScissorsIcon,
@@ -17,6 +21,7 @@ import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Slider } from "~/components/ui/slider";
 import { UsedRangesTrack } from "~/components/dashboard/used-ranges-track";
+import { YouTubeUrl } from "~/domain/value-objects/youtube-url.vo";
 
 import { addClipsToProjectAction } from "~/actions/projects-actions";
 import {
@@ -51,6 +56,7 @@ interface AddClipsToProjectClientProps {
   projectId: string;
   projectName: string;
   youtubeUrl: string;
+  thumbnailUrl?: string | null;
   videoDurationSeconds: number;
   /** Intervalos (segundos, absolutos no vídeo ORIGINAL) já usados por
    * clipes existentes do projeto — vem do server component, calculado a
@@ -70,12 +76,16 @@ export function AddClipsToProjectClient({
   projectId,
   projectName,
   youtubeUrl,
+  thumbnailUrl,
   videoDurationSeconds,
   usedRanges,
   userCredits,
 }: AddClipsToProjectClientProps) {
   const router = useRouter();
   const videoSeconds = Math.floor(videoDurationSeconds);
+  // Mesma proteção da tela de detalhes do projeto: o `href` é reconstruído
+  // pelo Value Object a partir do ID do vídeo, nunca a partir do valor bruto.
+  const validYoutubeUrl = useMemo(() => YouTubeUrl.tryCreate(youtubeUrl), [youtubeUrl]);
 
   const [mode, setMode] = useState<AppendMode>("auto");
   const [processing, setProcessing] = useState(false);
@@ -238,17 +248,70 @@ export function AddClipsToProjectClient({
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--marfim)] mb-1">
-          Adicionar cortes a &quot;{projectName}&quot;
-        </h1>
-        <p className="text-sm text-[var(--fumaca)]">
-          Você será cobrado apenas pelo que for adicionado agora — os cortes já gerados continuam intactos.
+      <header className="space-y-4">
+        <div className="flex flex-col gap-4 rounded-xl border border-[var(--linha)] bg-[var(--superficie)] p-4 sm:flex-row sm:items-center sm:gap-5">
+          <div className="relative w-full shrink-0 overflow-hidden rounded-lg border border-[var(--linha)] bg-[var(--superficie-2)] sm:w-44">
+            <div className="aspect-video">
+              {thumbnailUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- não há remotePatterns configurados para next/image (S3/YouTube); ver convenção em recent-videos-client.tsx
+                <img
+                  data-testid="append-video-thumbnail"
+                  src={thumbnailUrl}
+                  alt={`Thumbnail do vídeo original: ${projectName}`}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <div
+                  data-testid="append-video-thumbnail-placeholder"
+                  className="flex h-full w-full items-center justify-center text-[var(--fumaca)]"
+                >
+                  <Film className="h-8 w-8" aria-hidden="true" />
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--fumaca)]">
+              Adicionar cortes
+            </p>
+            <h1
+              className="line-clamp-2 break-words text-base font-semibold leading-snug text-[var(--marfim)] sm:text-lg"
+              title={projectName}
+            >
+              {projectName}
+            </h1>
+            <div
+              data-testid="append-video-meta"
+              className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--fumaca)]"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                <Clock className="h-4 w-4" aria-hidden="true" />
+                {Math.floor(videoSeconds / 60)} min
+              </span>
+              {validYoutubeUrl && (
+                <a
+                  data-testid="append-youtube-url"
+                  href={validYoutubeUrl.canonicalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-sm text-[var(--prata)] underline-offset-4 hover:text-[var(--ouro)] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ouro)]"
+                >
+                  Assistir no YouTube
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                  <span className="sr-only">(abre em nova aba)</span>
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <p className="flex items-start gap-2 text-sm text-[var(--fumaca)]">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          Você só paga pelos cortes novos. Os cortes já gerados continuam intactos.
         </p>
-        <p className="mt-2 truncate text-xs text-[var(--fumaca)]" data-testid="append-youtube-url">
-          Vídeo original: {youtubeUrl}
-        </p>
-      </div>
+      </header>
 
       {submitError && (
         <p role="alert" className="rounded-xl border border-red-400/40 bg-red-500/10 p-4 text-sm text-red-400">

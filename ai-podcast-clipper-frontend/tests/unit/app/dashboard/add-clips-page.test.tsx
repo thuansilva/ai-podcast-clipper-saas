@@ -42,6 +42,7 @@ const youtubeProject = {
   displayName: "Meu Podcast",
   sourceType: "YOUTUBE",
   youtubeUrl: "https://www.youtube.com/watch?v=abc12345678",
+  thumbnailUrl: "https://img.youtube.com/vi/abc12345678/hqdefault.jpg",
   durationSeconds: 3600,
   clips: [] as Array<{ sourceStartTime: number | null; sourceEndTime: number | null }>,
 };
@@ -147,6 +148,7 @@ describe("AddClipsToProjectPage", () => {
     const props = JSON.parse(client.textContent || "{}");
     expect(props.projectId).toBe("proj-1");
     expect(props.youtubeUrl).toBe(youtubeProject.youtubeUrl);
+    expect(props.thumbnailUrl).toBe(youtubeProject.thumbnailUrl);
     expect(props.usedRanges).toEqual([{ start: 10, end: 40 }]);
     expect(props.userCredits).toBe(42);
   });

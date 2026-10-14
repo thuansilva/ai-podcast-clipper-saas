@@ -29,10 +29,11 @@ import {
   type ProcessVideoWireManualCut,
 } from "~/application/services/process-video-payload.service";
 import { buildAppendProcessVideoPayload } from "~/application/services/append-clips-payload.service";
+import { remapOriginalRangeToOutput } from "~/domain/services/time-range-remap.service";
 import {
-  remapOriginalRangeToOutput,
-  remapOutputTimeToOriginal,
-} from "~/domain/services/time-range-remap.service";
+  resolveClipSourceRange,
+  type ClipSourceRemap,
+} from "~/domain/services/clip-source-range.service";
 import { AiSliceRequiredError } from "~/domain/errors/ai-slice-required-error";
 import type {
   AddClipsToProjectEventData,
@@ -463,11 +464,25 @@ export async function processVideoHandler({
       () => step.run("persist-clips-and-consume", async () => {
       const clips = modalResult.clips ?? [];
 
+      // Tempo no vídeo ORIGINAL de cada clipe (pré-requisito do "adicionar
+      // mais cortes"). `remappedManualCuts` só existe quando o YouTube foi
+      // baixado parcialmente para cortes manuais (e o step anterior já
+      // falha se ele faltar nesse caso); em todos os outros caminhos
+      // (upload direto, YouTube automático baixado inteiro) o arquivo
+      // processado É o vídeo original.
+      const sourceRemap: ClipSourceRemap = reservation.remappedManualCuts
+        ? { kind: "remapped-cuts", cuts: reservation.remappedManualCuts }
+        : { kind: "identity" };
+
       if (clips.length > 0) {
         await db.clip.createMany({
           data: clips.map((clip) => {
             const start = clip.start ?? clip.startTime ?? 0;
             const end = clip.end ?? clip.endTime ?? 0;
+            const { sourceStartTime, sourceEndTime } = resolveClipSourceRange(
+              { start, end },
+              sourceRemap,
+            );
             const dur = clip.duration ?? (end > start ? end - start : 0);
             const score =
               typeof clip.virality_score === "number"
@@ -489,6 +504,8 @@ export async function processVideoHandler({
               reason: clip.reason ?? null,
               startTime: start,
               endTime: end,
+              sourceStartTime,
+              sourceEndTime,
               durationSeconds: dur,
               subtitlePreset:
                 clip.preset ?? clip.subtitlePreset ?? preset ?? "HORMOZI",
@@ -976,22 +993,13 @@ export async function appendClipsToProjectHandler({
                 // nunca inventado: auto remapeia via `remapped_ranges`,
                 // manual casa pelo par new_start/new_end já devolvido em
                 // `remapped_cuts`).
-                let sourceStart: number | null = null;
-                let sourceEnd: number | null = null;
-                if (mode === "auto" && mergedRange) {
-                  sourceStart = remapOutputTimeToOriginal(start, mergedRange);
-                  sourceEnd = remapOutputTimeToOriginal(end, mergedRange);
-                } else if (mode === "manual" && reservation.remappedCuts) {
-                  const matched = reservation.remappedCuts.find(
-                    (cut) =>
-                      Math.abs(cut.new_start - start) < 0.5 &&
-                      Math.abs(cut.new_end - end) < 0.5,
+                const { sourceStartTime: sourceStart, sourceEndTime: sourceEnd } =
+                  resolveClipSourceRange(
+                    { start, end },
+                    mode === "auto"
+                      ? { kind: "merged-range", mergedRange }
+                      : { kind: "remapped-cuts", cuts: reservation.remappedCuts },
                   );
-                  if (matched) {
-                    sourceStart = matched.original_start;
-                    sourceEnd = matched.original_end;
-                  }
-                }
 
                 return {
                   s3Key: clip.s3_key ?? clip.s3Key ?? "",
