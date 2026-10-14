@@ -1,18 +1,11 @@
 "use client";
 
-import { Clock, ExternalLink, Film } from "lucide-react";
-import { Button } from "~/components/ui/button";
+import { ChevronDown, Clock, ExternalLink, Film } from "lucide-react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "~/components/ui/tooltip";
 
 interface OriginalVideoPopoverProps {
   displayName: string | null;
@@ -26,8 +19,8 @@ interface OriginalVideoPopoverProps {
 }
 
 /**
- * Botão de ícone que revela, sob demanda, os dados do vídeo original do
- * projeto. O conteúdo fica escondido até o clique e a URL crua nunca é
+ * Chip clicável (ao lado das métricas do cabeçalho do projeto) que revela,
+ * sob demanda, os dados do vídeo original do projeto. O conteúdo fica escondido até o clique e a URL crua nunca é
  * exibida: o acesso ao YouTube é um link de texto.
  */
 export function OriginalVideoPopover({
@@ -40,28 +33,25 @@ export function OriginalVideoPopover({
 
   return (
     <Popover>
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <PopoverTrigger asChild>
-              <Button
-                type="button"
-                variant="outline"
-                size="icon-lg"
-                aria-label="Ver vídeo original"
-                data-testid="original-video-trigger"
-                className="border-[var(--linha)] bg-[var(--superficie)] text-[var(--prata)] hover:bg-[var(--superficie-2)] hover:text-[var(--marfim)]"
-              >
-                <Film aria-hidden="true" />
-              </Button>
-            </PopoverTrigger>
-          </TooltipTrigger>
-          <TooltipContent>Vídeo original</TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
+      <PopoverTrigger asChild>
+        {/* Sem aria-label: o nome acessível é o próprio texto visível
+            ("Vídeo original"), atendendo WCAG 2.5.3 (label in name). */}
+        <button
+          type="button"
+          data-testid="original-video-trigger"
+          className="group inline-flex items-center gap-1.5 rounded-full border border-[var(--linha)] bg-[var(--superficie)] px-3 py-1 text-sm text-[var(--prata)] transition-colors hover:border-[var(--ouro)]/60 hover:text-[var(--marfim)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ouro)] data-[state=open]:border-[var(--ouro)]/60 data-[state=open]:text-[var(--marfim)]"
+        >
+          <Film className="h-4 w-4 text-[var(--ouro)]" aria-hidden="true" />
+          <span className="font-medium text-[var(--ouro)]">Vídeo original</span>
+          <ChevronDown
+            className="h-3.5 w-3.5 text-[var(--fumaca)] transition-transform group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+            aria-hidden="true"
+          />
+        </button>
+      </PopoverTrigger>
 
       <PopoverContent
-        align="end"
+        align="start"
         data-testid="original-video-card"
         className="w-80 gap-3 border border-[var(--linha)] bg-[var(--superficie)] p-3 text-[var(--marfim)]"
       >

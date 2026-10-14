@@ -4,6 +4,12 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 
 ---
 
+### 2026-10-14: "Vídeo original" vira chip ao lado das métricas do projeto
+- **Commit(s):** ainda não commitado
+- **O que foi feito:** a pedido do usuário, o acesso ao vídeo original saiu da toolbar (botão de ícone ao lado da busca) e foi para o cabeçalho, como um 3º chip ao lado de "X min de cortes gerados" e "N cortes gerados": "Vídeo original · N min" com chevron, abrindo o mesmo popover (agora alinhado à esquerda). As métricas viraram chips no mesmo estilo e a contagem passou a usar singular ("1 corte gerado"). A toolbar ficou só com busca e "Adicionar cortes". Ajuste seguinte, também a pedido: o chip do vídeo original passou a ser o 1º da linha, com ícone e rótulo na cor `--ouro` e sem a duração (que continua no popover); os chips de duração e contagem ganharam cor da paleta (`--chart-3` e `--chart-4`, fundo 10%/borda 30%) para não ficarem opacos. Arquivos: `src/app/dashboard/projects/[id]/page.tsx`, `src/components/dashboard/original-video-popover.tsx`
+- **Testes (RED observado → GREEN):** chip dentro de `project-stats` e fora de `clips-toolbar`, singular, nome acessível = texto visível (WCAG 2.5.3, sem `aria-label`), texto do chip no teste do popover. `npm run check` limpo; `npm run test` 1123 passed/8 skipped; `tests/integration/project-details*` passaram
+- **Docs:** seção 2.9 de `docs/arquitetura/visao-jornada-usuario.md`
+
 ### 2026-10-14: Cabeçalho da tela "Adicionar cortes" mais limpo (thumbnail + link em texto)
 - **Commit(s):** ainda não commitado
 - **O que foi feito:** o cabeçalho de `src/components/dashboard/add-clips-to-project-client.tsx` exibia a URL crua do YouTube ("Vídeo original: https://…"). Agora é um card com a thumbnail (ou placeholder), o nome do projeto, a duração e o link em texto "Assistir no YouTube" (href canônico via `YouTubeUrl.tryCreate`, igual à tela de detalhes), seguido do aviso de cobrança mais curto. `page.tsx` da rota `add-clips` passa `thumbnailUrl`. A estrutura do restante do formulário não mudou

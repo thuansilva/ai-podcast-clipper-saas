@@ -278,6 +278,20 @@ describe("ProjectDetailsPage", () => {
       expect(screen.queryByTestId("original-video-card")).toBeNull();
     });
 
+    it("coloca o vídeo original junto das métricas do cabeçalho, não na toolbar", async () => {
+      await renderWith({
+        youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&feature=share",
+        thumbnailUrl: "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+      });
+      const stats = screen.getByTestId("project-stats");
+      const trigger = screen.getByTestId("original-video-trigger");
+      expect(stats.contains(trigger)).toBe(true);
+      expect(screen.getByTestId("clips-toolbar").contains(trigger)).toBe(false);
+      expect(trigger).toHaveTextContent(/Vídeo original/);
+      // Vídeo original é o 1º chip; duração e contagem vêm depois.
+      expect(stats.firstElementChild).toBe(trigger);
+    });
+
     it("renderiza o trigger, mas mantém o card escondido até o clique", async () => {
       await renderWith({
         youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&feature=share",
@@ -347,6 +361,13 @@ describe("ProjectDetailsPage", () => {
         params: Promise.resolve({ id: "proj-s" }),
         searchParams: Promise.resolve(sp),
       });
+
+    it("usa singular quando o projeto tem 1 corte ('1 corte gerado')", async () => {
+      setup({ total: 1, filtered: 1, clips: [{ id: "c1", title: "Único", viralityScore: 5 }] });
+      render(await run({}));
+      expect(screen.getByText("1 corte gerado")).toBeDefined();
+      expect(screen.queryByText("1 cortes gerados")).toBeNull();
+    });
 
     it("renderiza o campo de busca (GET, aria-label) preenchido com o termo atual", async () => {
       setup({ total: 3, filtered: 1, clips: [{ id: "c1", title: "Café", viralityScore: 5 }] });

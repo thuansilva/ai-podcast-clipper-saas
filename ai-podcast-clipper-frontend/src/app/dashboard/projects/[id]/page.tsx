@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
-import { AlertTriangle, ArrowLeft, Clock, Film, Loader2, Plus, Search, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Clock, Loader2, Plus, Scissors, Search, X } from "lucide-react";
 import { isManualCut } from "~/domain/services/clip-origin.service";
 import { formatClipsDurationLabel } from "~/domain/services/clip-duration.service";
 import { YouTubeUrl } from "~/domain/value-objects/youtube-url.vo";
@@ -156,15 +156,27 @@ export default async function ProjectDetailsPage(props: {
         <h1 className="text-3xl font-bold tracking-tight text-[var(--marfim)] break-words">
           {project.displayName || project.id}
         </h1>
-        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-[var(--fumaca)]">
+        <div
+          data-testid="project-stats"
+          className="flex flex-wrap items-center gap-2"
+        >
+          {hasOriginalVideo && (
+            <OriginalVideoPopover
+              displayName={project.displayName}
+              durationMinutes={originalVideoMinutes}
+              thumbnailUrl={project.thumbnailUrl}
+              youtubeCanonicalUrl={validYoutubeUrl?.canonicalUrl ?? null}
+            />
+          )}
           <span
-            className="flex items-center"
+            className="inline-flex items-center gap-1.5 rounded-full border border-[var(--chart-3)]/30 bg-[var(--chart-3)]/10 px-3 py-1 text-sm text-[var(--chart-3)]"
             title={`Vídeo original: ${originalVideoMinutes} min`}
           >
-            <Clock className="mr-1.5 h-4 w-4" aria-hidden="true" /> {clipsDurationLabel}
+            <Clock className="h-4 w-4" aria-hidden="true" /> {clipsDurationLabel}
           </span>
-          <span className="flex items-center">
-            <Film className="mr-1.5 h-4 w-4" aria-hidden="true" /> {totalClips} cortes gerados
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[var(--chart-4)]/30 bg-[var(--chart-4)]/10 px-3 py-1 text-sm text-[var(--chart-4)]">
+            <Scissors className="h-4 w-4" aria-hidden="true" />
+            {totalClips === 1 ? "1 corte gerado" : `${totalClips} cortes gerados`}
           </span>
         </div>
       </header>
@@ -175,7 +187,7 @@ export default async function ProjectDetailsPage(props: {
             Cortes Gerados
           </h2>
 
-          {/* Toolbar à direita: [busca] [vídeo original] [adicionar cortes] */}
+          {/* Toolbar à direita: [busca] [adicionar cortes] */}
           <div
             data-testid="clips-toolbar"
             className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end"
@@ -213,15 +225,6 @@ export default async function ProjectDetailsPage(props: {
             </form>
 
             <div className="flex items-center gap-2">
-              {hasOriginalVideo && (
-                <OriginalVideoPopover
-                  displayName={project.displayName}
-                  durationMinutes={originalVideoMinutes}
-                  thumbnailUrl={project.thumbnailUrl}
-                  youtubeCanonicalUrl={validYoutubeUrl?.canonicalUrl ?? null}
-                />
-              )}
-
               {/*
                 Botão "Adicionar cortes": `<Link>` real para a rota
                 `/dashboard/projects/[id]/add-clips`. `data-testid`

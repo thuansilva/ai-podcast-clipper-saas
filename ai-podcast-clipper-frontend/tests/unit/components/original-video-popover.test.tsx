@@ -10,11 +10,11 @@ const baseProps = {
 };
 
 describe("OriginalVideoPopover", () => {
-  it("renderiza só o botão de ícone e mantém o conteúdo escondido até o clique", () => {
+  it("renderiza só o chip 'Vídeo original' (sem a duração) e mantém o conteúdo escondido até o clique", () => {
     render(<OriginalVideoPopover {...baseProps} />);
 
     const trigger = screen.getByTestId("original-video-trigger");
-    expect(trigger).toHaveAttribute("aria-label", "Ver vídeo original");
+    expect(trigger).toHaveTextContent(/^Vídeo original$/);
     expect(screen.queryByTestId("original-video-card")).toBeNull();
     expect(screen.queryByTestId("original-video-youtube-link")).toBeNull();
   });

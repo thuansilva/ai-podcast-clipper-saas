@@ -63,10 +63,11 @@ describe("ProjectDetailsPage (card do vídeo original e header) - Accessibility 
     vi.mocked(db.uploadedFile.findUnique).mockResolvedValue(project as any);
   });
 
-  it("o botão de ícone do vídeo original tem nome acessível e é um botão de popover (WCAG 4.1.2)", async () => {
+  it("o botão do vídeo original tem nome acessível igual ao texto visível e é um botão de popover (WCAG 4.1.2 / 2.5.3)", async () => {
     await renderProjectPage();
 
-    const trigger = screen.getByRole("button", { name: "Ver vídeo original" });
+    const trigger = screen.getByRole("button", { name: /^Vídeo original/ });
+    expect(trigger).not.toHaveAttribute("aria-label");
     expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     expect(trigger.className).toMatch(/focus-visible:ring/);
