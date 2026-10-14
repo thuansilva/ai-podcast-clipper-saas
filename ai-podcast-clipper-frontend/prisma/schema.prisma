@@ -103,13 +103,50 @@ model UploadedFile {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  clips Clip[]
+  clips             Clip[]
+  processingBatches ProjectProcessingBatch[]
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String
 
   @@index([s3Key])
   @@index([userId])
+}
+
+// Um lote de processamento incremental ("adicionar mais cortes" a um
+// projeto já existente — manual ou via IA sobre um novo trecho/slice) sobre
+// um `UploadedFile` já existente. Ver AddClipsToProjectUseCase para a
+// motivação completa: os campos únicos por projeto em `UploadedFile`
+// (status/creditsCost/manualCutsJson/sliceStartTime.../s3Key) assumem um
+// único processamento por projeto, incompatível com múltiplos lotes. Uma
+// falha num lote NUNCA deve afetar `UploadedFile.status` nem os clipes de
+// outros lotes.
+model ProjectProcessingBatch {
+  id     String @id @default(cuid())
+  mode   String // "manual" | "auto" (auto = IA sobre um novo slice)
+  // Manual: ManualCutDTO[] (tempos absolutos no vídeo ORIGINAL).
+  // Auto: { startTime, endTime } do slice novo escolhido (tempos absolutos
+  // no vídeo ORIGINAL).
+  rangesJson Json
+  // Snapshot dos intervalos já usados pelo projeto no momento da criação do
+  // lote (tempos absolutos no vídeo ORIGINAL), enviados ao backend como
+  // `excludedRanges` — guardado só para auditoria/depuração.
+  excludedRangesJson Json?
+  // Chave S3 do vídeo baixado deste lote (SEMPRE única — nunca reaproveita o
+  // s3Key do projeto nem de outro lote, ver RNF-SEC-18). Preenchida quando o
+  // download deste lote termina.
+  s3Key        String?
+  creditsCost  Int      @default(0)
+  status       String   @default("queued") // queued, processing, processed, failed
+  errorMessage String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  uploadedFile   UploadedFile @relation(fields: [uploadedFileId], references: [id], onDelete: Cascade)
+  uploadedFileId String
+
+  @@index([uploadedFileId])
+  @@index([status])
 }
 
 model Clip {
@@ -121,6 +158,13 @@ model Clip {
   reason          String?
   startTime       Float   @default(0)
   endTime         Float   @default(0)
+  // Tempo absoluto no vídeo ORIGINAL (nunca no arquivo baixado/concatenado
+  // que de fato foi processado nesta requisição — ver RF de "adicionar mais
+  // cortes" / AddClipsToProjectUseCase). `null` para clipes manuais de
+  // projetos do YouTube criados antes desta coluna existir (não há como
+  // recuperar esse tempo com certeza — nunca inventado por backfill).
+  sourceStartTime Float?
+  sourceEndTime   Float?
   durationSeconds Float   @default(0)
   subtitlePreset  String  @default("HORMOZI")
   layoutMode      String  @default("SMART_CROP")

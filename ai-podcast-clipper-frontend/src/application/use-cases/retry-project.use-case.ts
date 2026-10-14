@@ -24,6 +24,18 @@ export interface RetryProjectInput {
   >;
 }
 
+/**
+ * KNOWN GAP (documentado, não resolvido nesta tarefa — ver RF "adicionar
+ * mais cortes" / `AddClipsToProjectUseCase`): este use case apaga TODOS os
+ * clipes do projeto (`clipRepository.deleteByUploadedFileId`) antes de
+ * reenfileirar, o que é incompatível com projetos que já receberam algum
+ * "lote" de append (`ProjectProcessingBatch`) — um retry apagaria também os
+ * clipes desses lotes, que o usuário esperava preservar. Nenhuma guarda
+ * contra esse caso foi adicionada aqui ainda; se/quando `RetryProjectUseCase`
+ * ganhar essa guarda, ela deve bloquear o retry com um erro claro quando
+ * `processingBatchRepository.findByUploadedFileId(projectId)` não estiver
+ * vazio, em vez de apagar silenciosamente clipes de lotes anteriores.
+ */
 export class RetryProjectUseCase {
   constructor(
     private readonly uploadedFileRepository: IUploadedFileRepository,

@@ -451,6 +451,133 @@ class TestGenrePropagation:
         assert fake_provider.genres == []
 
 
+class TestExcludedRangesFiltering:
+    """RF 'adicionar mais cortes': `core/video_pipeline.py` discards
+    automatic-mode candidates overlapping `request.excluded_ranges` with a
+    defensive, code-enforced filter (never relies solely on the LLM prompt
+    obeying it), BEFORE `clips_limit` is applied. Overlap semantics mirror
+    the frontend's `rangesOverlap`
+    (`src/domain/services/range-overlap.service.ts`):
+    `clip.start < excluded.end and excluded.start < clip.end`."""
+
+    def _three_candidates(self) -> MomentsExtraction:
+        return MomentsExtraction(
+            clips=[
+                ClipItem(title="A", hook="h", start=10.0, end=40.0, virality_score=9, reason="r"),
+                ClipItem(title="B", hook="h", start=50.0, end=80.0, virality_score=8, reason="r"),
+                ClipItem(title="C", hook="h", start=90.0, end=120.0, virality_score=7, reason="r"),
+            ]
+        )
+
+    def _run_auto(
+        self,
+        deps: Dict[str, MagicMock],
+        transcriber: WhisperTranscriber,
+        tmp_path: Path,
+        excluded_ranges,
+        clips_limit: int = 5,
+    ):
+        fake_provider = FakeMomentsProvider(self._three_candidates())
+        payload: Dict[str, Any] = {
+            "s3_key": "uploads/user_1/8f14e45f-ceea-4e67-a1b2-3c4d5e6f7a8b/podcast.mp4",
+            "mode": "auto",
+        }
+        if excluded_ranges is not None:
+            payload["excluded_ranges"] = excluded_ranges
+        request = ProcessVideoRequest.model_validate(payload)
+        _run(request, tmp_path, transcriber, clips_limit=clips_limit, moments_provider=fake_provider)
+        return [call.kwargs["clip_item"].title for call in deps["process_clip"].call_args_list]
+
+    @pytest.mark.parametrize(
+        ("excluded_start", "excluded_end", "expected_titles"),
+        [
+            # Overlaps A at its start (partial overlap at the beginning).
+            (5.0, 15.0, ["B", "C"]),
+            # Overlaps A at its end (partial overlap at the end).
+            (35.0, 45.0, ["B", "C"]),
+            # Fully contains B.
+            (45.0, 85.0, ["A", "C"]),
+            # Fully contained within C.
+            (95.0, 100.0, ["A", "B"]),
+            # Touches A's end exactly: edge-touching ranges never overlap.
+            (40.0, 50.0, ["A", "B", "C"]),
+            # No overlap with any candidate.
+            (200.0, 210.0, ["A", "B", "C"]),
+        ],
+        ids=[
+            "overlap_at_start",
+            "overlap_at_end",
+            "excluded_contains_candidate",
+            "candidate_contains_excluded",
+            "edge_touching_is_not_overlap",
+            "no_overlap",
+        ],
+    )
+    def test_overlap_variations(
+        self,
+        deps: Dict[str, MagicMock],
+        transcriber: WhisperTranscriber,
+        tmp_path: Path,
+        excluded_start: float,
+        excluded_end: float,
+        expected_titles: List[str],
+    ):
+        titles = self._run_auto(
+            deps, transcriber, tmp_path, [{"start": excluded_start, "end": excluded_end}]
+        )
+        assert titles == expected_titles
+
+    def test_excluded_ranges_absent_does_not_filter_anything_regression(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        titles = self._run_auto(deps, transcriber, tmp_path, excluded_ranges=None)
+        assert titles == ["A", "B", "C"]
+
+    def test_empty_excluded_ranges_does_not_filter_anything_regression(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        titles = self._run_auto(deps, transcriber, tmp_path, excluded_ranges=[])
+        assert titles == ["A", "B", "C"]
+
+    def test_filter_runs_before_clips_limit_is_applied(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        # clips_limit=2. If clips_limit were applied BEFORE the filter, the
+        # first 2 candidates (A, B) would be sliced first and A then
+        # discarded, leaving only B. Filtering first (the required order)
+        # discards A up front, leaving [B, C], then clips_limit=2 keeps both.
+        titles = self._run_auto(
+            deps, transcriber, tmp_path, [{"start": 5.0, "end": 15.0}], clips_limit=2
+        )
+        assert titles == ["B", "C"]
+
+    def test_heavy_filtering_returns_fewer_than_clips_limit_never_more(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        titles = self._run_auto(
+            deps,
+            transcriber,
+            tmp_path,
+            [{"start": 5.0, "end": 15.0}, {"start": 85.0, "end": 95.0}],
+            clips_limit=5,
+        )
+        assert titles == ["B"]
+
+    def test_manual_mode_ignores_excluded_ranges_since_moments_identification_never_runs(
+        self, deps: Dict[str, MagicMock], transcriber: WhisperTranscriber, tmp_path: Path
+    ):
+        payload = load_manual_cuts_payload()
+        payload["excluded_ranges"] = [{"start": 0.0, "end": 100.0}]
+        request = ProcessVideoRequest.model_validate(payload)
+
+        _run(request, tmp_path, transcriber, moments_provider=deps["moments_provider"])
+
+        # All 3 fixture manual cuts are still processed -- excluded_ranges
+        # has no effect in manual mode.
+        assert deps["process_clip"].call_count == 3
+        deps["identify"].assert_not_called()
+
+
 class TestResolveInputVideoPath:
     """RNF-SEC-19: core/video_pipeline.py::resolve_input_video_path always
     downloads `s3_key` through the storage port into base_dir/input.mp4. The

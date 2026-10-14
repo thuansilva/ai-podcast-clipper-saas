@@ -500,6 +500,36 @@ def _concat_video_segments(temp_dir: str, segment_paths: List[str]) -> str:
     return output_path
 
 
+def resolve_download_time_ranges(
+    manual_cuts: Optional[List[Any]],
+    slice_range: Optional[Any],
+) -> Optional[List[Tuple[float, float]]]:
+    """Builds the `time_ranges` argument for `download_youtube_to_s3` from a
+    `DownloadYouTubeRequest`'s `manual_cuts`/`slice` fields.
+
+    The two are mutually exclusive by construction (enforced by
+    `DownloadYouTubeRequest`'s own `model_validator`), so this never needs to
+    reconcile both at once:
+
+    - `manual_cuts` non-empty -> one range per cut (RF-PIPE-08).
+    - `slice` present (and `manual_cuts` absent) -> a single range covering
+      the whole slice (RF "adicionar mais cortes" — IA sobre um novo slice).
+    - Neither -> `None` (whole-video download, unchanged from before either
+      field existed).
+
+    Duck-typed on purpose (only `.start`/`.end` are accessed), same
+    convention as `remap_manual_cuts` below, so this stays decoupled from
+    `core.schemas`. Shared by `main.py` and `local_server.py` so the two
+    runners never drift on this decision (pipeline-consolidation decision,
+    see `AGENTS.md`).
+    """
+    if manual_cuts:
+        return [(cut.start, cut.end) for cut in manual_cuts]
+    if slice_range is not None:
+        return [(slice_range.start, slice_range.end)]
+    return None
+
+
 def remap_manual_cuts(
     manual_cuts: List[Any],
     remapped_ranges: List[dict],

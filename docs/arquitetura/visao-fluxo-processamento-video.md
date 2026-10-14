@@ -504,6 +504,57 @@ Usuário clica **"Reprocessar"** na Dashboard:
 3. Envia novo `ProcessVideoEvent` ao Inngest
 4. Volta ao Step 1 (reservar créditos, processar, etc.)
 
+## Fluxo: Adicionar Cortes a Projeto Existente (append)
+
+Feature "adicionar mais cortes" a um projeto do YouTube já processado (RF-PROJ-06). Não reprocessa o vídeo inteiro nem cria projeto novo: cada pedido vira um `ProjectProcessingBatch` próprio (com `s3Key`, custo e status isolados) e baixa só o trecho novo: cortes manuais novos, ou um slice novo escolhido para a IA analisar. O evento `append-clips-events` tem função Inngest dedicada (`appendClipsToProject` em `src/inngest/functions.ts`, `concurrency` de 1 por `uploadedFileId`, `retries: 1`), separada de `processVideoHandler` para não arriscar o fluxo de primeiro processamento.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Usuário
+    participant UI as Tela Adicionar cortes
+    participant UC as AddClipsToProjectUseCase
+    participant DB as Postgres
+    participant IQ as Inngest append-clips-events
+    participant FN as appendClipsToProjectHandler
+    participant BE as Backend GPU
+
+    U->>UI: envia cortes manuais ou slice de IA
+    UI->>UC: addClipsToProjectAction
+    UC->>DB: valida projeto, clipes legados e lote ativo
+    UC->>DB: createIfNoActive (trava a linha do UploadedFile)
+    UC->>IQ: send com id append-clips-batchId
+    IQ->>FN: evento do lote
+    FN->>DB: claim-batch (queued para processing)
+    FN->>BE: /download_youtube só dos cortes ou do slice, em s3Key nova
+    FN->>DB: validate-and-reserve-credits (hold do incremento)
+    FN->>DB: mark-batch-processing (s3Key e creditsCost do lote)
+    FN->>BE: /process_video com excluded_ranges ou cortes remapeados
+    BE-->>FN: clipes com tempos do arquivo do lote
+    FN->>DB: createMany de Clip com sourceStartTime e sourceEndTime
+    FN->>DB: consome o hold e marca o lote como processed
+    Note over FN,DB: Falha após o hold: lote failed, refund só do lote, clipes antigos intactos
+```
+
+| Etapa | O que faz | Onde |
+|---|---|---|
+| Validação | Dono do projeto, `sourceType = YOUTUBE` com `youtubeUrl`, sem lote ativo, sem clipe legado, corte manual sem sobreposição com clipe existente, slice de IA obrigatório e com fim maior que o início | `AddClipsToProjectUseCase.execute` |
+| Criação do lote | Um lote ativo por projeto, criado numa transação que trava a linha do `UploadedFile` | `PrismaProcessingBatchRepository.createIfNoActive` (RNF-IDEM-07) |
+| Envio | `inngest.send` com `id: append-clips-${batchId}` (dedupe pelo Inngest) | `InngestQueueGateway.sendAddClipsToProjectEvent` (RNF-IDEM-08) |
+| `claim-batch` | UPDATE condicional `queued` para `processing`; evento duplicado sai com `skipped: true`, sem cobrar nem gravar | `appendClipsToProjectHandler` |
+| `validate-and-reserve-credits` | Baixa só os cortes (`manual_cuts`) ou só o slice (`slice`) numa chave nova `youtube/<uuid>/original.mp4`; valida duração e cortes contra o vídeo original; faz o hold do incremento sem alterar `UploadedFile.status` | `downloadYouTubeVideo`, `computeEffectiveProcessingDuration`, `HoldCreditsUseCase` (`skipFileStatusUpdate`) |
+| `mark-batch-processing` | Grava `s3Key` e `creditsCost` no lote | `ProjectProcessingBatch` |
+| `call-modal-gpu` | Manual: envia os cortes remapeados para o arquivo baixado. Automático: envia os `excluded_ranges` remapeados para a timeline do arquivo do lote | `buildAppendProcessVideoPayload`, `remapOriginalRangeToOutput` |
+| Backend | `/download_youtube` com `slice` baixa um único trecho e devolve `remapped_ranges` com um item. `/process_video` com `excluded_ranges` descarta candidatos da IA que se sobrepõem, antes do `clips_limit` (só modo automático) | `core/youtube_downloader.py::resolve_download_time_ranges`, `core/video_pipeline.py` (`_filter_out_excluded_ranges`) |
+| `persist-clips-and-consume` | Insere os clipes com `sourceStartTime`/`sourceEndTime` (tempo no vídeo original, por `remappedRanges` no automático e pelo par `new_start`/`new_end` no manual, tolerância de 0,5 s); consome o hold; lote vira `processed` | `appendClipsToProjectHandler` |
+| `onFailure` | Lote vira `failed` com a mensagem; devolve só o crédito reservado do lote. Nada é apagado e `UploadedFile` não muda | `appendClipsToProject` (`onFailure`) |
+
+**Ciclo de vida do lote:** `queued` para `processing` para `processed`, ou `failed` em qualquer falha após o claim.
+
+**Riscos residuais** (seção "Riscos residuais — feature adicionar cortes" do checklist): a persistência dos clipes e o consumo de crédito não são atômicos (um retry após `createMany` pode duplicar clipes), e um lote fica preso em `queued` se o envio do evento falhar, bloqueando novos cortes naquele projeto.
+
+---
+
 ## Sumário: Diferenças Entre Ambientes
 
 | Aspecto | Modal (Produção) | GPU Local (Dev) |

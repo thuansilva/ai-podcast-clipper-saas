@@ -30,6 +30,8 @@ const mockClip: Clip = {
   reason: "Test reason",
   startTime: 0,
   endTime: 30,
+  sourceStartTime: null,
+  sourceEndTime: null,
   durationSeconds: 30,
   subtitlePreset: "NEON",
   layoutMode: "SMART_CROP",

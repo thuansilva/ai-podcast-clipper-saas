@@ -25,6 +25,8 @@ const baseClip: Clip = {
   reason: "Forte gatilho de curiosidade",
   startTime: 10.0,
   endTime: 45.0,
+  sourceStartTime: null,
+  sourceEndTime: null,
   durationSeconds: 35.0,
   subtitlePreset: "HORMOZI",
   layoutMode: "SMART_CROP",

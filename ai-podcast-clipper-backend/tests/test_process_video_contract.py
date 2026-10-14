@@ -161,6 +161,61 @@ class TestProcessVideoRequestForwardCompatibilityFields:
         assert request.genre is None
 
 
+class TestProcessVideoRequestExcludedRanges:
+    """RF 'adicionar mais cortes': `excluded_ranges` is a new, strictly
+    optional `ProcessVideoRequest` field (TDD RED until `core/schemas.py`
+    adds `TimeRange`/`excluded_ranges`)."""
+
+    def test_excluded_ranges_default_to_none_when_omitted(self):
+        request = ProcessVideoRequest.model_validate(_legacy_payload())
+        assert request.excluded_ranges is None
+
+    def test_accepts_excluded_ranges_in_auto_mode(self):
+        payload = _legacy_payload()
+        payload["excluded_ranges"] = [{"start": 10.0, "end": 20.0}]
+        request = ProcessVideoRequest.model_validate(payload)
+        assert request.excluded_ranges is not None
+        assert request.excluded_ranges[0].start == 10.0
+        assert request.excluded_ranges[0].end == 20.0
+
+    def test_empty_excluded_ranges_list_is_accepted(self):
+        payload = _legacy_payload()
+        payload["excluded_ranges"] = []
+        request = ProcessVideoRequest.model_validate(payload)
+        assert request.excluded_ranges == []
+
+    def test_excluded_range_has_no_sixty_second_cap(self):
+        # Unlike ManualCut/ClipItem (capped at 60s, an individual output
+        # clip's max length), an excluded range describes portions already
+        # covered by earlier batches and can span several minutes.
+        payload = _legacy_payload()
+        payload["excluded_ranges"] = [{"start": 0.0, "end": 300.0}]
+        request = ProcessVideoRequest.model_validate(payload)
+        assert request.excluded_ranges[0].end == 300.0
+
+    def test_excluded_range_rejects_end_not_greater_than_start(self):
+        payload = _legacy_payload()
+        payload["excluded_ranges"] = [{"start": 10.0, "end": 10.0}]
+        with pytest.raises(ValidationError):
+            ProcessVideoRequest.model_validate(payload)
+
+    def test_excluded_range_forbids_unknown_fields(self):
+        payload = _legacy_payload()
+        payload["excluded_ranges"] = [{"start": 10.0, "end": 20.0, "title": "nope"}]
+        with pytest.raises(ValidationError):
+            ProcessVideoRequest.model_validate(payload)
+
+    def test_excluded_ranges_in_manual_mode_is_accepted_at_the_schema_level(self):
+        # The contract only ever sends excluded_ranges with mode="auto" (the
+        # frontend omits it otherwise), but the schema itself places no
+        # mode restriction on it -- core/video_pipeline.py simply never
+        # reads it in manual mode (moments identification never runs there).
+        payload = load_manual_cuts_payload()
+        payload["excluded_ranges"] = [{"start": 0.0, "end": 100.0}]
+        request = ProcessVideoRequest.model_validate(payload)
+        assert request.excluded_ranges is not None
+
+
 class TestManualCutValidation:
     def test_accepts_valid_cut_with_title(self):
         cut = schemas.ManualCut(start=10.0, end=25.0, title="Pergunta")

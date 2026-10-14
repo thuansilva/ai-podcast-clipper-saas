@@ -5,7 +5,7 @@ import type { Clip } from "@prisma/client";
 
 const clip: Clip = {
   id: "c1", s3Key: "k.mp4", title: "Meu corte", hook: null, viralityScore: null,
-  reason: null, startTime: 0, endTime: 30, durationSeconds: 30,
+  reason: null, startTime: 0, endTime: 30, sourceStartTime: null, sourceEndTime: null, durationSeconds: 30,
   subtitlePreset: "NEON", layoutMode: "SMART_CROP", transcriptWords: [],
   createdAt: new Date(), updatedAt: new Date(), uploadedFileId: "f1", userId: "u1",
 };

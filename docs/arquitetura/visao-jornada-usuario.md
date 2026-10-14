@@ -358,8 +358,50 @@ No topo do card "Configurações do Corte" (`CreateProjectClient`) há um radio 
 | Renomear | Editar `displayName` do `UploadedFile` | Dialog/AlertDialog inline em `RecentVideosClient` |
 | Reprocessar | Mudar opções (GENRE, etc.) e re-enfileirar | `CreateProjectClient` em modo edit |
 | Deletar | Hard-delete do `UploadedFile` e clipes relacionados (+ arquivos S3) | AlertDialog inline em `RecentVideosClient` |
+| Adicionar cortes | Abre a tela de um novo lote (cortes manuais ou IA em um slice novo) sem apagar os clipes existentes | Botão no cabeçalho, `/dashboard/projects/[id]/add-clips` (seção 2.10) |
 
 ---
+
+#### 2.9 Cabeçalho da Tela de Projeto, Toolbar, Vídeo Original e Busca (2026-10-13; redesenhado em 2026-10-14)
+
+**Rota**: `/dashboard/projects/[id]`
+
+- O cabeçalho mostra o título do projeto e duas métricas: a **soma da duração dos cortes gerados** do projeto inteiro, no formato "X min de cortes gerados" (RF-PROJ-07, RN-PROJ-DUR-01), e "N cortes gerados". Ambas valem para TODOS os cortes, não dependem da página nem da busca.
+- Acima do grid, na linha do título "Cortes Gerados", há uma **toolbar alinhada à direita** (empilha no mobile), nesta ordem: **campo de busca**, **botão de ícone "Ver vídeo original"** e botão **Adicionar cortes** (leva à seção 2.10).
+- O **vídeo original** não é mais um banner: fica escondido atrás do botão de ícone (`original-video-trigger`, com tooltip). Ao clicar abre um popover com thumbnail, nome, "X min de duração" e o link de texto **"Assistir no YouTube"** (a URL crua não é exibida), que abre em nova aba com aviso para leitor de tela (RF-UI-06). O link é remontado a partir da URL canônica, nunca do valor bruto salvo, e só aparece se a URL for válida. O botão some se o projeto não tiver thumbnail nem URL.
+- A **busca de cortes** (RF-UI-08) é um formulário GET com `?q=`: filtra no servidor por título ou gancho, sem diferenciar maiúsculas. A paginação passa a usar a contagem filtrada e preserva `q`. Sem resultado, aparece "Nenhum corte encontrado para '...'" com link para limpar a busca.
+
+---
+
+#### 2.10 Adicionar Cortes a um Projeto Existente (2026-10-13)
+
+**Rota**: `/dashboard/projects/[id]/add-clips` (só para projetos do YouTube)
+
+O usuário adiciona cortes a um projeto já processado sem apagar os clipes existentes, pagando só pelo incremento (RF-PROJ-06, RF-UI-07, RF-BILL-13).
+
+```mermaid
+flowchart TD
+    A["Detalhes do projeto<br/>botão Adicionar cortes"] --> B["Tela Adicionar cortes"]
+    B --> C{"Projeto bloqueado?"}
+    C -->|"Não é do YouTube, tem clipe legado ou lote em andamento"| D["Aviso de bloqueio, sem formulário"]
+    C -->|"Não"| E["Trilha dos trechos já usados"]
+    E --> F{"Modo"}
+    F -->|"Manual: eu defino os cortes novos"| G["Corte que se sobrepõe a clipe existente é bloqueado"]
+    F -->|"IA gera mais"| H["Slice novo escolhido pelo usuário"]
+    G --> I["Custo do incremento"]
+    H --> I
+    I -->|"Enviar"| J["Lote criado (queued), processado em segundo plano"]
+    J --> K["Clipes antigos continuam; os novos aparecem quando o lote termina"]
+```
+
+- Corte manual que se sobrepõe a um clipe existente é bloqueado, no servidor e no cliente (RN-PROJ-APPEND-03). Trechos apenas encostados são permitidos.
+- "IA gera mais" sempre exige um slice novo. A IA nunca reanalisa o vídeo inteiro, e os trechos já usados dentro do slice são excluídos (RN-PROJ-APPEND-04).
+- Projeto com clipe manual do YouTube criado antes desta feature (sem tempo de origem) não aceita cortes novos (RN-PROJ-APPEND-02).
+- Só um lote pode estar ativo por projeto. Enquanto houver um em `queued` ou `processing`, a tela mostra o aviso de bloqueio (RNF-IDEM-07).
+- Fluxo de processamento: ver `visao-fluxo-processamento-video.md`, seção "Adicionar Cortes a Projeto Existente".
+
+---
+
 
 ### 3. Gestão & Billing
 
@@ -433,7 +475,7 @@ Se `subscription.status = 'active'` ou `'past_due'`:
 | `PricingToggleTabs` | `src/components/billing/pricing-toggle-tabs.tsx` | Monthly/Annual toggle |
 | `ActiveSubscriptionCard` | `src/components/billing/active-subscription-card.tsx` | Card de assinatura ativa |
 | `DeleteAccountSection` | `src/components/dashboard/delete-account-section.tsx` | Zona de risco: excluir conta (confirmação via `AlertDialog`) |
-| `AppSidebar` | `src/components/dashboard/sidebar/app-sidebar.tsx` | Navegação lateral do dashboard |
+| `AppSidebar` | `src/components/dashboard/sidebar/app-sidebar.tsx` | Navegação lateral do dashboard. Itens definidos em `src/navigation/sidebar/sidebar-items.ts`: grupo **Geral** (Início `/dashboard`, Meus Projetos `/dashboard/projects`) e grupo **Configurações** (Assinatura `/dashboard/billing`). A busca do header (`search-dialog.tsx`) é derivada da mesma lista e agrupa pelos mesmos rótulos |
 | `AccountSwitcher` | `src/components/dashboard/header/account-switcher.tsx` | Usuário logado, opções de conta |
 
 ---
@@ -464,6 +506,7 @@ Se `subscription.status = 'active'` ou `'past_due'`:
 | `/dashboard/projects` | `app/dashboard/projects/page.tsx` | Lista de projetos |
 | `/dashboard/projects/[id]` | `app/dashboard/projects/[id]/page.tsx` | Detalhes do projeto (clipes gerados) |
 | `/dashboard/projects/[id]/edit` | `app/dashboard/projects/[id]/edit/page.tsx` | Editar projeto (reprocessar) |
+| `/dashboard/projects/[id]/add-clips` | `app/dashboard/projects/[id]/add-clips/page.tsx` | Adicionar mais cortes a um projeto do YouTube já processado (2026-10-13) |
 | `/dashboard/billing` | `app/dashboard/billing/page.tsx` | Gerenciar billing e assinatura |
 | `/api/youtube/info` | `app/api/youtube/info/route.ts` | Buscar metadata de vídeo YouTube |
 | `/api/webhooks/stripe` | `app/api/webhooks/stripe/route.ts` | Webhook de eventos Stripe |

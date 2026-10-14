@@ -309,3 +309,20 @@ export function makeRetryProjectUseCase(): RetryProjectUseCase {
     new PrismaClipRepository()
   );
 }
+
+import { AddClipsToProjectUseCase } from "~/application/use-cases/add-clips-to-project.use-case";
+import { PrismaProcessingBatchRepository } from "~/infrastructure/database/repositories/prisma-processing-batch.repository";
+import type { IProcessingBatchRepository } from "~/domain/ports/processing-batch-repository";
+
+export function makeProcessingBatchRepository(): IProcessingBatchRepository {
+  return new PrismaProcessingBatchRepository();
+}
+
+export function makeAddClipsToProjectUseCase(): AddClipsToProjectUseCase {
+  return new AddClipsToProjectUseCase(
+    new PrismaUploadedFileRepository(),
+    new PrismaClipRepository(),
+    new PrismaProcessingBatchRepository(),
+    new InngestQueueGateway()
+  );
+}

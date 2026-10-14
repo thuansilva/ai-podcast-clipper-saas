@@ -641,7 +641,7 @@ describe("CreateProjectClient - modo manual de cortes", () => {
     for (let i = 0; i < ordered.length - 1; i++) {
       expect(
         ordered[i]!.compareDocumentPosition(ordered[i + 1]!) &
-          Node.DOCUMENT_POSITION_FOLLOWING,
+        Node.DOCUMENT_POSITION_FOLLOWING,
       ).toBeTruthy();
     }
     expect(ordered[3]!.tagName).toBe("BUTTON");

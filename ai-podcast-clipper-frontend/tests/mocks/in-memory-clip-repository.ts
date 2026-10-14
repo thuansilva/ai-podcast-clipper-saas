@@ -46,6 +46,8 @@ export class InMemoryClipRepository implements IClipRepository {
         reason: input.reason ?? null,
         startTime: input.startTime,
         endTime: input.endTime,
+        sourceStartTime: input.sourceStartTime ?? null,
+        sourceEndTime: input.sourceEndTime ?? null,
         durationSeconds: input.durationSeconds,
         subtitlePreset: input.subtitlePreset ?? "HORMOZI",
         layoutMode: input.layoutMode ?? "SMART_CROP",

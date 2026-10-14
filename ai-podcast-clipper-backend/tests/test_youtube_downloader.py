@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from yt_dlp.utils import DownloadError, download_range_func
 
 import main
+from core import schemas
 from core.schemas import DownloadYouTubeRequest, DownloadYouTubeResponse
 from core.youtube_downloader import (
     VIDEO_RANGE_MARGIN_SECONDS,
@@ -27,6 +28,7 @@ from core.youtube_downloader import (
     download_youtube_to_s3,
     get_youtube_video_info,
     remap_manual_cuts,
+    resolve_download_time_ranges,
 )
 from main import download_youtube
 from tests.storage_fakes import FakeObjectStorage
@@ -434,6 +436,57 @@ class TestDownloadYouTubeRequestSchema:
         assert "s3_bucket" not in DownloadYouTubeRequest.model_fields
 
 
+class TestDownloadYouTubeRequestSliceContract:
+    """RF 'adicionar mais cortes' (IA sobre um novo slice): `slice` is a new,
+    strictly optional `DownloadYouTubeRequest` field, mutually exclusive
+    with `manual_cuts`, with NO 60s duration cap (unlike `ManualCut`)."""
+
+    def test_slice_is_optional_and_defaults_to_none(self):
+        req = DownloadYouTubeRequest(url="https://www.youtube.com/watch?v=x")
+        assert req.slice is None
+
+    def test_accepts_a_slice_without_manual_cuts(self):
+        req = DownloadYouTubeRequest(
+            url="https://www.youtube.com/watch?v=x",
+            slice={"start": 10.0, "end": 310.0},
+        )
+        assert req.slice.start == 10.0
+        assert req.slice.end == 310.0
+
+    def test_slice_has_no_sixty_second_cap_unlike_manual_cut(self):
+        # A slice for the IA to analyze over can be several minutes long,
+        # where ManualCut(start=0, end=300) would be rejected (> 60s).
+        req = DownloadYouTubeRequest(
+            url="https://www.youtube.com/watch?v=x",
+            slice={"start": 0.0, "end": 300.0},
+        )
+        assert req.slice.end - req.slice.start == 300.0
+        with pytest.raises(ValidationError):
+            schemas.ManualCut(start=0.0, end=300.0)
+
+    def test_slice_and_manual_cuts_together_is_rejected(self):
+        with pytest.raises(ValidationError):
+            DownloadYouTubeRequest(
+                url="https://www.youtube.com/watch?v=x",
+                slice={"start": 10.0, "end": 310.0},
+                manual_cuts=[{"start": 1.0, "end": 5.0}],
+            )
+
+    def test_slice_rejects_end_not_greater_than_start(self):
+        with pytest.raises(ValidationError):
+            DownloadYouTubeRequest(
+                url="https://www.youtube.com/watch?v=x",
+                slice={"start": 10.0, "end": 10.0},
+            )
+
+    def test_slice_forbids_unknown_fields(self):
+        with pytest.raises(ValidationError):
+            DownloadYouTubeRequest(
+                url="https://www.youtube.com/watch?v=x",
+                slice={"start": 10.0, "end": 20.0, "title": "nope"},
+            )
+
+
 class TestDownloadYouTubeEndpoint:
     @pytest.fixture
     def endpoint_storage(self, monkeypatch: pytest.MonkeyPatch) -> FakeObjectStorage:
@@ -624,6 +677,66 @@ class TestDownloadYouTubeEndpoint:
         assert mock_download.call_args.kwargs["time_ranges"] is None
         assert resp.remapped_ranges is None
         assert resp.remapped_cuts is None
+
+    @patch("main.download_youtube_to_s3")
+    def test_endpoint_passes_slice_as_single_time_range_and_never_populates_remapped_cuts(
+        self, mock_download, endpoint_storage: FakeObjectStorage
+    ):
+        mock_download.return_value = {
+            "s3_key": "youtube/3f2b8c1e-9a4d-4e6b-8f1a-2c3d4e5f6a7b/original.mp4",
+            "title": "Exciting Podcast",
+            "duration": 3600,
+            "thumbnail": "https://img.youtube.com/vi/vid123/hqdefault.jpg",
+            "remapped_ranges": [
+                {"original_start": 8.0, "original_end": 317.0, "offset_in_output": 0.0},
+            ],
+        }
+
+        endpoint_fn = self._get_raw_endpoint()
+        token = MagicMock()
+        token.credentials = "valid_secret"
+
+        with patch.dict(os.environ, {"AUTH_TOKEN": "valid_secret"}):
+            req = DownloadYouTubeRequest(
+                url="https://www.youtube.com/watch?v=vid123",
+                s3_key="youtube/3f2b8c1e-9a4d-4e6b-8f1a-2c3d4e5f6a7b/original.mp4",
+                slice={"start": 10.0, "end": 310.0},
+            )
+            resp = endpoint_fn(request=req, token=token)
+
+        assert mock_download.call_args.kwargs["time_ranges"] == [(10.0, 310.0)]
+        assert resp.remapped_ranges is not None
+        assert resp.remapped_ranges[0].original_start == 8.0
+        assert resp.remapped_ranges[0].original_end == 317.0
+        # remapped_cuts only ever applies to manual_cuts, never to slice.
+        assert resp.remapped_cuts is None
+
+
+class TestResolveDownloadTimeRanges:
+    """Unit tests for `resolve_download_time_ranges`, the helper shared by
+    `main.py` and `local_server.py` that decides what to forward to
+    `download_youtube_to_s3(time_ranges=...)` from a `DownloadYouTubeRequest`'s
+    `manual_cuts`/`slice` fields."""
+
+    def test_returns_none_when_neither_is_given(self):
+        assert resolve_download_time_ranges(None, None) is None
+        assert resolve_download_time_ranges([], None) is None
+
+    def test_manual_cuts_become_one_range_per_cut(self):
+        cuts = [ManualCutLike(1.0, 5.0), ManualCutLike(10.0, 15.0)]
+        assert resolve_download_time_ranges(cuts, None) == [(1.0, 5.0), (10.0, 15.0)]
+
+    def test_slice_becomes_a_single_range(self):
+        slice_range = ManualCutLike(10.0, 310.0)
+        assert resolve_download_time_ranges(None, slice_range) == [(10.0, 310.0)]
+
+    def test_manual_cuts_take_priority_over_slice_if_ever_called_with_both(self):
+        # The schema's own validator makes this combination impossible to
+        # reach in production (422 before this function is ever called),
+        # but this function's own priority rule is still pinned down here.
+        cuts = [ManualCutLike(1.0, 5.0)]
+        slice_range = ManualCutLike(10.0, 310.0)
+        assert resolve_download_time_ranges(cuts, slice_range) == [(1.0, 5.0)]
 
 
 class TestRemapManualCuts:

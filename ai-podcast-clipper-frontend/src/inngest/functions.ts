@@ -28,7 +28,20 @@ import {
   buildProcessVideoPayload,
   type ProcessVideoWireManualCut,
 } from "~/application/services/process-video-payload.service";
-import type { ManualCutDTO, ProcessingMode } from "~/application/dtos/video-dtos";
+import { buildAppendProcessVideoPayload } from "~/application/services/append-clips-payload.service";
+import {
+  remapOriginalRangeToOutput,
+  remapOutputTimeToOriginal,
+} from "~/domain/services/time-range-remap.service";
+import { AiSliceRequiredError } from "~/domain/errors/ai-slice-required-error";
+import type {
+  AddClipsToProjectEventData,
+  AiSliceDTO,
+  ManualCutDTO,
+  ProcessingMode,
+  TimeRangeDTO,
+} from "~/application/dtos/video-dtos";
+import { v4 as uuidv4 } from "uuid";
 import { fetch as undiciFetch, Agent } from "undici";
 import { logger } from "~/lib/observability/logger";
 import { withSpan, injectTraceHeaders } from "~/lib/observability/tracer";
@@ -111,6 +124,7 @@ export async function downloadYouTubeVideo({
   url,
   s3Key,
   manualCuts,
+  slice,
 }: {
   url: string;
   s3Key?: string;
@@ -124,6 +138,19 @@ export async function downloadYouTubeVideo({
    * automatic mode.
    */
   manualCuts?: ManualCutDTO[];
+  /**
+   * NEW contract (RF "adicionar mais cortes" — IA sobre um novo slice):
+   * absolute-in-original-video `{startTime, endTime}`, mutually exclusive
+   * with `manualCuts`. Unlike `manualCuts`/`ManualCut`, has NO 60s duration
+   * cap — a slice for the IA to analyze can be several minutes long. The
+   * backend (NOT YET implemented at the time this was written — see this
+   * feature's handback) must accept a new `slice: {start, end}` field on
+   * `DownloadYouTubeRequest` and respond with `remapped_ranges` containing
+   * exactly one entry describing where the slice (merged with margin)
+   * landed in the output file — the same `remapped_ranges` shape already
+   * returned for `manualCuts`.
+   */
+  slice?: AiSliceDTO;
 }): Promise<YouTubeDownloadResult> {
   const endpoint = getYouTubeDownloadEndpoint();
 
@@ -132,10 +159,16 @@ export async function downloadYouTubeVideo({
 
   const hasManualCuts = Array.isArray(manualCuts) && manualCuts.length > 0;
 
-  // Only `url` + `s3_key` (+ `manual_cuts` when present): the backend
-  // contract (DownloadYouTubeRequest) is extra="forbid" (RNF-SEC-18) and the
-  // bucket comes from the backend's own config — any other field is a 422.
-  const body: { url: string; s3_key?: string; manual_cuts?: ProcessVideoWireManualCut[] } = {
+  // Only `url` + `s3_key` (+ `manual_cuts` OR `slice`, mutually exclusive,
+  // when present): the backend contract (DownloadYouTubeRequest) is
+  // extra="forbid" (RNF-SEC-18) and the bucket comes from the backend's own
+  // config — any other field is a 422.
+  const body: {
+    url: string;
+    s3_key?: string;
+    manual_cuts?: ProcessVideoWireManualCut[];
+    slice?: TimeRangeDTO;
+  } = {
     url,
     s3_key: s3Key,
   };
@@ -147,6 +180,8 @@ export async function downloadYouTubeVideo({
       start: cut.startTime,
       end: cut.endTime,
     }));
+  } else if (slice) {
+    body.slice = { start: slice.startTime, end: slice.endTime };
   }
 
   const response = await undiciFetch(endpoint, {
@@ -626,6 +661,506 @@ export const processVideo = inngest.createFunction(
   async ({ event, step }) => {
     return processVideoHandler({
       event: event as unknown as { data: ProcessVideoEventData },
+      step: step as unknown as PipelineStep,
+    });
+  },
+);
+
+export interface AppendClipsResult {
+  success: boolean;
+  uploadedFileId: string;
+  batchId: string;
+  error?: string;
+  /** `true` quando o evento foi ignorado porque o lote já não estava
+   * "queued" (evento duplicado/reentregue) — nada foi cobrado nem gravado. */
+  skipped?: boolean;
+}
+
+/**
+ * Pipeline do evento `"append-clips-events"` ("adicionar mais cortes" a um
+ * projeto já existente — RF novo, ver `AddClipsToProjectUseCase`). Função
+ * DEDICADA, separada de `processVideoHandler`, por 3 motivos:
+ *
+ * 1. Semântica bem diferente: nunca apaga clipes existentes, nunca altera
+ *    `UploadedFile.status`/`creditsCost`/`s3Key` (só o `ProjectProcessingBatch`
+ *    do lote) e sempre baixa/processa só o range/slice NOVO, nunca o vídeo
+ *    inteiro.
+ * 2. Isolamento de risco: misturar essa lógica em `processVideoHandler`
+ *    arriscaria regressões no pipeline de primeiro processamento (já teste
+ *    extensivamente coberto); separado, cada arquivo evolui sem o outro.
+ * 3. Contrato HTTP novo com o backend Python: `/download_youtube` com
+ *    `slice` (em vez de `manual_cuts`, para o modo IA) e `/process_video`
+ *    com `excluded_ranges` — ambos específicos deste fluxo.
+ *
+ * NOTA IMPORTANTE para quem for implementar o lado do backend Python: os
+ * dois campos novos (`slice` em `DownloadYouTubeRequest` e
+ * `excluded_ranges` em `ProcessVideoRequest`) AINDA NÃO existem no backend
+ * no momento em que este código foi escrito — ver o relato desta tarefa
+ * para o contrato exato esperado.
+ */
+export async function appendClipsToProjectHandler({
+  event,
+  step,
+}: {
+  event: { data: AddClipsToProjectEventData };
+  step: PipelineStep;
+}): Promise<AppendClipsResult> {
+  const { uploadedFileId, batchId, mode } = event.data;
+  let heldCredits = 0;
+  let resolvedUserId: string | undefined = event.data.userId;
+
+  logger.info("append-clips-to-project pipeline started", {
+    uploadedFileId,
+    batchId,
+  });
+
+  // Idempotência por lote: "reivindica" o lote de forma ATÔMICA
+  // (queued -> processing, num único UPDATE condicional) antes de qualquer
+  // download/hold de crédito. Um evento duplicado/reentregue para o mesmo
+  // lote (replay, `inngest.send` repetido) encontra o lote já em
+  // processing/processed/failed e sai sem cobrar nem gravar nada. Fica num
+  // step PRÓPRIO (memoizado pelo Inngest): um retry dos steps seguintes
+  // nunca re-executa o claim e, portanto, nunca se auto-bloqueia. O
+  // `concurrency` da function não basta — ele limita steps simultâneos, não
+  // impede 2 runs do mesmo lote de se intercalarem entre steps.
+  const claimed = await step.run("claim-batch", async () => {
+    const { count } = await db.projectProcessingBatch.updateMany({
+      where: { id: batchId, uploadedFileId, status: "queued" },
+      data: { status: "processing" },
+    });
+    return count === 1;
+  });
+
+  if (!claimed) {
+    logger.warn("append-clips-to-project skipped: batch is not queued (duplicate event?)", {
+      uploadedFileId,
+      batchId,
+    });
+    return {
+      success: false,
+      uploadedFileId,
+      batchId,
+      skipped: true,
+      error: "Batch is not queued (duplicate or replayed event).",
+    };
+  }
+
+  try {
+    const reservation = await withSpan(
+      "inngest.step.append.validate-and-reserve-credits",
+      { uploadedFileId, batchId },
+      () =>
+        step.run("validate-and-reserve-credits", async () => {
+          const uploadedFile = await db.uploadedFile.findUniqueOrThrow({
+            where: { id: uploadedFileId },
+          });
+          // Confirma que o lote existe (defesa em profundidade — o use case
+          // já o cria antes de disparar este evento).
+          await db.projectProcessingBatch.findUniqueOrThrow({
+            where: { id: batchId },
+          });
+
+          if (uploadedFile.sourceType !== "YOUTUBE" || !uploadedFile.youtubeUrl) {
+            throw new Error(
+              "Append only supports YouTube projects with a youtubeUrl.",
+            );
+          }
+
+          // RNF-SEC-18: uma chave S3 NOVA por lote — nunca reaproveita a do
+          // projeto nem de um lote anterior (evita colisão de
+          // `clip_{index}` entre lotes em `compute_clip_output_s3_key`).
+          const newS3Key = `youtube/${uuidv4()}/original.mp4`;
+
+          let downloadResult: YouTubeDownloadResult;
+          let effectiveDuration: number;
+          let holdAmount: number | undefined;
+
+          if (mode === "manual") {
+            const manualCuts = event.data.manualCuts ?? [];
+            if (manualCuts.length === 0) {
+              throw new ManualCutsRequiredError();
+            }
+
+            downloadResult = await downloadYouTubeVideo({
+              url: uploadedFile.youtubeUrl,
+              s3Key: newS3Key,
+              manualCuts,
+            });
+
+            // RN-PIPE-MANUAL-17 (espelho): nenhum corte pode terminar depois
+            // do fim do vídeo ORIGINAL.
+            assertManualCutsWithinVideo(manualCuts, downloadResult.duration);
+
+            effectiveDuration = computeEffectiveProcessingDuration({
+              isManual: true,
+              manualCuts,
+              videoDurationSeconds: downloadResult.duration,
+            });
+            holdAmount = calculateManualCutsCredits(manualCuts);
+          } else {
+            const aiSlice = event.data.aiSlice;
+            if (!aiSlice || aiSlice.endTime <= aiSlice.startTime) {
+              throw new AiSliceRequiredError();
+            }
+
+            downloadResult = await downloadYouTubeVideo({
+              url: uploadedFile.youtubeUrl,
+              s3Key: newS3Key,
+              slice: aiSlice,
+            });
+
+            // Nunca cobra segundos inexistentes: um slice que ultrapassa o
+            // fim do vídeo (payload forjado — a UI já limita ao tamanho do
+            // vídeo) é cobrado só até a duração real baixada.
+            // (Duração desconhecida/0 do backend: sem clamp, comportamento
+            // anterior preservado.)
+            const billableSliceEnd =
+              downloadResult.duration > 0
+                ? Math.min(aiSlice.endTime, downloadResult.duration)
+                : aiSlice.endTime;
+            if (billableSliceEnd <= aiSlice.startTime) {
+              throw new AiSliceRequiredError();
+            }
+
+            effectiveDuration = computeEffectiveProcessingDuration({
+              isManual: false,
+              sliceStartTime: aiSlice.startTime,
+              sliceEndTime: billableSliceEnd,
+              videoDurationSeconds: downloadResult.duration,
+            });
+            holdAmount = undefined;
+          }
+
+          const holdCreditsUseCase = makeHoldCreditsUseCase();
+          const holdResult = await holdCreditsUseCase.execute({
+            userId: uploadedFile.userId,
+            durationSeconds: effectiveDuration,
+            fileId: uploadedFileId,
+            amount: holdAmount,
+            // Nunca sobrescreve `UploadedFile.creditsCost` (projeto) — o
+            // custo deste lote é rastreado só em
+            // `ProjectProcessingBatch.creditsCost` (step seguinte).
+            skipFileStatusUpdate: true,
+          });
+
+          return {
+            userId: uploadedFile.userId,
+            batchS3Key: downloadResult.s3_key,
+            creditsCost: holdResult.heldCredits,
+            remappedRanges: downloadResult.remappedRanges,
+            remappedCuts: downloadResult.remappedCuts,
+            subtitlePreset: uploadedFile.subtitlePreset ?? null,
+            genre: uploadedFile.genre ?? null,
+            aspectRatio: uploadedFile.aspectRatio ?? null,
+            autoZoom: uploadedFile.autoZoom ?? null,
+          };
+        }),
+    );
+
+    resolvedUserId = reservation.userId;
+    heldCredits = reservation.creditsCost;
+
+    await withSpan(
+      "inngest.step.append.mark-batch-processing",
+      { uploadedFileId, batchId },
+      () =>
+        step.run("mark-batch-processing", async () => {
+          await db.projectProcessingBatch.update({
+            where: { id: batchId },
+            data: {
+              status: "processing",
+              s3Key: reservation.batchS3Key,
+              creditsCost: reservation.creditsCost,
+            },
+          });
+        }),
+    );
+
+    const modalResult = await withSpan(
+      "inngest.step.append.call-modal-gpu",
+      { uploadedFileId, batchId, userId: resolvedUserId ?? "" },
+      () =>
+        step.run("call-modal-gpu", async () => {
+          let manualCutsWire: ProcessVideoWireManualCut[] | undefined;
+          let excludedRangesWire: TimeRangeDTO[] | undefined;
+
+          if (mode === "manual") {
+            const remapped = reservation.remappedCuts;
+            if (!remapped || remapped.length === 0) {
+              // Nunca cair silenciosamente para os cortes originais: eles
+              // apontariam para tempos do vídeo original completo, não do
+              // arquivo (menor) deste lote, armazenado em `reservation.batchS3Key`.
+              throw new Error(
+                "Manual cuts remapping missing for append batch: cannot send pre-download (original) timestamps.",
+              );
+            }
+            manualCutsWire = remapped.map((cut) => ({
+              title: cut.title ?? undefined,
+              start: cut.new_start,
+              end: cut.new_end,
+            }));
+          } else {
+            const excludedRanges = event.data.excludedRanges ?? [];
+            if (excludedRanges.length > 0) {
+              const mergedRange = reservation.remappedRanges?.[0];
+              if (!mergedRange) {
+                throw new Error(
+                  "Slice remapping missing for append batch: cannot compute excludedRanges in the output file's timeline.",
+                );
+              }
+              excludedRangesWire = excludedRanges.map((range) =>
+                remapOriginalRangeToOutput(range, mergedRange),
+              );
+            }
+          }
+
+          const payload = buildAppendProcessVideoPayload({
+            video: {
+              subtitlePreset: reservation.subtitlePreset,
+              genre: reservation.genre,
+              aspectRatio: reservation.aspectRatio,
+              autoZoom: reservation.autoZoom,
+            },
+            s3Key: reservation.batchS3Key,
+            mode,
+            manualCuts: manualCutsWire,
+            excludedRanges: excludedRangesWire,
+          });
+
+          const agent = new Agent({ headersTimeout: 0, bodyTimeout: 0 });
+          const response = await undiciFetch(env.PROCESS_VIDEO_ENDPOINT, {
+            method: "POST",
+            dispatcher: agent,
+            headers: injectTraceHeaders({
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${env.AUTH_TOKEN}`,
+            }),
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(
+              `Modal GPU processing failed with status ${response.status}: ${errorText || response.statusText}`,
+            );
+          }
+
+          return (await response.json()) as ModalProcessVideoResponse;
+        }),
+    );
+
+    await withSpan(
+      "inngest.step.append.persist-clips-and-consume",
+      { uploadedFileId, batchId, userId: resolvedUserId ?? "" },
+      () =>
+        step.run("persist-clips-and-consume", async () => {
+          const clips = modalResult.clips ?? [];
+          const mergedRange = reservation.remappedRanges?.[0];
+
+          if (clips.length > 0) {
+            await db.clip.createMany({
+              data: clips.map((clip) => {
+                const start = clip.start ?? clip.startTime ?? 0;
+                const end = clip.end ?? clip.endTime ?? 0;
+                const dur = clip.duration ?? (end > start ? end - start : 0);
+                const score =
+                  typeof clip.virality_score === "number"
+                    ? clip.virality_score
+                    : typeof clip.viralityScore === "number"
+                      ? clip.viralityScore
+                      : null;
+                const words =
+                  clip.words ?? clip.transcriptWords ?? clip.transcript_words ?? null;
+
+                // Tempo no vídeo ORIGINAL (RF "adicionar mais cortes" —
+                // nunca inventado: auto remapeia via `remapped_ranges`,
+                // manual casa pelo par new_start/new_end já devolvido em
+                // `remapped_cuts`).
+                let sourceStart: number | null = null;
+                let sourceEnd: number | null = null;
+                if (mode === "auto" && mergedRange) {
+                  sourceStart = remapOutputTimeToOriginal(start, mergedRange);
+                  sourceEnd = remapOutputTimeToOriginal(end, mergedRange);
+                } else if (mode === "manual" && reservation.remappedCuts) {
+                  const matched = reservation.remappedCuts.find(
+                    (cut) =>
+                      Math.abs(cut.new_start - start) < 0.5 &&
+                      Math.abs(cut.new_end - end) < 0.5,
+                  );
+                  if (matched) {
+                    sourceStart = matched.original_start;
+                    sourceEnd = matched.original_end;
+                  }
+                }
+
+                return {
+                  s3Key: clip.s3_key ?? clip.s3Key ?? "",
+                  title: clip.title ?? "Clip",
+                  hook: clip.hook ?? null,
+                  viralityScore: score,
+                  reason: clip.reason ?? null,
+                  startTime: start,
+                  endTime: end,
+                  sourceStartTime: sourceStart,
+                  sourceEndTime: sourceEnd,
+                  durationSeconds: dur,
+                  subtitlePreset:
+                    clip.preset ?? clip.subtitlePreset ?? reservation.subtitlePreset ?? "HORMOZI",
+                  layoutMode: clip.layout_mode ?? clip.layoutMode ?? "SMART_CROP",
+                  transcriptWords: words ?? Prisma.JsonNull,
+                  uploadedFileId,
+                  userId: resolvedUserId!,
+                };
+              }),
+            });
+          }
+
+          const consumeCreditsUseCase = makeConsumeCreditsUseCase();
+          await consumeCreditsUseCase.execute({
+            userId: resolvedUserId!,
+            amount: heldCredits,
+            heldAmount: heldCredits,
+            fileId: uploadedFileId,
+          });
+
+          await db.projectProcessingBatch.update({
+            where: { id: batchId },
+            data: { status: "processed" },
+          });
+        }),
+    );
+
+    logger.info("append-clips-to-project pipeline completed", {
+      uploadedFileId,
+      batchId,
+      userId: resolvedUserId ?? "",
+    });
+
+    return { success: true, uploadedFileId, batchId };
+  } catch (error: unknown) {
+    const rawErrorMessage =
+      error instanceof Error
+        ? error.message
+        : "Append clips processing failed unexpectedly";
+    const friendlyErrorMessage = formatFriendlyErrorMessage(rawErrorMessage);
+
+    logger.error("append-clips-to-project pipeline failed", {
+      uploadedFileId,
+      batchId,
+      userId: resolvedUserId ?? "",
+      error,
+    });
+
+    const fileUserId = resolvedUserId ?? event.data.userId;
+
+    // Libera só o hold DESTE lote — nunca toca em `UploadedFile` (projeto
+    // inteiro continua intacto, clipes de outros lotes nunca são afetados).
+    if (heldCredits > 0 && fileUserId) {
+      const user = await db.user.findUnique({
+        where: { id: fileUserId },
+        select: { reservedCredits: true },
+      });
+      const amountToRefund = Math.min(heldCredits, user?.reservedCredits ?? 0);
+      if (amountToRefund > 0) {
+        const refundCreditsUseCase = makeRefundCreditsUseCase();
+        await refundCreditsUseCase.execute({
+          userId: fileUserId,
+          amount: amountToRefund,
+          fileId: uploadedFileId,
+          reason: friendlyErrorMessage,
+          // Nunca marca o projeto (`UploadedFile`) como "failed" — só o
+          // lote (`ProjectProcessingBatch`, próximo passo) é marcado.
+          skipFileStatusUpdate: true,
+        });
+      }
+    }
+
+    await db.projectProcessingBatch.update({
+      where: { id: batchId },
+      data: { status: "failed", errorMessage: friendlyErrorMessage },
+    });
+
+    return {
+      success: false,
+      uploadedFileId,
+      batchId,
+      error: friendlyErrorMessage,
+    };
+  }
+}
+
+export const appendClipsToProject = inngest.createFunction(
+  {
+    id: "append-clips-to-project",
+    triggers: [{ event: "append-clips-events" }],
+    retries: 1,
+    concurrency: {
+      limit: 1,
+      key: "event.data.uploadedFileId",
+    },
+    onFailure: async ({ event, error }) => {
+      const data = event.data.event?.data as
+        | AddClipsToProjectEventData
+        | undefined;
+      const uploadedFileId = data?.uploadedFileId;
+      const batchId = data?.batchId;
+      const userId = data?.userId;
+      if (!uploadedFileId || !batchId) return;
+
+      const errorMessage =
+        error?.message || "Inngest function failed after retries";
+      const friendlyMessage = formatFriendlyErrorMessage(errorMessage);
+
+      logger.error("append-clips-to-project exhausted all retries", {
+        uploadedFileId,
+        batchId,
+        userId: userId ?? "",
+        error: errorMessage,
+      });
+
+      const currentBatch = await db.projectProcessingBatch.findUnique({
+        where: { id: batchId },
+        select: { creditsCost: true, status: true },
+      });
+
+      if (
+        !currentBatch ||
+        currentBatch.status === "processed" ||
+        currentBatch.status === "failed"
+      ) {
+        return;
+      }
+
+      if (userId && currentBatch.creditsCost > 0) {
+        const user = await db.user.findUnique({
+          where: { id: userId },
+          select: { reservedCredits: true },
+        });
+        const amountToRefund = Math.min(
+          currentBatch.creditsCost,
+          user?.reservedCredits ?? 0,
+        );
+        if (amountToRefund > 0) {
+          const refundCreditsUseCase = makeRefundCreditsUseCase();
+          await refundCreditsUseCase.execute({
+            userId,
+            amount: amountToRefund,
+            fileId: uploadedFileId,
+            reason: friendlyMessage,
+            skipFileStatusUpdate: true,
+          });
+        }
+      }
+
+      await db.projectProcessingBatch.update({
+        where: { id: batchId },
+        data: { status: "failed", errorMessage: friendlyMessage },
+      });
+    },
+  },
+  async ({ event, step }) => {
+    return appendClipsToProjectHandler({
+      event: event as unknown as { data: AddClipsToProjectEventData },
       step: step as unknown as PipelineStep,
     });
   },

@@ -152,6 +152,8 @@ describe("Clip Domain Entity", () => {
       reason: "Alto teor dramático e revelação surpreendente",
       startTime: 10,
       endTime: 40,
+      sourceStartTime: null,
+      sourceEndTime: null,
       durationSeconds: 30,
       subtitlePreset: "HORMOZI",
       layoutMode: "SMART_CROP",

@@ -58,9 +58,15 @@ export class HoldCreditsUseCase {
         description: `Hold de ${requiredCredits} créditos para processamento do arquivo ${input.fileId} [sub:${debitedSubscription},ot:${debitedOneTime}]`,
       });
 
-      await this.uploadedFileRepository.update(input.fileId, {
-        creditsCost: requiredCredits,
-      });
+      // `skipFileStatusUpdate`: hold escopado a um `ProjectProcessingBatch`
+      // (RF "adicionar mais cortes") nunca deve sobrescrever o
+      // `creditsCost` do `UploadedFile` (projeto) com o valor do lote — ver
+      // `HoldCreditsInput.skipFileStatusUpdate`.
+      if (!input.skipFileStatusUpdate) {
+        await this.uploadedFileRepository.update(input.fileId, {
+          creditsCost: requiredCredits,
+        });
+      }
 
       return {
         success: true,

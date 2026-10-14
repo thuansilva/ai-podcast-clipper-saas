@@ -2,9 +2,14 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
 import { db } from "~/server/db";
-import { ArrowLeft, Clock, Film } from "lucide-react";
+import { ArrowLeft, Clock, Film, Plus, Search, X } from "lucide-react";
 import { isManualCut } from "~/domain/services/clip-origin.service";
+import { formatClipsDurationLabel } from "~/domain/services/clip-duration.service";
+import { YouTubeUrl } from "~/domain/value-objects/youtube-url.vo";
 import { ClipCard } from "~/components/clip-card";
+import { Button } from "~/components/ui/button";
+import { Input } from "~/components/ui/input";
+import { OriginalVideoPopover } from "~/components/dashboard/original-video-popover";
 import {
   Pagination,
   PaginationContent,
@@ -15,6 +20,7 @@ import {
 } from "~/components/ui/pagination";
 
 const CLIPS_PER_PAGE = 10;
+const MAX_SEARCH_LENGTH = 100;
 
 export default async function ProjectDetailsPage(props: {
   params: Promise<{ id: string }>;
@@ -22,59 +28,191 @@ export default async function ProjectDetailsPage(props: {
 }) {
   const { id } = await props.params;
   const searchParams = await props.searchParams;
-  
+
   const pageParam = typeof searchParams.page === 'string' ? parseInt(searchParams.page, 10) : 1;
   const page = isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+
+  // Busca server-side por título/gancho. Aparada e limitada para não gerar
+  // `contains` gigantes; vazio equivale a "sem filtro".
+  const query =
+    typeof searchParams.q === "string"
+      ? searchParams.q.trim().slice(0, MAX_SEARCH_LENGTH)
+      : "";
+  const clipsSearchFilter = query
+    ? {
+        OR: [
+          { title: { contains: query, mode: "insensitive" as const } },
+          { hook: { contains: query, mode: "insensitive" as const } },
+        ],
+      }
+    : undefined;
 
   const userId = await makeAuthGateway().getUserId();
   if (!userId) redirect("/login");
 
-  const project = await db.uploadedFile.findUnique({
-    where: { id, userId },
-    include: {
-      clips: {
-        orderBy: {
-          createdAt: "desc",
+  // A duração dos cortes não pode ser somada a partir de `project.clips`: essa
+  // lista é paginada (CLIPS_PER_PAGE) e possivelmente filtrada pela busca, então
+  // somar só ela daria um total errado. Por isso usamos um aggregate separado
+  // sobre TODOS os clipes do projeto (ver clip-duration.service.ts). O mesmo
+  // vale para `_count`, que continua sendo o total sem filtro.
+  const [project, clipsDurationAggregate] = await Promise.all([
+    db.uploadedFile.findUnique({
+      where: { id, userId },
+      include: {
+        clips: {
+          ...(clipsSearchFilter ? { where: clipsSearchFilter } : {}),
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: CLIPS_PER_PAGE,
+          skip: (page - 1) * CLIPS_PER_PAGE,
         },
-        take: CLIPS_PER_PAGE,
-        skip: (page - 1) * CLIPS_PER_PAGE,
+        _count: {
+          select: { clips: true }
+        }
       },
-      _count: {
-        select: { clips: true }
-      }
-    },
-  });
+    }),
+    db.clip.aggregate({
+      where: { uploadedFileId: id },
+      _sum: { durationSeconds: true },
+    }),
+  ]);
 
   if (!project) redirect("/dashboard/projects");
 
   const totalClips = project._count.clips;
-  const totalPages = Math.ceil(totalClips / CLIPS_PER_PAGE);
+  // Com busca ativa a paginação é calculada sobre a contagem filtrada.
+  const filteredClips = clipsSearchFilter
+    ? await db.clip.count({
+        where: { uploadedFileId: id, ...clipsSearchFilter },
+      })
+    : totalClips;
+  const totalPages = Math.ceil(filteredClips / CLIPS_PER_PAGE);
+  const clipsDurationLabel = formatClipsDurationLabel(
+    clipsDurationAggregate._sum.durationSeconds,
+  );
+  const originalVideoMinutes = Math.floor(project.durationSeconds / 60);
+
+  // Proteção defensiva: `project.youtubeUrl` é, em teoria, sempre uma URL do
+  // YouTube (projetos de upload direto têm esse campo null), mas validamos e
+  // normalizamos via Value Object antes de transformar em link clicável —
+  // nunca confiamos num valor de banco para montar um `href`. O `canonicalUrl`
+  // é reconstruído só a partir do ID de vídeo extraído (regex fixa de 11
+  // caracteres), então nunca reflete esquemas como `javascript:` ou domínios
+  // arbitrários que porventura estejam no valor bruto.
+  const validYoutubeUrl = project.youtubeUrl
+    ? YouTubeUrl.tryCreate(project.youtubeUrl)
+    : null;
+
+  const hasOriginalVideo = Boolean(project.thumbnailUrl || project.youtubeUrl);
+
+  const basePath = `/dashboard/projects/${id}`;
+  const pageHref = (target: number) => {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    params.set("page", String(target));
+    // URLSearchParams usa "+" para espaço; preferimos %20 (mais previsível).
+    return `${basePath}?${params.toString().replace(/\+/g, "%20")}`;
+  };
 
   return (
     <div className="w-full h-full space-y-8 p-4 md:p-6">
       <Link
         href="/dashboard/projects"
-        className="inline-flex items-center text-sm text-[var(--fumaca)] hover:text-[var(--marfim)]"
+        className="inline-flex items-center rounded text-sm text-[var(--fumaca)] hover:text-[var(--marfim)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ouro)]"
       >
-        <ArrowLeft className="mr-2 h-4 w-4" /> Voltar para Projetos
+        <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" /> Voltar para Projetos
       </Link>
 
-      <div className="bg-[var(--superficie)] border border-[var(--linha)] rounded-xl p-6">
-        <h1 className="text-2xl font-bold text-[var(--marfim)]">
+      <header className="space-y-3 border-b border-[var(--linha)] pb-6">
+        <h1 className="text-3xl font-bold tracking-tight text-[var(--marfim)] break-words">
           {project.displayName || project.id}
         </h1>
-        <div className="flex gap-4 mt-2 text-sm text-[var(--fumaca)]">
-          <span className="flex items-center">
-            <Clock className="mr-1 h-4 w-4" /> {Math.floor(project.durationSeconds / 60)} min
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-[var(--fumaca)]">
+          <span
+            className="flex items-center"
+            title={`Vídeo original: ${originalVideoMinutes} min`}
+          >
+            <Clock className="mr-1.5 h-4 w-4" aria-hidden="true" /> {clipsDurationLabel}
           </span>
           <span className="flex items-center">
-            <Film className="mr-1 h-4 w-4" /> {totalClips} cortes gerados
+            <Film className="mr-1.5 h-4 w-4" aria-hidden="true" /> {totalClips} cortes gerados
           </span>
         </div>
-      </div>
+      </header>
 
-      <div>
-        <h2 className="text-xl font-bold text-[var(--marfim)] mb-4">Cortes Gerados</h2>
+      <section aria-labelledby="clips-heading">
+        <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <h2 id="clips-heading" className="text-xl font-bold text-[var(--marfim)]">
+            Cortes Gerados
+          </h2>
+
+          {/* Toolbar à direita: [busca] [vídeo original] [adicionar cortes] */}
+          <div
+            data-testid="clips-toolbar"
+            className="flex flex-col gap-2 sm:flex-row sm:items-center lg:justify-end"
+          >
+            <form
+              method="get"
+              action={basePath}
+              role="search"
+              className="relative w-full sm:w-64"
+            >
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[var(--fumaca)]"
+                aria-hidden="true"
+              />
+              <Input
+                type="search"
+                name="q"
+                defaultValue={query}
+                maxLength={MAX_SEARCH_LENGTH}
+                placeholder="Buscar cortes..."
+                aria-label="Buscar cortes"
+                data-testid="clips-search"
+                className="h-9 border-[var(--linha)] bg-[var(--superficie)] pl-9 pr-9 text-[var(--marfim)] placeholder:text-[var(--fumaca)] focus-visible:ring-[var(--ouro)]/60"
+              />
+              {query && (
+                <Link
+                  href={basePath}
+                  aria-label="Limpar busca"
+                  data-testid="clips-search-clear"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--fumaca)] hover:text-[var(--marfim)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ouro)]"
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Link>
+              )}
+            </form>
+
+            <div className="flex items-center gap-2">
+              {hasOriginalVideo && (
+                <OriginalVideoPopover
+                  displayName={project.displayName}
+                  durationMinutes={originalVideoMinutes}
+                  thumbnailUrl={project.thumbnailUrl}
+                  youtubeCanonicalUrl={validYoutubeUrl?.canonicalUrl ?? null}
+                />
+              )}
+
+              {/*
+                Botão "Adicionar cortes": `<Link>` real para a rota
+                `/dashboard/projects/[id]/add-clips`. `data-testid`
+                mantém o seletor estável pros testes.
+              */}
+              <Button
+                asChild
+                size="lg"
+                className="flex-1 bg-[var(--ouro)] text-black hover:bg-[var(--ouro)]/90 focus-visible:ring-[var(--ouro)]/60 sm:flex-none"
+              >
+                <Link href={`${basePath}/add-clips`} data-testid="add-clips-slot">
+                  <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                  Adicionar cortes
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+
         {totalClips === 0 ? (
           <div className="py-20 text-center text-[var(--fumaca)] border border-dashed border-[var(--linha)] rounded-xl">
             {project.status === "processing" || project.status === "queued"
@@ -82,6 +220,19 @@ export default async function ProjectDetailsPage(props: {
               : project.status === "failed"
                 ? ("Falha ao processar o projeto. " + (project.errorMessage || "")).trim()
                 : "Nenhum corte gerado."}
+          </div>
+        ) : filteredClips === 0 ? (
+          <div
+            data-testid="clips-search-empty"
+            className="py-20 text-center text-[var(--fumaca)] border border-dashed border-[var(--linha)] rounded-xl"
+          >
+            <p>Nenhum corte encontrado para &lsquo;{query}&rsquo;.</p>
+            <Link
+              href={basePath}
+              className="mt-3 inline-block rounded text-[var(--prata)] underline underline-offset-2 hover:text-[var(--ouro)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ouro)]"
+            >
+              Limpar busca
+            </Link>
           </div>
         ) : (
           <>
@@ -101,16 +252,16 @@ export default async function ProjectDetailsPage(props: {
                   <PaginationContent>
                     <PaginationItem>
                       <PaginationPrevious
-                        href={page > 1 ? `/dashboard/projects/${id}?page=${page - 1}` : "#"}
+                        href={page > 1 ? pageHref(page - 1) : "#"}
                         className={page === 1 ? "pointer-events-none opacity-50" : ""}
                         aria-disabled={page === 1}
                       />
                     </PaginationItem>
-                    
+
                     {Array.from({ length: totalPages }).map((_, i) => (
                       <PaginationItem key={i}>
                         <PaginationLink
-                          href={`/dashboard/projects/${id}?page=${i + 1}`}
+                          href={pageHref(i + 1)}
                           isActive={page === i + 1}
                         >
                           {i + 1}
@@ -120,7 +271,7 @@ export default async function ProjectDetailsPage(props: {
 
                     <PaginationItem>
                       <PaginationNext
-                        href={page < totalPages ? `/dashboard/projects/${id}?page=${page + 1}` : "#"}
+                        href={page < totalPages ? pageHref(page + 1) : "#"}
                         className={page === totalPages ? "pointer-events-none opacity-50" : ""}
                         aria-disabled={page === totalPages}
                       />
@@ -131,7 +282,7 @@ export default async function ProjectDetailsPage(props: {
             )}
           </>
         )}
-      </div>
+      </section>
     </div>
   );
 }

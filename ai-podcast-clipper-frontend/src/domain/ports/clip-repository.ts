@@ -10,6 +10,9 @@ export interface CreateClipInput {
   reason?: string | null;
   startTime: number;
   endTime: number;
+  /** Tempo absoluto no vídeo ORIGINAL — ver `ClipEntity.sourceStartTime`. */
+  sourceStartTime?: number | null;
+  sourceEndTime?: number | null;
   durationSeconds: number;
   subtitlePreset?: SubtitlePreset;
   layoutMode?: LayoutMode;

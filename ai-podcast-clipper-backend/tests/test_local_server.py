@@ -254,6 +254,83 @@ class TestLocalDownloadYouTube:
         assert data["remapped_ranges"] is None
         assert data["remapped_cuts"] is None
 
+    # -----------------------------------------------------------------
+    # RF "adicionar mais cortes" (IA sobre um novo slice): `slice` sent to
+    # `/download_youtube` -> `download_youtube_to_s3(time_ranges=[one
+    # range])` -> response carries `remapped_ranges` (never
+    # `remapped_cuts`, which only applies to `manual_cuts`). Same contract
+    # as main.py (tests/test_youtube_downloader.py).
+    # -----------------------------------------------------------------
+
+    def test_slice_is_forwarded_as_single_time_range_and_response_has_no_remapped_cuts(
+        self, download_storage
+    ):
+        with patch.object(local_server, "download_youtube_to_s3") as download:
+            download.return_value = {
+                "s3_key": LOCAL_VALID_KEY,
+                "title": "Podcast",
+                "duration": 3600,
+                "thumbnail": None,
+                "remapped_ranges": [
+                    {"original_start": 8.0, "original_end": 317.0, "offset_in_output": 0.0},
+                ],
+            }
+            response = client.post(
+                "/download_youtube",
+                json={
+                    "url": LOCAL_VALID_URL,
+                    "s3_key": LOCAL_VALID_KEY,
+                    "slice": {"start": 10.0, "end": 310.0},
+                },
+                headers=AUTH_HEADERS,
+            )
+
+        assert response.status_code == 200
+        assert download.call_args.kwargs["time_ranges"] == [(10.0, 310.0)]
+        data = response.json()
+        assert data["remapped_ranges"] == [
+            {"original_start": 8.0, "original_end": 317.0, "offset_in_output": 0.0}
+        ]
+        assert data["remapped_cuts"] is None
+
+    def test_slice_and_manual_cuts_together_returns_422(self, download_storage):
+        with patch.object(local_server, "download_youtube_to_s3") as download:
+            response = client.post(
+                "/download_youtube",
+                json={
+                    "url": LOCAL_VALID_URL,
+                    "manual_cuts": [{"start": 1.0, "end": 5.0}],
+                    "slice": {"start": 10.0, "end": 310.0},
+                },
+                headers=AUTH_HEADERS,
+            )
+        assert response.status_code == 422
+        download.assert_not_called()
+
+    def test_slice_has_no_sixty_second_cap(self, download_storage):
+        # Unlike manual_cuts (ManualCut, capped at 60s), a slice for the IA
+        # to analyze over can be several minutes long.
+        with patch.object(local_server, "download_youtube_to_s3") as download:
+            download.return_value = {
+                "s3_key": LOCAL_VALID_KEY,
+                "title": "Podcast",
+                "duration": 3600,
+                "thumbnail": None,
+                "remapped_ranges": [
+                    {"original_start": 0.0, "original_end": 300.0, "offset_in_output": 0.0},
+                ],
+            }
+            response = client.post(
+                "/download_youtube",
+                json={
+                    "url": LOCAL_VALID_URL,
+                    "slice": {"start": 0.0, "end": 300.0},
+                },
+                headers=AUTH_HEADERS,
+            )
+        assert response.status_code == 200
+        assert download.call_args.kwargs["time_ranges"] == [(0.0, 300.0)]
+
     def test_too_many_manual_cuts_returns_422_before_any_download(self, download_storage):
         with patch.object(local_server, "download_youtube_to_s3") as download:
             response = client.post(
@@ -636,6 +713,62 @@ class TestProcessVideoManualCutsIntegration:
         assert response.status_code == 200
         storage: FakeObjectStorage = pipeline_env["storage"]
         assert [key for key, _ in storage.downloads] == [PROCESS_VIDEO_KEY]
+
+
+@REQUIRES_FFMPEG
+class TestProcessVideoExcludedRangesIntegration:
+    """RF 'adicionar mais cortes': `excluded_ranges` end-to-end through the
+    real `/process_video` request/response cycle on the local runner. Same
+    contract as `tests/test_video_pipeline.py`'s mocked unit tests, exercised
+    here through the real HTTP endpoint + pipeline wiring."""
+
+    def test_candidates_overlapping_excluded_ranges_are_discarded(self, pipeline_env):
+        pipeline_env["identify_moments"].return_value = MomentsExtraction(
+            clips=[
+                ClipItem(title="A", hook="h", start=0.0, end=5.0, virality_score=8, reason="r"),
+                ClipItem(title="B", hook="h", start=6.0, end=11.0, virality_score=7, reason="r"),
+                ClipItem(title="C", hook="h", start=12.0, end=14.0, virality_score=6, reason="r"),
+            ]
+        )
+        payload = {
+            "s3_key": PROCESS_VIDEO_KEY,
+            "preset": "HORMOZI",
+            "mode": "auto",
+            # Overlaps A's tail (0-5 vs 4-7) and all of B (6-11 vs 4-7).
+            "excluded_ranges": [{"start": 4.0, "end": 7.0}],
+        }
+
+        response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
+
+        assert response.status_code == 200
+        clips = response.json()["clips"]
+        assert [clip["title"] for clip in clips] == ["C"]
+
+    def test_excluded_ranges_absent_is_a_no_op_regression(self, pipeline_env):
+        # pipeline_env's default moments_provider returns a single clip
+        # (2.0-20.0); omitting excluded_ranges must behave exactly as before
+        # this field existed.
+        payload = {"s3_key": PROCESS_VIDEO_KEY, "preset": "HORMOZI"}
+
+        response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
+
+        assert response.status_code == 200
+        clips = response.json()["clips"]
+        assert len(clips) == 1
+        assert clips[0]["title"] == "Gancho do Gemini"
+
+    def test_manual_mode_with_excluded_ranges_processes_every_cut_unaffected(
+        self, pipeline_env
+    ):
+        payload = _payload_for_local_file(pipeline_env["video_path"])
+        payload["excluded_ranges"] = [{"start": 0.0, "end": 12.0}]
+
+        response = client.post("/process_video", json=payload, headers=AUTH_HEADERS)
+
+        assert response.status_code == 200
+        clips = response.json()["clips"]
+        assert len(clips) == FIXTURE_CUT_COUNT
+        pipeline_env["identify_moments"].assert_not_called()
 
 
 # ---------------------------------------------------------------------------

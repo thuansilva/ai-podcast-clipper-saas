@@ -15,6 +15,18 @@ export interface ClipEntity {
   reason?: string | null;
   startTime: number;
   endTime: number;
+  /**
+   * Tempo absoluto no vídeo ORIGINAL (nunca no arquivo baixado/concatenado
+   * que de fato foi processado — ver `AddClipsToProjectUseCase` e
+   * `docs/arquitetura/visao-fluxo-processamento-video.md`). `null` para
+   * clipes manuais de projetos do YouTube criados antes desta coluna existir
+   * (não há como recuperar esse tempo com certeza — nunca inventado por
+   * backfill). Para clipes automáticos (qualquer `sourceType`) e clipes
+   * manuais de upload direto, sempre igual a `startTime`/`endTime` (nesses
+   * modos nunca há remapeamento).
+   */
+  sourceStartTime?: number | null;
+  sourceEndTime?: number | null;
   durationSeconds: number;
   subtitlePreset: SubtitlePreset;
   layoutMode: LayoutMode;
@@ -31,6 +43,8 @@ export interface CreateClipInput {
   title: string;
   startTime: number;
   endTime: number;
+  sourceStartTime?: number | null;
+  sourceEndTime?: number | null;
   hook?: string | null;
   viralityScore?: number | null;
   reason?: string | null;
@@ -51,6 +65,8 @@ export class Clip {
   private _reason?: string | null;
   private _startTime: number;
   private _endTime: number;
+  private _sourceStartTime?: number | null;
+  private _sourceEndTime?: number | null;
   private _durationSeconds: number;
   private _subtitlePreset: SubtitlePreset;
   private _layoutMode: LayoutMode;
@@ -72,6 +88,8 @@ export class Clip {
     reason: string | null | undefined,
     startTime: number,
     endTime: number,
+    sourceStartTime: number | null | undefined,
+    sourceEndTime: number | null | undefined,
     durationSeconds: number,
     subtitlePreset: SubtitlePreset,
     layoutMode: LayoutMode,
@@ -101,6 +119,8 @@ export class Clip {
     this._reason = reason ?? null;
     this._startTime = startTime;
     this._endTime = endTime;
+    this._sourceStartTime = sourceStartTime ?? null;
+    this._sourceEndTime = sourceEndTime ?? null;
     this._durationSeconds = durationSeconds;
     this._subtitlePreset = subtitlePreset;
     this._layoutMode = layoutMode;
@@ -128,6 +148,8 @@ export class Clip {
       input.reason,
       input.startTime,
       input.endTime,
+      input.sourceStartTime,
+      input.sourceEndTime,
       duration,
       input.subtitlePreset ?? "HORMOZI",
       input.layoutMode ?? "SMART_CROP",
@@ -152,6 +174,8 @@ export class Clip {
       data.reason,
       data.startTime,
       data.endTime,
+      data.sourceStartTime,
+      data.sourceEndTime,
       data.durationSeconds,
       data.subtitlePreset,
       data.layoutMode,
@@ -188,6 +212,14 @@ export class Clip {
 
   get endTime(): number {
     return this._endTime;
+  }
+
+  get sourceStartTime(): number | null | undefined {
+    return this._sourceStartTime;
+  }
+
+  get sourceEndTime(): number | null | undefined {
+    return this._sourceEndTime;
   }
 
   get durationSeconds(): number {
@@ -251,6 +283,8 @@ export class Clip {
       reason: this._reason,
       startTime: this._startTime,
       endTime: this._endTime,
+      sourceStartTime: this._sourceStartTime,
+      sourceEndTime: this._sourceEndTime,
       durationSeconds: this._durationSeconds,
       subtitlePreset: this._subtitlePreset,
       layoutMode: this._layoutMode,

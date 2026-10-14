@@ -44,6 +44,7 @@ from core.youtube_downloader import (
     YouTubeVideoUnavailableError,
     download_youtube_to_s3,
     remap_manual_cuts,
+    resolve_download_time_ranges,
 )
 
 # Roda em cada cold start do container (Modal reimporta main.py do zero por
@@ -242,13 +243,13 @@ def download_youtube(
         )
 
     s3_key = request.s3_key or f"youtube/{uuid.uuid4()}/original.mp4"
-    # RF-PIPE-08 manual-mode partial download: when the caller sends
-    # manual_cuts, only the range(s) covering them (merged, with margin) are
-    # downloaded and concatenated into a single file, instead of the whole
-    # video. Falsy (None/empty) behaves exactly as before this field existed.
-    time_ranges = (
-        [(cut.start, cut.end) for cut in request.manual_cuts] if request.manual_cuts else None
-    )
+    # RF-PIPE-08 manual-mode partial download / RF "adicionar mais cortes"
+    # (IA sobre um novo slice): when the caller sends manual_cuts or slice
+    # (mutually exclusive, enforced by the request schema), only the
+    # range(s) covering them (merged, with margin) are downloaded and
+    # concatenated into a single file, instead of the whole video. Falsy
+    # (both None/empty) behaves exactly as before either field existed.
+    time_ranges = resolve_download_time_ranges(request.manual_cuts, request.slice)
 
     try:
         result = download_youtube_to_s3(

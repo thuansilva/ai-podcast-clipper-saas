@@ -9,6 +9,7 @@ erDiagram
     User ||--o{ UploadedFile : "faz upload (1:N)"
     User ||--o{ Clip : "possui (1:N)"
     UploadedFile ||--o{ Clip : "gera (1:N)"
+    UploadedFile ||--o{ ProjectProcessingBatch : "processa em lotes (1:N)"
 
     User {
         String id PK
@@ -72,6 +73,20 @@ erDiagram
         DateTime updatedAt
     }
 
+    ProjectProcessingBatch {
+        String id PK
+        String uploadedFileId FK
+        String mode "manual, auto"
+        Json rangesJson
+        Json excludedRangesJson
+        String s3Key
+        Int creditsCost
+        String status "queued, processing, processed, failed"
+        String errorMessage
+        DateTime createdAt
+        DateTime updatedAt
+    }
+
     Clip {
         String id PK
         String uploadedFileId FK
@@ -83,6 +98,8 @@ erDiagram
         String reason
         Float startTime
         Float endTime
+        Float sourceStartTime "tempo no vídeo original; NULL em clipes manuais antigos do YouTube"
+        Float sourceEndTime "tempo no vídeo original; NULL em clipes manuais antigos do YouTube"
         Float durationSeconds
         String subtitlePreset
         String layoutMode
@@ -110,4 +127,6 @@ erDiagram
 - **`CreditTransaction`**: Ledger (Livro-razão) de créditos, documentando com segurança cada pacote comprado, saldo reservado ou estornado por falha.
 - **`UploadedFile`**: Representa um "Projeto/Vídeo Base", seja upado direto ou baixado do YouTube. Contém o status do processamento para gerenciar a fila do Inngest.
 - **`Clip`**: Os cortes finais em formato 9:16 gerados pelo seu novo Backend GPU local, relacionados diretamente ao arquivo base que os originou e contendo métricas de *virality score* calculadas pela IA.
+- **`ProjectProcessingBatch`** (2026-10-13): um lote de "adicionar mais cortes" sobre um `UploadedFile` do YouTube já existente. Cada lote tem sua própria `s3Key`, custo e status (`queued`, `processing`, `processed`, `failed`), então uma falha nunca afeta o projeto nem os clipes de outros lotes. No máximo um lote ativo por projeto (RNF-IDEM-07). Migration `20261014015607_add_processing_batch_and_clip_source_time`.
+- **Colunas `Clip.sourceStartTime` / `Clip.sourceEndTime`** (2026-10-13): tempo do clipe no vídeo original, usado para calcular os trechos já cobertos ao adicionar cortes. O `startTime`/`endTime` continua sendo o tempo no arquivo processado, que em clipes manuais de projetos do YouTube pode ser diferente. A migration só preenche as colunas quando os dois tempos já coincidem; clipes manuais antigos do YouTube ficam `NULL` (RN-PROJ-APPEND-02).
 - **`ProcessingOption`**: Tabela de parametrização global (para renderizar dinamicamente estilos de legenda, modelos de IA e formatos na UI).

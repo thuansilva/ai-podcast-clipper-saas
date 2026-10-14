@@ -64,10 +64,16 @@ export class RefundCreditsUseCase {
         description: `Estorno de ${input.amount} créditos para o arquivo ${input.fileId}: ${input.reason}`,
       });
 
-      await this.uploadedFileRepository.update(input.fileId, {
-        status: "failed",
-        errorMessage: input.reason,
-      });
+      // `skipFileStatusUpdate`: refund escopado a um `ProjectProcessingBatch`
+      // (RF "adicionar mais cortes") nunca deve marcar o `UploadedFile`
+      // (projeto) inteiro como "failed" — ver
+      // `RefundCreditsInput.skipFileStatusUpdate`.
+      if (!input.skipFileStatusUpdate) {
+        await this.uploadedFileRepository.update(input.fileId, {
+          status: "failed",
+          errorMessage: input.reason,
+        });
+      }
     });
 
     return { success: true };

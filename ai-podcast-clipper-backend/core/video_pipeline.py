@@ -11,12 +11,39 @@ itself is shared, eliminating drift between environments.
 import json
 import pathlib
 
+from typing import List
+
 from core.clip_pipeline import process_clip
 from core.moments_port import MomentsProvider
-from core.schemas import ProcessVideoRequest, ProcessVideoResponse
+from core.schemas import ClipItem, ProcessVideoRequest, ProcessVideoResponse, TimeRange
 from core.storage.ports import ObjectStorage
 from core.transcription import RANGE_MARGIN_SECONDS, WhisperTranscriber, merge_time_ranges
 from core.video_probe import get_video_duration_seconds, validate_manual_cuts_against_duration
+
+
+def _overlaps_any_excluded_range(clip: ClipItem, excluded_ranges: List[TimeRange]) -> bool:
+    """Same overlap semantics as the frontend's `rangesOverlap`
+    (`src/domain/services/range-overlap.service.ts`): two ranges overlap if
+    they share any second; ranges that only touch at an edge (e.g. clip
+    ending exactly where an excluded range starts) do NOT overlap."""
+    return any(
+        clip.start < excluded.end and excluded.start < clip.end
+        for excluded in excluded_ranges
+    )
+
+
+def _filter_out_excluded_ranges(
+    clips: List[ClipItem], excluded_ranges: "List[TimeRange] | None"
+) -> List[ClipItem]:
+    """RF 'adicionar mais cortes' (IA sobre um novo slice): defensive,
+    code-enforced filter — never relies solely on the LLM prompt to avoid
+    re-suggesting a moment that overlaps a range already covered by an
+    earlier processing batch of the same project. `excluded_ranges`
+    missing/empty is a strict no-op (regression-free for every caller that
+    predates this field)."""
+    if not excluded_ranges:
+        return clips
+    return [clip for clip in clips if not _overlaps_any_excluded_range(clip, excluded_ranges)]
 
 
 def resolve_input_video_path(
@@ -103,7 +130,14 @@ def run_video_processing_pipeline(
         moments_extraction = moments_provider.identify_moments(
             transcript_segments, genre=request.genre
         )
-        clips_to_process = moments_extraction.clips[:clips_limit]
+        # RF "adicionar mais cortes": discard, before clips_limit is
+        # applied, any candidate that overlaps a range already covered by
+        # an earlier batch (request.excluded_ranges) — defensive filter,
+        # never relies solely on the LLM prompt obeying this.
+        candidate_clips = _filter_out_excluded_ranges(
+            moments_extraction.clips, request.excluded_ranges
+        )
+        clips_to_process = candidate_clips[:clips_limit]
         print(f"Identified {len(clips_to_process)} candidate clips")
 
     # 3. Process clips (LR-ASD on cropped segments + vertical reframe + styled subtitles)

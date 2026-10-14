@@ -148,6 +148,7 @@ from core.youtube_downloader import (
     YouTubeVideoUnavailableError,
     download_youtube_to_s3,
     remap_manual_cuts,
+    resolve_download_time_ranges,
 )
 
 import pathlib
@@ -189,13 +190,12 @@ def download_youtube(
     # in local dev, see core/storage/factory.py). No local-file shortcut: the
     # returned s3_key is always a real storage key, never a /tmp path.
     s3_key = req.s3_key or f"youtube/{uuid.uuid4()}/original.mp4"
-    # RF-PIPE-08 manual-mode partial download: same contract as main.py's
-    # download_youtube — when manual_cuts is sent, only the range(s)
-    # covering them (merged, with margin) are downloaded and concatenated
-    # into a single file, instead of the whole video.
-    time_ranges = (
-        [(cut.start, cut.end) for cut in req.manual_cuts] if req.manual_cuts else None
-    )
+    # RF-PIPE-08 manual-mode partial download / RF "adicionar mais cortes"
+    # (IA sobre um novo slice): same contract as main.py's download_youtube —
+    # when manual_cuts or slice is sent (mutually exclusive), only the
+    # range(s) covering them (merged, with margin) are downloaded and
+    # concatenated into a single file, instead of the whole video.
+    time_ranges = resolve_download_time_ranges(req.manual_cuts, req.slice)
 
     try:
         result = download_youtube_to_s3(

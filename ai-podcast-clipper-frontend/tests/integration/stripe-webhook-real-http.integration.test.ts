@@ -291,7 +291,7 @@ describe("Stripe Webhook - Integração HTTP real (não mockada)", () => {
 
   it(
     "charge.refunded com payload real assinado, via HTTP de verdade, " +
-      "revoga créditos no Postgres real (efeito observável pelo servidor real)",
+    "revoga créditos no Postgres real (efeito observável pelo servidor real)",
     async (ctx) => {
       if (!serverReachable) {
         ctx.skip();
@@ -349,7 +349,7 @@ describe("Stripe Webhook - Integração HTTP real (não mockada)", () => {
 
   it(
     "retry do Stripe com o mesmo event.id, via HTTP de verdade, não revoga " +
-      "créditos uma segunda vez (idempotência observada ponta a ponta)",
+    "créditos uma segunda vez (idempotência observada ponta a ponta)",
     async (ctx) => {
       if (!serverReachable) {
         ctx.skip();

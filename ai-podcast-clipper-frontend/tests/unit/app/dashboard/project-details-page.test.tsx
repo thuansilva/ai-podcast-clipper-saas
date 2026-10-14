@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import ProjectDetailsPage from "~/app/dashboard/projects/[id]/page";
 import { redirect } from "next/navigation";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
@@ -22,12 +22,21 @@ vi.mock("~/server/db", () => ({
     uploadedFile: {
       findUnique: vi.fn(),
     },
+    clip: {
+      aggregate: vi.fn(),
+      count: vi.fn(),
+    },
   },
 }));
 
 describe("ProjectDetailsPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default realista: projeto sem clipes ainda -> Prisma retorna _sum null.
+    // Testes que precisam de um total diferente sobrescrevem explicitamente.
+    vi.mocked(db.clip.aggregate).mockResolvedValue({
+      _sum: { durationSeconds: null },
+    } as any);
   });
 
   it("redirects to /login if user is not authenticated", async () => {
@@ -175,5 +184,234 @@ describe("ProjectDetailsPage", () => {
     render(result);
     expect(await screen.findByText("Corte Manual")).toBeDefined();
     expect(screen.queryByText("--")).toBeNull();
+  });
+
+  it("exibe a duração total dos CORTES (aggregate de todos os clipes), não a duração do vídeo original", async () => {
+    vi.mocked(makeAuthGateway).mockReturnValue({
+      getUserId: vi.fn().mockResolvedValue("user-1"),
+    } as any);
+
+    vi.mocked(db.uploadedFile.findUnique).mockResolvedValue({
+      id: "proj-4",
+      userId: "user-1",
+      displayName: "Podcast Longo",
+      durationSeconds: 7200, // vídeo original de 120 min
+      status: "processed",
+      _count: { clips: 15 },
+      clips: [{ id: "clip-x", title: "Corte X", viralityScore: 9 }],
+    } as any);
+
+    // Soma de TODOS os clipes do projeto (não só os da página atual).
+    vi.mocked(db.clip.aggregate).mockResolvedValue({
+      _sum: { durationSeconds: 1200 }, // 20 min
+    } as any);
+
+    const result = await ProjectDetailsPage({
+      params: Promise.resolve({ id: "proj-4" }), searchParams: Promise.resolve({}),
+    });
+
+    render(result);
+    expect(await screen.findByText("20 min de cortes gerados")).toBeDefined();
+    expect(screen.queryByText("120 min de cortes gerados")).toBeNull();
+    expect(db.clip.aggregate).toHaveBeenCalledWith({
+      where: { uploadedFileId: "proj-4" },
+      _sum: { durationSeconds: true },
+    });
+  });
+
+  it("sempre renderiza o slot do botão 'Adicionar cortes' no header", async () => {
+    vi.mocked(makeAuthGateway).mockReturnValue({
+      getUserId: vi.fn().mockResolvedValue("user-1"),
+    } as any);
+
+    vi.mocked(db.uploadedFile.findUnique).mockResolvedValue({
+      id: "proj-5",
+      userId: "user-1",
+      displayName: "Podcast Qualquer",
+      durationSeconds: 300,
+      status: "processed",
+      _count: { clips: 0 }, clips: [],
+    } as any);
+
+    const result = await ProjectDetailsPage({
+      params: Promise.resolve({ id: "proj-5" }), searchParams: Promise.resolve({}),
+    });
+
+    render(result);
+    const slot = screen.getByTestId("add-clips-slot");
+    expect(slot).toBeDefined();
+    expect(slot.getAttribute("href")).toBe("/dashboard/projects/proj-5/add-clips");
+    expect(slot.textContent).toMatch(/Adicionar cortes/i);
+  });
+
+  describe("vídeo original (ícone + popover)", () => {
+    async function renderWith(extra: Record<string, unknown>, id = "proj-x") {
+      vi.mocked(makeAuthGateway).mockReturnValue({
+        getUserId: vi.fn().mockResolvedValue("user-1"),
+      } as any);
+      vi.mocked(db.uploadedFile.findUnique).mockResolvedValue({
+        id,
+        userId: "user-1",
+        displayName: "Podcast do YouTube",
+        durationSeconds: 300,
+        status: "processed",
+        _count: { clips: 0 },
+        clips: [],
+        ...extra,
+      } as any);
+      render(
+        await ProjectDetailsPage({
+          params: Promise.resolve({ id }),
+          searchParams: Promise.resolve({}),
+        }),
+      );
+    }
+
+    it("não renderiza o trigger quando não há youtubeUrl nem thumbnailUrl (upload direto)", async () => {
+      await renderWith({ youtubeUrl: null, thumbnailUrl: null });
+      expect(screen.queryByTestId("original-video-trigger")).toBeNull();
+      expect(screen.queryByTestId("original-video-card")).toBeNull();
+    });
+
+    it("renderiza o trigger, mas mantém o card escondido até o clique", async () => {
+      await renderWith({
+        youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&feature=share",
+        thumbnailUrl: "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+      });
+      expect(screen.getByTestId("original-video-trigger")).toBeDefined();
+      expect(screen.queryByTestId("original-video-card")).toBeNull();
+      expect(screen.queryByTestId("original-video-youtube-link")).toBeNull();
+    });
+
+    it("ao clicar, mostra link de texto 'Assistir no YouTube' com href canônico e sem URL crua", async () => {
+      await renderWith({
+        youtubeUrl: "https://www.youtube.com/watch?v=dQw4w9WgXcQ&feature=share",
+        thumbnailUrl: "https://img.youtube.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+      });
+      fireEvent.click(screen.getByTestId("original-video-trigger"));
+
+      expect(screen.getByTestId("original-video-card")).toBeDefined();
+      const link = screen.getByTestId("original-video-youtube-link");
+      expect(link.getAttribute("href")).toBe("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
+      expect(link.getAttribute("target")).toBe("_blank");
+      expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+      expect(link.textContent).toContain("Assistir no YouTube");
+      expect(link.textContent).not.toMatch(/youtube\.com|youtu\.be/i);
+      expect(screen.getByText("5 min de duração")).toBeDefined();
+    });
+
+    it("não renderiza o link quando youtubeUrl não é do YouTube (javascript:)", async () => {
+      await renderWith({
+        youtubeUrl: "javascript:alert(1)//youtube.com",
+        thumbnailUrl: "https://img.youtube.com/vi/xxx/hqdefault.jpg",
+      });
+      fireEvent.click(screen.getByTestId("original-video-trigger"));
+      expect(screen.getByTestId("original-video-card")).toBeDefined();
+      expect(screen.queryByTestId("original-video-youtube-link")).toBeNull();
+    });
+
+    it("não renderiza o link quando youtubeUrl é null mas thumbnailUrl existe", async () => {
+      await renderWith({
+        youtubeUrl: null,
+        thumbnailUrl: "https://example-bucket.s3.amazonaws.com/thumb.jpg",
+      });
+      fireEvent.click(screen.getByTestId("original-video-trigger"));
+      expect(screen.getByTestId("original-video-card")).toBeDefined();
+      expect(screen.queryByTestId("original-video-youtube-link")).toBeNull();
+    });
+  });
+
+  describe("busca de cortes (?q=)", () => {
+    function setup(opts: { total: number; filtered: number; clips: any[] }) {
+      vi.mocked(makeAuthGateway).mockReturnValue({
+        getUserId: vi.fn().mockResolvedValue("user-1"),
+      } as any);
+      vi.mocked(db.clip.count).mockResolvedValue(opts.filtered);
+      vi.mocked(db.uploadedFile.findUnique).mockResolvedValue({
+        id: "proj-s",
+        userId: "user-1",
+        displayName: "Podcast",
+        durationSeconds: 300,
+        status: "processed",
+        _count: { clips: opts.total },
+        clips: opts.clips,
+      } as any);
+    }
+    const run = async (sp: Record<string, string>) =>
+      ProjectDetailsPage({
+        params: Promise.resolve({ id: "proj-s" }),
+        searchParams: Promise.resolve(sp),
+      });
+
+    it("renderiza o campo de busca (GET, aria-label) preenchido com o termo atual", async () => {
+      setup({ total: 3, filtered: 1, clips: [{ id: "c1", title: "Café", viralityScore: 5 }] });
+      render(await run({ q: "café" }));
+      const input = screen.getByTestId("clips-search") as HTMLInputElement;
+      expect(input.getAttribute("aria-label")).toBe("Buscar cortes");
+      expect(input.getAttribute("name")).toBe("q");
+      expect(input.defaultValue).toBe("café");
+      expect(input.closest("form")?.getAttribute("method")?.toLowerCase()).toBe("get");
+    });
+
+    it("filtra no banco por title/hook (contains, insensitive) e mantém aggregate sobre todos os cortes", async () => {
+      setup({ total: 3, filtered: 1, clips: [{ id: "c1", title: "Café", viralityScore: 5 }] });
+      render(await run({ q: "  café " }));
+
+      const args = vi.mocked(db.uploadedFile.findUnique).mock.calls[0]![0] as any;
+      expect(args.include.clips.where).toEqual({
+        OR: [
+          { title: { contains: "café", mode: "insensitive" } },
+          { hook: { contains: "café", mode: "insensitive" } },
+        ],
+      });
+      expect(db.clip.aggregate).toHaveBeenCalledWith({
+        where: { uploadedFileId: "proj-s" },
+        _sum: { durationSeconds: true },
+      });
+      expect(screen.getByText("3 cortes gerados")).toBeDefined();
+    });
+
+    it("sem q não aplica filtro e não faz count extra", async () => {
+      setup({ total: 1, filtered: 1, clips: [{ id: "c1", title: "A", viralityScore: 5 }] });
+      render(await run({}));
+      const args = vi.mocked(db.uploadedFile.findUnique).mock.calls[0]![0] as any;
+      expect(args.include.clips.where).toBeUndefined();
+      expect(db.clip.count).not.toHaveBeenCalled();
+    });
+
+    it("mostra estado vazio específico quando a busca não encontra nada", async () => {
+      setup({ total: 3, filtered: 0, clips: [] });
+      render(await run({ q: "xyz" }));
+      expect(screen.getByText(/Nenhum corte encontrado para/).textContent).toContain("xyz");
+      expect(screen.queryByText("Nenhum corte gerado.")).toBeNull();
+    });
+
+    it("paginação usa a contagem filtrada e preserva q nos links", async () => {
+      setup({
+        total: 40,
+        filtered: 25,
+        clips: [{ id: "c1", title: "Café", viralityScore: 5 }],
+      });
+      render(await run({ q: "café com leite", page: "2" }));
+      expect(db.clip.count).toHaveBeenCalledWith({
+        where: {
+          uploadedFileId: "proj-s",
+          OR: [
+            { title: { contains: "café com leite", mode: "insensitive" } },
+            { hook: { contains: "café com leite", mode: "insensitive" } },
+          ],
+        },
+      });
+      const hrefs = screen
+        .getAllByRole("link")
+        .map((a) => a.getAttribute("href"))
+        .filter((h) => h?.includes("page="));
+      // 25 filtrados / 10 por página = 3 páginas (+ anterior/próxima)
+      expect(hrefs).toContain(
+        "/dashboard/projects/proj-s?q=caf%C3%A9%20com%20leite&page=3",
+      );
+      expect(hrefs.every((h) => h!.includes("q=caf%C3%A9%20com%20leite"))).toBe(true);
+      expect(hrefs.some((h) => h!.endsWith("page=4"))).toBe(false);
+    });
   });
 });

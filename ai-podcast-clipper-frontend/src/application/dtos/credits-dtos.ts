@@ -3,6 +3,17 @@ export interface HoldCreditsInput {
   durationSeconds: number;
   fileId: string;
   amount?: number;
+  /**
+   * `true` quando `fileId` é um `UploadedFile` (projeto) cujo
+   * `creditsCost`/`status` NÃO deve ser sobrescrito por este hold — caso de
+   * "adicionar mais cortes" (`AppendClipsToProjectUseCase`/
+   * `appendClipsToProjectHandler`), em que o hold é escopado a um
+   * `ProjectProcessingBatch`, não ao projeto inteiro. `false`/ausente
+   * (padrão) preserva o comportamento original: `UploadedFile.creditsCost`
+   * É atualizado com o valor reservado (fluxo de processamento único por
+   * projeto, `processVideoHandler`/`RetryProjectUseCase`).
+   */
+  skipFileStatusUpdate?: boolean;
 }
 
 export interface HoldCreditsOutput {
@@ -22,6 +33,10 @@ export interface RefundCreditsInput {
   amount: number;
   fileId: string;
   reason: string;
+  /** Ver `HoldCreditsInput.skipFileStatusUpdate` — mesma motivação: um
+   * reembolso escopado a um `ProjectProcessingBatch` nunca deve marcar o
+   * `UploadedFile` (projeto) inteiro como `"failed"`. */
+  skipFileStatusUpdate?: boolean;
 }
 
 export interface AddCreditsFromStripeInput {

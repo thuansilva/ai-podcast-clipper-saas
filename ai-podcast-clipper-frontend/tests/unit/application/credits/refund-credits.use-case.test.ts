@@ -135,6 +135,42 @@ describe("RefundCreditsUseCase", () => {
     expect(user?.reservedCredits).toBe(0);
   });
 
+  it("deve estornar créditos sem marcar o UploadedFile como failed quando skipFileStatusUpdate=true (refund escopado a um lote de append)", async () => {
+    await userRepo.create({
+      id: "user-batch",
+      email: "batch@example.com",
+      credits: 8,
+      reservedCredits: 2,
+    });
+
+    const file = await fileRepo.create({
+      userId: "user-batch",
+      s3Key: "test/project.mp4",
+      sourceType: "YOUTUBE",
+      status: "processed", // projeto já tinha terminado o processamento ORIGINAL
+    });
+
+    const result = await useCase.execute({
+      userId: "user-batch",
+      amount: 2,
+      fileId: file.id,
+      reason: "Erro no lote de append",
+      skipFileStatusUpdate: true,
+    });
+
+    expect(result.success).toBe(true);
+
+    const user = await userRepo.findById("user-batch");
+    expect(user?.credits).toBe(10);
+    expect(user?.reservedCredits).toBe(0);
+
+    // O projeto continua "processed" — só o lote (fora deste repositório)
+    // é marcado como failed.
+    const unchangedFile = await fileRepo.findById(file.id);
+    expect(unchangedFile?.status).toBe("processed");
+    expect(unchangedFile?.errorMessage).toBeNull();
+  });
+
   it("deve lançar NotFoundError se o usuário não existir", async () => {
     await expect(
       useCase.execute({

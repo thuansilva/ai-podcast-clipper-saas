@@ -6,10 +6,15 @@ import {
   makeListUserVideosUseCase,
   makeDeleteProjectUseCase,
   makeRenameProjectUseCase,
+  makeAddClipsToProjectUseCase,
 } from "~/infrastructure/factories/use-case-factories";
 import { makeAuthGateway } from "~/infrastructure/factories/auth-factory";
-import { makeProjectActionRateLimiter } from "~/infrastructure/factories/rate-limiter-factory";
+import {
+  makeProjectActionRateLimiter,
+  makeYouTubeImportRateLimiter,
+} from "~/infrastructure/factories/rate-limiter-factory";
 import { RateLimitExceededError } from "~/domain/errors/rate-limit-exceeded-error";
+import { DomainError } from "~/domain/errors/domain-error";
 import { getProcessingOptions } from "~/application/services/processing-options.service";
 import {
   renameProjectSchema,
@@ -17,6 +22,8 @@ import {
   listProjectsSchema,
   retryProjectSchema,
 } from "~/domain/schemas/projects-actions.schema";
+import { addClipsToProjectSchema } from "~/domain/schemas/add-clips-to-project.schema";
+import type { AddClipsToProjectActionInput } from "~/domain/schemas/add-clips-to-project.schema";
 
 export async function loadMoreProjectsAction(
   page: number,
@@ -186,5 +193,67 @@ export async function retryProjectAction(
     return { success: true };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : "Erro desconhecido" };
+  }
+}
+
+/**
+ * Server Action para "adicionar mais cortes" a um projeto já existente
+ * (manual ou "IA gera mais" sobre um novo slice) — ver
+ * `AddClipsToProjectUseCase`. Reaproveita o rate limiter de importação do
+ * YouTube (`makeYouTubeImportRateLimiter`, 5/min), não o de ações de
+ * projeto (delete/rename/retry, 20/min): assim como `importYouTubeVideo`,
+ * esta action dispara um download real + processamento GPU a cada chamada,
+ * perfil de custo bem diferente de renomear/deletar.
+ */
+export async function addClipsToProjectAction(
+  projectId: string,
+  input: AddClipsToProjectActionInput
+): Promise<{ success: boolean; batchId?: string; error?: string }> {
+  const userId = await makeAuthGateway().getUserId();
+  if (!userId) {
+    return { success: false, error: "Não autorizado." };
+  }
+
+  const parsed = addClipsToProjectSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Dados inválidos.",
+    };
+  }
+
+  if (!projectId || projectId.trim() === "") {
+    return { success: false, error: "ID do projeto é obrigatório." };
+  }
+
+  try {
+    const allowed = await makeYouTubeImportRateLimiter().consume(userId);
+    if (!allowed) {
+      throw new RateLimitExceededError(
+        "Too many requests. Please wait a minute before trying again."
+      );
+    }
+
+    const useCase = makeAddClipsToProjectUseCase();
+    const result = await useCase.execute({
+      projectId,
+      userId,
+      mode: parsed.data.mode,
+      manualCuts: parsed.data.manualCuts,
+      aiSlice: parsed.data.aiSlice,
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath(`/dashboard/projects/${projectId}`);
+
+    return { success: true, batchId: result.batchId };
+  } catch (error) {
+    if (error instanceof DomainError) {
+      return { success: false, error: error.message };
+    }
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    };
   }
 }

@@ -249,6 +249,42 @@ describe("HoldCreditsUseCase", () => {
     expect(user?.reservedCredits).toBe(50);
   });
 
+  it("deve reservar créditos sem sobrescrever o creditsCost do UploadedFile quando skipFileStatusUpdate=true (hold escopado a um lote de append)", async () => {
+    await userRepo.create({
+      id: "user-batch",
+      email: "batch@example.com",
+      credits: 10,
+      reservedCredits: 0,
+    });
+
+    const file = await fileRepo.create({
+      userId: "user-batch",
+      s3Key: "test/project.mp4",
+      sourceType: "YOUTUBE",
+      durationSeconds: 3600,
+      creditsCost: 60, // custo do processamento ORIGINAL do projeto
+    });
+
+    const result = await useCase.execute({
+      userId: "user-batch",
+      durationSeconds: 30,
+      fileId: file.id,
+      amount: 1,
+      skipFileStatusUpdate: true,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.heldCredits).toBe(1);
+
+    const user = await userRepo.findById("user-batch");
+    expect(user?.credits).toBe(9);
+    expect(user?.reservedCredits).toBe(1);
+
+    // O creditsCost do PROJETO não foi tocado pelo hold do lote.
+    const unchangedFile = await fileRepo.findById(file.id);
+    expect(unchangedFile?.creditsCost).toBe(60);
+  });
+
   it("deve lançar erro e impedir o hold se a duração do vídeo ultrapassar o limite do plano do usuário", async () => {
     await userRepo.create({
       id: "user-starter-limit",

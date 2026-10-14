@@ -4,6 +4,50 @@ Este arquivo funciona como um diário de evolução do projeto: onde paramos, o 
 
 ---
 
+### 2026-10-14: Menu lateral — "Meus Projetos" movido para o grupo "Geral"
+- **Commit(s):** ainda não commitado
+- **O que foi feito:** o usuário removeu o grupo próprio "Meus Projetos" (`id: 2`) em `src/navigation/sidebar/sidebar-items.ts` e colocou o item dentro do grupo "Geral", junto de "Início". A busca do header (`search-dialog.tsx`) é derivada dessa lista, então "Meus Projetos" passa a aparecer agrupado em "Geral" lá também, sem mudança de código.
+- **Testes:** novo `tests/unit/navigation/sidebar-items.test.ts`, que trava a estrutura real do menu (os testes de `nav-main` usam fixtures próprias e não cobriam a configuração real)
+- **Docs:** linha do `AppSidebar` em `docs/arquitetura/visao-jornada-usuario.md` agora descreve os grupos do menu
+- **Limpeza:** removidos `src/components/dashboard/sidebar.tsx` e `src/components/dashboard/app-sidebar.tsx`, menus antigos com itens fixos no código e sem nenhum import em `src/` ou `tests/` (o menu real é `src/components/dashboard/sidebar/app-sidebar.tsx`). Após a remoção: `npm run check` limpo e `npm run test` com 1088 passed/8 skipped
+
+### 2026-10-14: Redesenho da tela de detalhes do projeto (toolbar, popover do vídeo original, busca)
+- **Commit(s):** ainda não commitado
+- **O que foi feito:**
+  - Removido o banner `original-video-card`; o vídeo original agora fica num popover aberto por um botão de ícone (`src/components/dashboard/original-video-popover.tsx`), com link de texto "Assistir no YouTube" em vez da URL crua
+  - Toolbar à direita na linha de "Cortes Gerados": busca, ícone do vídeo original e "Adicionar cortes"
+  - Busca server-side por `?q=` (título/gancho, insensível a maiúsculas), paginação sobre a contagem filtrada preservando `q` e estado vazio específico (RF-UI-08)
+  - Testes unitários, a11y e integração (Postgres real) novos/ajustados; docs: visão da jornada (2.9), RF-UI-06/RF-UI-08 e matriz
+- **Por quê:** feedback do usuário de que o banner ocupava espaço e a URL crua era feia; busca facilita achar cortes em projetos grandes
+
+### 2026-10-13: Fecha o gap de teste da página "Adicionar cortes" (RF-UI-07 de ⚠️ para ✅)
+- **Commit(s):** nenhum ainda — alterações deixadas no working directory para revisão do usuário
+- **Contexto:** o agente de docs-release que consolidou a documentação da feature "adicionar mais cortes a um projeto existente" encontrou, por leitura real do código, que `src/app/dashboard/projects/[id]/add-clips/page.tsx` (quem decide bloquear o acesso — projeto não-YouTube, clipe legado sem `sourceStartTime`/`sourceEndTime`, ou lote já em andamento) não tinha nenhum teste importando essa página, e rebaixou o RF-UI-07 de ✅ para ⚠️ por honestidade. Perguntei ao usuário se corrigia agora ou aceitava como gap conhecido — escolheu corrigir agora.
+- **O que foi feito (TDD, RED→GREEN confirmado de verdade):** novo `tests/unit/app/dashboard/add-clips-page.test.tsx` (6 casos: redirect pra `/login` sem sessão; redirect pra `/dashboard/projects` quando o projeto não existe/não pertence ao usuário; os 3 bloqueios de domínio — `UnsupportedAppendSourceError`, `LegacyClipsMissingSourceRangeError`, `ProjectBatchInProgressError` — renderizando a mensagem certa e nunca montando `AddClipsToProjectClient`; e o caminho feliz, confirmando que `usedRanges`/`userCredits`/`youtubeUrl` chegam certos no client). Como a implementação já existia (de um agente anterior), o RED foi confirmado removendo temporariamente a checagem de `activeBatch` da página, vendo o teste correspondente falhar de verdade, e restaurando — não foi só "ausência de teste antes".
+- **Verificado:** `npm run check` limpo; `npm run test` 1073 passed/8 skipped (+6, sem regressão).
+- **Docs atualizados:** `docs/operacao/checklist-go-live.md` (item fechado), `docs/requisitos/requisitos-funcionais-e-nao-funcionais.md` (RF-UI-07 ⚠️→✅ nas duas tabelas, resumo recalculado: 59 ✅/1 ⚠️/2 ❌ de 62 RFs), este arquivo.
+- **Arquivos alterados:** `ai-podcast-clipper-frontend/tests/unit/app/dashboard/add-clips-page.test.tsx` (novo), `docs/operacao/checklist-go-live.md`, `docs/requisitos/requisitos-funcionais-e-nao-funcionais.md`, este arquivo.
+
+### 2026-10-13: Adicionar cortes a projeto existente (YouTube), duração total dos cortes e card do vídeo original
+- **Commit(s):** nenhum ainda — alterações deixadas no working directory para revisão do usuário
+- **Contexto:** um projeto do YouTube já processado não aceitava novos cortes sem recriar o projeto. A feature permite adicionar cortes (manuais, ou IA sobre um slice novo) sem apagar os clipes existentes, cobrando só o incremento. Na mesma rodada: a tela de projeto mostrava a duração do vídeo original no lugar da soma dos cortes gerados, e ganhou um card com o vídeo original.
+- **O que foi implementado** (código lido nesta tarefa de documentação; suíte reportada pela sessão principal):
+  - Frontend, contrato e infra: model `ProjectProcessingBatch` e colunas `Clip.sourceStartTime`/`sourceEndTime` (migration `20261014015607_add_processing_batch_and_clip_source_time`); `AddClipsToProjectUseCase`, Server Action `addClipsToProjectAction`, schema `add-clips-to-project.schema.ts`, erros de domínio; evento `append-clips-events` com a função `appendClipsToProject` (`src/inngest/functions.ts`).
+  - Backend Python: `DownloadYouTubeRequest.slice` e `ProcessVideoRequest.excluded_ranges` (`TimeRange`, sem teto de 60s no slice); `resolve_download_time_ranges`; filtro defensivo de candidatos sobrepostos antes do `clips_limit`.
+  - UI: rota `/dashboard/projects/[id]/add-clips` com trilha de trechos usados, bloqueio de sobreposição manual e custo do incremento.
+  - Tela de projeto: duração = soma de todos os clipes do projeto (`formatClipsDurationLabel`); card do vídeo original (thumbnail, duração, link pela URL canônica em nova aba); botão "Adicionar cortes".
+  - Correções de segurança feitas durante a revisão: `aiSlice` aceitava `Infinity` (agora `.finite()`, com cobrança limitada ao fim real do vídeo); evento reentregue cobrava 2x (claim atômico por lote e `id` de dedupe no envio); 4 requisições simultâneas criavam 4 lotes (criação atômica por projeto).
+  - Acessibilidade: aviso "(abre em nova aba)" no link do YouTube e `role="status"` no envio do formulário de adição.
+- **Requisitos e regras registrados:** RF-PROJ-06, RF-PROJ-07, RF-UI-06, RF-UI-07 (⚠️), RF-PIPE-16, RF-BILL-13, RNF-IDEM-07, RNF-IDEM-08; RN-PIPE-APPEND-01 e 02; RN-PROJ-APPEND-01 a 05; RN-PROJ-DUR-01. Os resumos de RF e RNF no doc de requisitos estavam defasados (51 e 75 linhas); recontados em 62 e 89.
+- **Riscos residuais e gaps** (no checklist, seção "Riscos residuais — feature adicionar cortes"; não corrigidos): (1) persistência de clipes e consumo de crédito não atômicos, então um retry após o `createMany` pode duplicar clipes; (2) lote preso em `queued` se o envio do evento falhar, o que bloqueia novos cortes naquele projeto; (3) a página `add-clips/page.tsx` (bloqueios de projeto não-YouTube, clipe legado e lote ativo) não tem teste automatizado. Pendência de acessibilidade (seção HIGH): os links de Termos e Privacidade do cadastro (`custom-sign-up-form.tsx`) abrem em nova aba sem aviso.
+- **Comentários de código defasados** (não alterados, pois a tarefa era só documentação): o cabeçalho de `appendClipsToProjectHandler` em `src/inngest/functions.ts` diz que `slice` e `excluded_ranges` ainda não existem no backend (já existem); o comentário do botão "Adicionar cortes" em `src/app/dashboard/projects/[id]/page.tsx` fala em "slot" e em outro agente construindo a rota. Limpar em commit próprio.
+- **Verificação:** a suíte foi rodada pela sessão principal depois de cada frente. Resultado reportado: backend `pytest` 576 passed; frontend `npm run check` limpo, `npm run test` 1067 passed/8 skipped, `npm run test:integration` 155 passed/17 failed/2 skipped (as 17 falhas são pré-existentes, sem servidor de dev em `:3000`). Nesta tarefa os testes não foram rodados de novo; os caminhos e nomes de teste citados nas docs foram conferidos por leitura.
+- **Arquivos alterados (documentação):** `docs/requisitos/requisitos-funcionais-e-nao-funcionais.md`, `docs/requisitos/casos-de-uso-e-regras-de-negocio.md`, `docs/arquitetura/visao-fluxo-processamento-video.md`, `docs/arquitetura/visao-dados-modelo-er.md`, `docs/arquitetura/visao-jornada-usuario.md`, `docs/operacao/checklist-go-live.md`, `progress.md`.
+- **Próximos passos:** decidir a prioridade dos 2 riscos de fluxo; escrever o teste da página `add-clips/page.tsx` (TDD); limpar os 2 comentários defasados; decidir o aviso dos links de Termos e Privacidade no cadastro; atualizar a lista de models em `AGENTS.md` (não inclui `ProjectProcessingBatch`), decisão do usuário.
+
+---
+
+
 ### 2026-10-13: Esconde o seletor de Gênero no modo de corte Manual
 - **Commit(s):** nenhum ainda — alterações deixadas no working directory para revisão do usuário
 - **Contexto:** o corte manual nunca passa pela IA de identificação de momentos virais (`core/video_pipeline.py`, `if request.mode == "manual"` pula direto pra `clips_to_process = request.manual_cuts`, sem chamar `moments_provider.identify_moments`) — então o `genre` (implementado mais cedo nesta mesma data) não tem efeito nenhum nesse modo. O usuário percebeu isso e pediu para esconder o seletor no modo manual, mesmo raciocínio já aplicado a `CLIP_MODEL`/`ASPECT_RATIO`.

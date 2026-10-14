@@ -84,6 +84,42 @@ class ManualCut(BaseModel):
         return self
 
 
+class TimeRange(BaseModel):
+    """A single `{start, end}` time range in seconds, with NO maximum
+    duration (unlike `ManualCut`, capped at 60s — an individual output
+    clip's length). Two independent uses, both introduced for "adicionar
+    mais cortes a um projeto existente" (RF novo):
+
+    - `DownloadYouTubeRequest.slice`: the portion of the *original* YouTube
+      video the caller wants the IA to analyze for new viral moments next
+      (a subsequent `/process_video` call with `mode="auto"`). This can be
+      several minutes long, so it must not inherit `ManualCut`'s 60s cap.
+    - `ProcessVideoRequest.excluded_ranges`: ranges, in the timeline of
+      *this request's `s3_key` file* (never the original video — same
+      convention as `manual_cuts[].start/end`), already covered by clips
+      from earlier processing batches of the same project. Automatic-mode
+      candidate clips that overlap one of these are discarded (see
+      `core/video_pipeline.py`).
+
+    Same wire shape (`{start, end}`) as `TimeRangeDTO` on the frontend
+    (`src/domain/services/range-overlap.service.ts`).
+    """
+
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+
+    start: float = Field(..., ge=0, description="Start timestamp, in seconds")
+    end: float = Field(..., description="End timestamp, in seconds")
+
+    @model_validator(mode="after")
+    def validate_end_after_start(self) -> "TimeRange":
+        if self.end <= self.start:
+            raise ValueError(
+                f"TimeRange: end timestamp ({self.end}) must be greater than "
+                f"start timestamp ({self.start})"
+            )
+        return self
+
+
 # Canonical UUID (8-4-4-4-12), as produced by `uuidv4()` in the frontend and
 # `uuid.uuid4()` in the backend.
 _UUID_PATTERN = (
@@ -189,6 +225,23 @@ class ProcessVideoRequest(BaseModel):
             "skips moment identification entirely."
         ),
     )
+    excluded_ranges: Optional[List[TimeRange]] = Field(
+        default=None,
+        description=(
+            "RF 'adicionar mais cortes': ranges, in seconds, within THIS "
+            "request's s3_key file (same timeline as manual_cuts[].start/"
+            "end — never the original video). These are ranges already "
+            "covered by clips from earlier processing batches of the same "
+            "project. Only meaningful — and only ever sent by the frontend "
+            "— when mode='auto' and non-empty; omitted/None/empty is a "
+            "strict no-op, identical to this field never having existed. "
+            "Automatic-mode candidate clips that overlap any of these "
+            "ranges are discarded (defensive filter, not just a prompt "
+            "hint — see core/video_pipeline.py) before clips_limit is "
+            "applied. No effect in 'manual' mode, which skips moment "
+            "identification entirely."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_mode_and_manual_cuts(self) -> "ProcessVideoRequest":
@@ -280,6 +333,32 @@ class DownloadYouTubeRequest(BaseModel):
             "field existed)."
         ),
     )
+    slice: Optional[TimeRange] = Field(
+        default=None,
+        description=(
+            "RF 'adicionar mais cortes': the portion of the *original* "
+            "YouTube video the caller wants the IA to analyze next for new "
+            "viral moments (a subsequent `/process_video` call with "
+            "mode='auto'). Mutually exclusive with `manual_cuts` (422 if "
+            "both are sent — see validate_slice_and_manual_cuts_exclusive). "
+            "Unlike `manual_cuts`/`ManualCut`, has NO 60-second duration "
+            "cap: an IA slice can be several minutes long. When present, "
+            "only the range covering it (merged, with the same safety "
+            "margin as `manual_cuts`, see VIDEO_RANGE_MARGIN_SECONDS) is "
+            "downloaded and uploaded to `s3_key`, and the response's "
+            "`remapped_ranges` contains exactly one entry describing where "
+            "it landed. `remapped_cuts` is never populated for `slice` — "
+            "that field only ever applies to `manual_cuts`."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def validate_slice_and_manual_cuts_exclusive(self) -> "DownloadYouTubeRequest":
+        if self.slice is not None and self.manual_cuts:
+            raise ValueError(
+                "slice and manual_cuts are mutually exclusive; send only one of them"
+            )
+        return self
 
 
 class RemappedTimeRange(BaseModel):
